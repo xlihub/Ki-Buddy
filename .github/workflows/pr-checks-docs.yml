@@ -3,7 +3,7 @@ name: 'PR Checks (docs only)'
 on:
   pull_request:
     types: [opened, synchronize, edited, ready_for_review]
-    branches: [main, dev]
+    branches: [product/main]
     paths:
       - '**/*.md'
       - 'docs/**'

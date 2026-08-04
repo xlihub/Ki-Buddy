@@ -22,6 +22,7 @@ jobs:
   verify-cask:
     name: Verify Homebrew Cask
     runs-on: ubuntu-latest
+    if: vars.KI_ENABLE_UPSTREAM_MAINTENANCE == 'true'
 
     steps:
       - name: Get expected version

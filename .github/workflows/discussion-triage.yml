@@ -14,6 +14,7 @@ permissions:
 jobs:
   triage:
     runs-on: ubuntu-latest
+    if: vars.KI_ENABLE_UPSTREAM_MAINTENANCE == 'true'
     steps:
       - name: Welcome comment with owner mention
         uses: actions/github-script@v7

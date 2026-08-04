@@ -20,6 +20,7 @@ permissions:
 jobs:
   triage:
     runs-on: ubuntu-latest
+    if: vars.KI_ENABLE_UPSTREAM_MAINTENANCE == 'true'
     steps:
       - uses: actions/checkout@v4
         with:
