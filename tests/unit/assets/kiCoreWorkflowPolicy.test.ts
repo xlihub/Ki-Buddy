@@ -25,12 +25,10 @@ describe('Ki-Core workflow source policies', () => {
     expect(webCli).not.toContain('KI_CORE_ACTIONS_TOKEN');
   });
 
-  it('exposes the candidate token to build commands only when candidate policy is selected', () => {
+  it('does not expose a cross-repository token to branch-controlled build commands', () => {
     const reusable = workflow('_build-reusable.yml');
-    const conditionalToken =
-      "KI_CORE_ACTIONS_TOKEN: ${{ inputs.ki_core_source_policy == 'candidate' && secrets.KI_CORE_ACTIONS_TOKEN || '' }}";
     expect(reusable).toContain("default: 'release-pinned'");
     expect(reusable).not.toContain('aioncore_run_id:');
-    expect(reusable.match(new RegExp(conditionalToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))).toHaveLength(4);
+    expect(reusable).not.toContain('KI_CORE_ACTIONS_TOKEN');
   });
 });

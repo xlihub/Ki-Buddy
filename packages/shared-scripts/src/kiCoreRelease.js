@@ -12,6 +12,7 @@ const KI_CORE_SOURCE_POLICIES = new Set(['candidate', 'development', 'release-pi
 const SHA40_PATTERN = /^[0-9a-f]{40}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const ARCHIVE_HELPER_TIMEOUT_MS = 120000;
 
 const CANONICAL_PLATFORMS = {
   'macos-x64': {
@@ -163,7 +164,7 @@ function validatePlatformManifest(platforms, version, sourceType, selectedPlatfo
     throw new Error('Ki-Core platforms must be an object');
   }
   const expectedKeys = sourceType === 'stable' ? Object.keys(CANONICAL_PLATFORMS) : [selectedPlatform];
-  if (JSON.stringify(Object.keys(platforms)) !== JSON.stringify(expectedKeys)) {
+  if (JSON.stringify(Object.keys(platforms).toSorted()) !== JSON.stringify(expectedKeys.toSorted())) {
     throw new Error(`Ki-Core ${sourceType} manifest has an unexpected platform set`);
   }
 
@@ -299,6 +300,7 @@ function extractArchiveSafely(archivePath, outputDir, expectedEntries) {
     execFileSync(process.execPath, [helperPath, archivePath, outputDir, JSON.stringify(expectedEntries)], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: ARCHIVE_HELPER_TIMEOUT_MS,
     });
   } catch (error) {
     const detail = error?.stderr?.trim();
@@ -313,6 +315,7 @@ function inspectArchiveSafely(archivePath) {
       execFileSync(process.execPath, [helperPath, '--inspect', archivePath], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: ARCHIVE_HELPER_TIMEOUT_MS,
       })
     );
   } catch (error) {

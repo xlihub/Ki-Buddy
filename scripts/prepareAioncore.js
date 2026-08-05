@@ -9,7 +9,7 @@
  *  - AIONUI_BACKEND_SOURCE_POLICY: release-pinned, candidate, or development
  *  - AIONUI_BACKEND_RUN_ID: Ki-Core candidate workflow run id
  *  - AIONUI_BACKEND_EXPECTED_SHA: expected Ki-Core candidate commit
- *  - KI_CORE_ACTIONS_TOKEN: read-only token for candidate artifacts
+ *  - KI_CORE_ACTIONS_TOKEN: optional read-only token for candidate API rate limits
  *  - AIONUI_BACKEND_VERSION: development-only AionCore override
  *  - AIONUI_BACKEND_ARCH: target architecture (default: process.arch)
  *  - GH_TOKEN / GITHUB_TOKEN: GitHub API token (for rate limiting)

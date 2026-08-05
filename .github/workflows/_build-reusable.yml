@@ -50,9 +50,6 @@ on:
         required: false
       KEYCHAIN_PASSWORD:
         required: false
-      KI_CORE_ACTIONS_TOKEN:
-        description: 'Read-only token for xlihub/Ki-Core Actions artifacts; candidate policy only'
-        required: false
       P12_PASSWORD:
         required: false
       SENTRY_AUTH_TOKEN:
@@ -413,7 +410,6 @@ jobs:
           AIONUI_BACKEND_RUN_ID: ${{ inputs.ki_core_candidate_run_id }}
           AIONUI_BACKEND_EXPECTED_SHA: ${{ inputs.ki_core_candidate_head_sha }}
           AIONUI_BACKEND_ARCH: ${{ matrix.arch }}
-          KI_CORE_ACTIONS_TOKEN: ${{ inputs.ki_core_source_policy == 'candidate' && secrets.KI_CORE_ACTIONS_TOKEN || '' }}
 
       - name: Build with electron-builder (Windows)
         if: startsWith(matrix.platform, 'windows')
@@ -444,7 +440,6 @@ jobs:
           AIONUI_BACKEND_SOURCE_POLICY: ${{ inputs.ki_core_source_policy }}
           AIONUI_BACKEND_RUN_ID: ${{ inputs.ki_core_candidate_run_id }}
           AIONUI_BACKEND_EXPECTED_SHA: ${{ inputs.ki_core_candidate_head_sha }}
-          KI_CORE_ACTIONS_TOKEN: ${{ inputs.ki_core_source_policy == 'candidate' && secrets.KI_CORE_ACTIONS_TOKEN || '' }}
           # Node.js memory limit for vite bundling (prevents OOM during build)
           # Node.js 内存限制，防止 vite 打包时内存不足
           NODE_OPTIONS: '--max-old-space-size=8192'
@@ -550,7 +545,6 @@ jobs:
           AIONUI_BACKEND_SOURCE_POLICY: ${{ inputs.ki_core_source_policy }}
           AIONUI_BACKEND_RUN_ID: ${{ inputs.ki_core_candidate_run_id }}
           AIONUI_BACKEND_EXPECTED_SHA: ${{ inputs.ki_core_candidate_head_sha }}
-          KI_CORE_ACTIONS_TOKEN: ${{ inputs.ki_core_source_policy == 'candidate' && secrets.KI_CORE_ACTIONS_TOKEN || '' }}
           npm_config_arch: ${{ matrix.arch }}
           APP_ID: ${{ secrets.APP_ID }}
           appleId: ${{ secrets.APPLE_ID }}
@@ -591,7 +585,6 @@ jobs:
           AIONUI_BACKEND_SOURCE_POLICY: ${{ inputs.ki_core_source_policy }}
           AIONUI_BACKEND_RUN_ID: ${{ inputs.ki_core_candidate_run_id }}
           AIONUI_BACKEND_EXPECTED_SHA: ${{ inputs.ki_core_candidate_head_sha }}
-          KI_CORE_ACTIONS_TOKEN: ${{ inputs.ki_core_source_policy == 'candidate' && secrets.KI_CORE_ACTIONS_TOKEN || '' }}
           npm_config_arch: ${{ matrix.arch }}
           npm_config_cache: ${{ runner.temp }}/.npm
           ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron

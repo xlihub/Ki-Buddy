@@ -29,7 +29,10 @@ function sha256(value: string | Buffer) {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function writeStoredZip(filePath: string, entries: Array<{ name: string; content: string | Buffer; mode?: number }>) {
+function writeStoredZip(
+  filePath: string,
+  entries: Array<{ name: string; content: string | Buffer; encrypted?: boolean; mode?: number }>
+) {
   const localParts: Buffer[] = [];
   const centralParts: Buffer[] = [];
   let offset = 0;
@@ -37,30 +40,31 @@ function writeStoredZip(filePath: string, entries: Array<{ name: string; content
   for (const entry of entries) {
     const name = Buffer.from(entry.name);
     const content = Buffer.from(entry.content);
+    const payload = entry.encrypted ? Buffer.concat([Buffer.alloc(12), content]) : content;
     const checksum = crc32(content);
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);
-    local.writeUInt16LE(0x800, 6);
+    local.writeUInt16LE(entry.encrypted ? 0x801 : 0x800, 6);
     local.writeUInt32LE(checksum, 14);
-    local.writeUInt32LE(content.length, 18);
+    local.writeUInt32LE(payload.length, 18);
     local.writeUInt32LE(content.length, 22);
     local.writeUInt16LE(name.length, 26);
-    localParts.push(local, name, content);
+    localParts.push(local, name, payload);
 
     const central = Buffer.alloc(46);
     central.writeUInt32LE(0x02014b50, 0);
     central.writeUInt16LE(0x0314, 4);
     central.writeUInt16LE(20, 6);
-    central.writeUInt16LE(0x800, 8);
+    central.writeUInt16LE(entry.encrypted ? 0x801 : 0x800, 8);
     central.writeUInt32LE(checksum, 16);
-    central.writeUInt32LE(content.length, 20);
+    central.writeUInt32LE(payload.length, 20);
     central.writeUInt32LE(content.length, 24);
     central.writeUInt16LE(name.length, 28);
     central.writeUInt32LE(((entry.mode ?? 0o100644) << 16) >>> 0, 38);
     central.writeUInt32LE(offset, 42);
     centralParts.push(central, name);
-    offset += local.length + name.length + content.length;
+    offset += local.length + name.length + payload.length;
   }
 
   const centralSize = centralParts.reduce((total, part) => total + part.length, 0);
@@ -230,6 +234,35 @@ describe('Ki-Core stable asset verification', () => {
       });
       expect(manifest.product.releaseCommit).toBe(RELEASE_SHA);
       expect(manifest.upstream.peeledCommit).toBe(UPSTREAM_SHA);
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts a stable manifest whose platform object uses a different key order', async () => {
+    const fixture = await createStableFixture();
+    try {
+      fixture.manifest.platforms = Object.fromEntries(Object.entries(fixture.manifest.platforms).toReversed());
+      const manifestText = `${JSON.stringify(fixture.manifest, null, 2)}\n`;
+      writeFileSync(fixture.manifestPath, manifestText);
+      writeFileSync(
+        fixture.checksumPath,
+        `${Object.values(fixture.manifest.platforms)
+          .map((entry) => `${entry.sha256}  ${entry.archive}`)
+          .join('\n')}\n${sha256(manifestText)}  ki-core-release.json\n`
+      );
+
+      expect(() =>
+        validateDownloadedAssets({
+          sourceType: 'stable',
+          platformKey: fixture.selected.platformKey,
+          tag: TAG,
+          manifestPath: fixture.manifestPath,
+          checksumPath: fixture.checksumPath,
+          archivePath: fixture.archivePath,
+          pinnedChecksums: fixture.pin.checksums,
+        })
+      ).not.toThrow();
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });
     }
@@ -437,6 +470,19 @@ describe('Ki-Core archive extraction safety', () => {
     writeStoredZip(archivePath, [{ name: 'aioncore.exe', content: 'outside.exe', mode: 0o120777 }]);
     try {
       expect(() => extractArchiveSafely(archivePath, outputDir, ['aioncore.exe'])).toThrow(/regular file/);
+      expect(() => readFileSync(join(outputDir, 'aioncore.exe'))).toThrow();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an encrypted ZIP entry before creating the output directory', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ki-core-encrypted-zip-'));
+    const archivePath = join(root, 'encrypted.zip');
+    const outputDir = join(root, 'output');
+    writeStoredZip(archivePath, [{ name: 'aioncore.exe', content: 'encrypted', encrypted: true }]);
+    try {
+      expect(() => extractArchiveSafely(archivePath, outputDir, ['aioncore.exe'])).toThrow(/Encrypted/);
       expect(() => readFileSync(join(outputDir, 'aioncore.exe'))).toThrow();
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -92,12 +92,14 @@ function prepareManagedResources(binaryPath, targetDir) {
   ensureDirectory(dataDir);
 
   console.log(`  Preparing managed resources under ${path.relative(process.cwd(), bundleOut)}`);
+  const childEnv = {
+    ...process.env,
+    AIONUI_BUNDLED_MANAGED_RESOURCES: '',
+  };
+  delete childEnv.KI_CORE_ACTIONS_TOKEN;
   execFileSync(binaryPath, ['--data-dir', dataDir, 'prepare-managed-resources', '--bundle-out', bundleOut], {
     stdio: 'inherit',
-    env: {
-      ...process.env,
-      AIONUI_BUNDLED_MANAGED_RESOURCES: '',
-    },
+    env: childEnv,
   });
 
   removeDirectorySafe(dataDir);
@@ -142,22 +144,25 @@ function downloadFile(url, outputPath, token = '') {
 }
 
 function githubApiGetJson(apiPath, token) {
-  try {
-    return JSON.parse(
-      execFileSync('gh', ['api', apiPath], {
-        encoding: 'utf8',
-        timeout: 15000,
-        env: { ...process.env, GH_TOKEN: token },
-      })
-    );
-  } catch {
-    const headers = ['-H', 'Accept: application/vnd.github+json', '-H', `Authorization: Bearer ${token}`];
-    const out = execFileSync('curl', ['-fsSL', ...headers, `https://api.github.com/${apiPath}`], {
-      encoding: 'utf8',
-      timeout: 15000,
-    });
-    return JSON.parse(out);
+  if (token) {
+    try {
+      return JSON.parse(
+        execFileSync('gh', ['api', apiPath], {
+          encoding: 'utf8',
+          timeout: 15000,
+          env: { ...process.env, GH_TOKEN: token },
+        })
+      );
+    } catch {}
   }
+
+  const headers = ['-H', 'Accept: application/vnd.github+json'];
+  if (token) headers.push('-H', `Authorization: Bearer ${token}`);
+  const out = execFileSync('curl', ['-fsSL', ...headers, `https://api.github.com/${apiPath}`], {
+    encoding: 'utf8',
+    timeout: 15000,
+  });
+  return JSON.parse(out);
 }
 
 function resolveLatestLegacyTag() {
@@ -262,8 +267,6 @@ function downloadAndVerifyCandidate(platform, arch, runId, expectedSha, token) {
   if (!/^[1-9]\d*$/.test(runId)) throw new Error('Ki-Core candidate run ID must be numeric');
   if (!/^[0-9a-f]{40}$/.test(expectedSha))
     throw new Error('Ki-Core candidate head SHA must be a full lowercase commit SHA');
-  if (!token) throw new Error('KI_CORE_ACTIONS_TOKEN is required for Ki-Core candidate downloads');
-
   const target = getCanonicalTarget(platform, arch);
   const run = githubApiGetJson(`repos/${KI_CORE_REPOSITORY}/actions/runs/${runId}`, token);
   validateCandidateRun(run, { headSha: expectedSha });
