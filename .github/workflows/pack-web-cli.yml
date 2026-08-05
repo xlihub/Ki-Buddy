@@ -120,8 +120,7 @@ jobs:
         env:
           PACK_PLATFORM: ${{ matrix.platform }}
           PACK_ARCH: ${{ matrix.arch }}
-          # Version is pinned in repo-root package.json (aioncoreVersion).
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AIONUI_BACKEND_SOURCE_POLICY: release-pinned
 
       - name: Upload tarball artifact
         uses: actions/upload-artifact@v6

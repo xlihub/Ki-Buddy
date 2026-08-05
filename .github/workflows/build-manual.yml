@@ -1,8 +1,8 @@
 name: '🔨 Manual Build'
 
 permissions:
-  contents: write
-  actions: write
+  actions: read
+  contents: read
 
 on:
   workflow_dispatch:
@@ -30,11 +30,14 @@ on:
         required: false
         type: boolean
         default: false
-      aioncore_run_id:
-        description: 'Optional AionCore Manual Build workflow run id to bundle instead of the pinned release'
-        required: false
+      ki_core_candidate_run_id:
+        description: 'Successful Ki-Core Candidate Build workflow run ID'
+        required: true
         type: string
-        default: ''
+      ki_core_candidate_head_sha:
+        description: 'Full merged Ki-Core product/main commit SHA used by the candidate run'
+        required: true
+        type: string
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
@@ -87,7 +90,9 @@ jobs:
       matrix: ${{ needs.prepare-matrix.outputs.matrix }}
       ref: ${{ inputs.branch }}
       skip_code_quality: ${{ inputs.skip_code_quality }}
-      aioncore_run_id: ${{ inputs.aioncore_run_id }}
+      ki_core_source_policy: candidate
+      ki_core_candidate_run_id: ${{ inputs.ki_core_candidate_run_id }}
+      ki_core_candidate_head_sha: ${{ inputs.ki_core_candidate_head_sha }}
       append_commit_hash: true
       upload_installers_only: true
     secrets: inherit

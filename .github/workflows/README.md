@@ -1,5 +1,15 @@
 # GPT Workflows
 
+## Ki-Core 来源策略
+
+Ki-Buddy 打包只允许三种显式来源策略：
+
+- `release-pinned`：正式桌面包与 Web CLI 使用。读取 `package.json` 的完整 Ki-Core tag 和六平台 SHA-256；禁止 `latest`、Actions run ID 和本地 binary。
+- `candidate`：仅 `build-manual.yml` 使用。必须提供 Ki-Core Candidate Build run ID、完整 `product/main` commit SHA，以及只读 `KI_CORE_ACTIONS_TOKEN`。
+- `development`：仅本地开发使用。允许显式 local bundle、local binary 或旧 AionCore 下载路径，不得写入稳定 Ki-Core provenance。
+
+`KI_CORE_ACTIONS_TOKEN` 只授予读取 `xlihub/Ki-Core` Actions run 与 artifact 的权限。普通 PR、Web CLI 和正式发布 workflow 不传递该 secret。首次 Ki-Core release 发布并验证六个平台后，才能填写 `package.json.kiCore.tag` 与 `checksums` 并启用正式构建。
+
 本项目使用 GPT 驱动的 GitHub Actions 工作流辅助 PR 审查。
 
 ## 架构概览

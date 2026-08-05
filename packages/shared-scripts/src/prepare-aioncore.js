@@ -1,64 +1,40 @@
 /**
- * Prepare aioncore binary for packaging.
+ * Prepare the aioncore runtime binary for Ki-Buddy packaging.
  *
- * Resolution order:
- *  1. GitHub Actions artifact download when AIONUI_BACKEND_RUN_ID is set
- *  2. GitHub release download (requires version or defaults to "latest")
- *  3. Complete local bundle from AIONUI_BACKEND_LOCAL_BUNDLE_DIR
- *  4. Local binary fallback from AIONUI_BACKEND_LOCAL_BINARY
- *
- * Output: {projectRoot}/resources/bundled-aioncore/{platform}-{arch}/
- *   - aioncore[.exe]
- *   - manifest.json
- *   - managed-resources/...
+ * Source policies:
+ *  - release-pinned: immutable xlihub/Ki-Core release configured in package.json
+ *  - candidate: verified xlihub/Ki-Core Actions candidate run
+ *  - development: explicit local inputs or the legacy AionCore development release path
  *
  * @module prepare-aioncore
  */
 
-const { execSync, execFileSync } = require('child_process');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+const { execFileSync, execSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const {
+  KI_CORE_REPOSITORY,
+  createBundleProvenance,
+  extractArchiveSafely,
+  getArchiveName,
+  getCanonicalTarget,
+  getReleaseUrl,
+  getSourcePolicy,
+  inspectArchiveSafely,
+  readKiCorePin,
+  selectCandidateArtifact,
+  validateCandidateRun,
+  validateDownloadedAssets,
+} = require('./kiCoreRelease');
+const { validateEntries } = require('./safeExtractArchive');
 const { verifyBundledAioncoreResources } = require('./verify-bundled-aioncore-resources');
 
-const GITHUB_OWNER = 'iOfficeAI';
-const GITHUB_REPO = 'AionCore';
-
-const ACTIONS_ARTIFACT_TARGETS = {
-  'darwin-arm64': {
-    artifactName: 'aioncore-manual-macos-arm64',
-    manualPlatform: 'macos-arm64',
-  },
-  'darwin-x64': {
-    artifactName: 'aioncore-manual-macos-x64',
-    manualPlatform: 'macos-x64',
-  },
-  'linux-arm64': {
-    artifactName: 'aioncore-manual-linux-arm64',
-    manualPlatform: 'linux-arm64',
-  },
-  'linux-x64': {
-    artifactName: 'aioncore-manual-linux-x64',
-    manualPlatform: 'linux-x64',
-  },
-  'win32-arm64': {
-    artifactName: 'aioncore-manual-windows-arm64',
-    manualPlatform: 'windows-arm64',
-  },
-  'win32-x64': {
-    artifactName: 'aioncore-manual-windows-x64',
-    manualPlatform: 'windows-x64',
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const LEGACY_GITHUB_OWNER = 'iOfficeAI';
+const LEGACY_GITHUB_REPO = 'AionCore';
 
 function ensureDirectory(dirPath) {
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
-  }
+  if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 }
 
 function removeDirectorySafe(dirPath) {
@@ -83,23 +59,15 @@ function ensureExecutableMode(filePath) {
 }
 
 function writeJson(filePath, payload) {
-  fs.writeFileSync(filePath, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
+  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 }
 
 function getBinaryName(platform) {
   return platform === 'win32' ? 'aioncore.exe' : 'aioncore';
 }
 
-function getActionsTarget(platform, arch) {
-  return ACTIONS_ARTIFACT_TARGETS[`${platform}-${arch}`] || null;
-}
-
 function getActionsArtifactName(platform, arch) {
-  return getActionsTarget(platform, arch)?.artifactName || null;
-}
-
-function getActionsManualPlatform(platform, arch) {
-  return getActionsTarget(platform, arch)?.manualPlatform || `${platform}-${arch}`;
+  return `ki-core-candidate-${getCanonicalTarget(platform, arch).platformKey}`;
 }
 
 function getActionsArtifactMissingMessage({ runId, platform, arch, expectedArtifactName, availableArtifactNames }) {
@@ -108,9 +76,9 @@ function getActionsArtifactMissingMessage({ runId, platform, arch, expectedArtif
       ? availableArtifactNames.join(', ')
       : '(none)';
   return [
-    `AionCore run ${runId} does not contain artifact [ ${expectedArtifactName} ] required for [ ${platform}-${arch} ].`,
+    `Ki-Core run ${runId} does not contain artifact [ ${expectedArtifactName} ] required for [ ${platform}-${arch} ].`,
     `Available artifacts: ${available}.`,
-    `Re-run AionCore Manual Build with platform [ ${getActionsManualPlatform(platform, arch)} ] or all.`,
+    `Re-run Ki-Core Candidate Build with platform [ ${getCanonicalTarget(platform, arch).platformKey} ] or all.`,
   ].join(' ');
 }
 
@@ -149,438 +117,374 @@ function verifyPreparedAioncoreBundle(projectRoot, platform, arch) {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Source resolvers
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve the actual version tag when "latest" is requested.
- * Uses GitHub API via `gh` CLI (needs GH_TOKEN in CI) or falls back to
- * `curl` with an optional Authorization header (GITHUB_TOKEN / GH_TOKEN).
- */
-function resolveLatestTag() {
-  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
-
-  // 1. Try gh CLI (honours GH_TOKEN automatically)
-  try {
-    const out = execSync(`gh api repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest --jq .tag_name`, {
-      encoding: 'utf-8',
-      timeout: 15000,
-    }).trim();
-    if (out) return out;
-  } catch {
-    // gh CLI not available or no token — fall back to curl
-  }
-
-  // 2. Curl with optional token to avoid rate-limit 403
-  try {
-    const authArgs = token ? ['-H', `Authorization: token ${token}`] : [];
-    const args = ['-fsSL', ...authArgs, `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`];
-    const out = execFileSync('curl', args, { encoding: 'utf-8', timeout: 15000 });
-    const tag = JSON.parse(out).tag_name;
-    if (tag) return tag;
-  } catch {
-    // network issue or rate-limited
-  }
-
-  return null;
-}
-
-/**
- * Build the release asset filename for the given platform/arch/tag.
- *
- * Expected asset naming convention:
- *   aioncore-v0.1.0-aarch64-apple-darwin.tar.gz
- */
-function getAssetName(platform, arch, tag) {
-  const archMap = { x64: 'x86_64', arm64: 'aarch64' };
-  const platformMap = {
-    darwin: 'apple-darwin',
-    linux: 'unknown-linux-gnu',
-    win32: 'pc-windows-msvc',
-  };
-  const normalizedArch = archMap[arch];
-  const normalizedPlatform = platformMap[platform];
-  if (!normalizedArch || !normalizedPlatform) return null;
-  const ext = platform === 'win32' ? '.zip' : '.tar.gz';
-  return `aioncore-${tag}-${normalizedArch}-${normalizedPlatform}${ext}`;
-}
-
-function getDownloadUrl(assetName, tag) {
-  return `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/${tag}/${assetName}`;
-}
-
-function downloadFile(url, outputPath) {
-  console.log(`  Downloading aioncore from ${url}`);
-  if (process.platform === 'win32') {
-    const ps = `$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri '${url}' -OutFile '${outputPath.replace(/'/g, "''")}'`;
-    execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], {
-      timeout: 120000,
-    });
-    return;
-  }
-  try {
-    execFileSync('curl', ['-L', '--fail', '--silent', '--show-error', '-o', outputPath, url], { timeout: 120000 });
-  } catch {
-    execFileSync('wget', ['-q', '-O', outputPath, url], { timeout: 120000 });
-  }
-}
-
-function extractArchive(archivePath, outputDir, platform) {
-  ensureDirectory(outputDir);
-  if (platform === 'win32' || archivePath.endsWith('.zip')) {
-    if (platform === 'win32') {
-      const ps = `Expand-Archive -LiteralPath '${archivePath.replace(/'/g, "''")}' -DestinationPath '${outputDir.replace(/'/g, "''")}' -Force`;
-      execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps]);
-    } else {
-      execFileSync('unzip', ['-o', archivePath, '-d', outputDir]);
-    }
-  } else {
-    execFileSync('tar', ['-xzf', archivePath, '-C', outputDir]);
-  }
-}
-
-function findBinaryInDir(dir, binaryName) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isFile() && entry.name === binaryName) return fullPath;
-    if (entry.isDirectory()) {
-      const found = findBinaryInDir(fullPath, binaryName);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-function findAioncoreArchiveInDir(dir) {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (
-      entry.isFile() &&
-      entry.name.startsWith('aioncore-') &&
-      (entry.name.endsWith('.zip') || entry.name.endsWith('.tar.gz'))
-    ) {
-      return fullPath;
-    }
-    if (entry.isDirectory()) {
-      const found = findAioncoreArchiveInDir(fullPath);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
 function getGitHubToken() {
   return process.env.GH_TOKEN || process.env.GITHUB_TOKEN || '';
 }
 
-function githubApiGetJson(apiPath) {
-  const token = getGitHubToken();
-
-  try {
-    return JSON.parse(
-      execFileSync('gh', ['api', apiPath], {
-        encoding: 'utf-8',
-        timeout: 15000,
-        env: {
-          ...process.env,
-          GH_TOKEN: token || process.env.GH_TOKEN,
-        },
-      })
-    );
-  } catch {
-    // gh CLI not available or failed — fall back to curl.
+function downloadFile(url, outputPath, token = '') {
+  console.log(`  Downloading Ki-Core asset from ${url}`);
+  if (process.platform === 'win32') {
+    const headers = token ? ` -Headers @{ Authorization = 'Bearer ${token.replace(/'/g, "''")}' }` : '';
+    const ps = `$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri '${url.replace(/'/g, "''")}' -OutFile '${outputPath.replace(/'/g, "''")}'${headers}`;
+    execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { timeout: 120000 });
+    return;
   }
 
-  const headers = ['-H', 'Accept: application/vnd.github+json'];
-  if (token) {
-    headers.push('-H', `Authorization: Bearer ${token}`);
-  }
-
-  const url = `https://api.github.com/${apiPath}`;
-  const out = execFileSync('curl', ['-fsSL', ...headers, url], {
-    encoding: 'utf-8',
-    timeout: 15000,
-  });
-  return JSON.parse(out);
-}
-
-function downloadFileWithAuth(url, outputPath) {
-  const token = getGitHubToken();
-  const headers = ['-H', 'Accept: application/vnd.github+json'];
-  if (token) {
-    headers.push('-H', `Authorization: Bearer ${token}`);
-  }
-
+  const headers = token ? ['-H', `Authorization: Bearer ${token}`] : [];
   try {
     execFileSync('curl', ['-L', '--fail', '--silent', '--show-error', ...headers, '-o', outputPath, url], {
       timeout: 120000,
     });
-    return;
+  } catch (error) {
+    if (token) throw error;
+    execFileSync('wget', ['-q', '-O', outputPath, url], { timeout: 120000 });
+  }
+}
+
+function githubApiGetJson(apiPath, token) {
+  try {
+    return JSON.parse(
+      execFileSync('gh', ['api', apiPath], {
+        encoding: 'utf8',
+        timeout: 15000,
+        env: { ...process.env, GH_TOKEN: token },
+      })
+    );
   } catch {
-    // curl may be unavailable in some local environments; try gh before failing.
+    const headers = ['-H', 'Accept: application/vnd.github+json', '-H', `Authorization: Bearer ${token}`];
+    const out = execFileSync('curl', ['-fsSL', ...headers, `https://api.github.com/${apiPath}`], {
+      encoding: 'utf8',
+      timeout: 15000,
+    });
+    return JSON.parse(out);
   }
-
-  execFileSync('gh', ['api', url, '--output', outputPath], {
-    timeout: 120000,
-    env: {
-      ...process.env,
-      GH_TOKEN: token || process.env.GH_TOKEN,
-    },
-  });
 }
 
-function listActionsArtifacts(runId) {
-  const response = githubApiGetJson(
-    `repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}/artifacts?per_page=100`
+function resolveLatestLegacyTag() {
+  const token = getGitHubToken();
+  try {
+    const out = execSync(`gh api repos/${LEGACY_GITHUB_OWNER}/${LEGACY_GITHUB_REPO}/releases/latest --jq .tag_name`, {
+      encoding: 'utf8',
+      timeout: 15000,
+    }).trim();
+    if (out) return out;
+  } catch {}
+
+  try {
+    const headers = token ? ['-H', `Authorization: Bearer ${token}`] : [];
+    const out = execFileSync(
+      'curl',
+      [
+        '-fsSL',
+        ...headers,
+        `https://api.github.com/repos/${LEGACY_GITHUB_OWNER}/${LEGACY_GITHUB_REPO}/releases/latest`,
+      ],
+      { encoding: 'utf8', timeout: 15000 }
+    );
+    return JSON.parse(out).tag_name || null;
+  } catch {
+    return null;
+  }
+}
+
+function getLegacyAssetName(platform, arch, tag) {
+  const archMap = { x64: 'x86_64', arm64: 'aarch64' };
+  const platformMap = { darwin: 'apple-darwin', linux: 'unknown-linux-gnu', win32: 'pc-windows-msvc' };
+  if (!archMap[arch] || !platformMap[platform]) return null;
+  return `aioncore-${tag}-${archMap[arch]}-${platformMap[platform]}${platform === 'win32' ? '.zip' : '.tar.gz'}`;
+}
+
+function createFreshTempDir(prefix) {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function extractExpectedArchive(archivePath, tempDir, binaryName) {
+  const extractDir = path.join(tempDir, 'binary');
+  extractArchiveSafely(archivePath, extractDir, [binaryName]);
+  return path.join(extractDir, binaryName);
+}
+
+function downloadAndVerifyStable(platform, arch, pin) {
+  const target = getCanonicalTarget(platform, arch);
+  const archiveName = getArchiveName(pin.tag, target);
+  const tempDir = createFreshTempDir('ki-core-release-');
+  const manifestPath = path.join(tempDir, 'ki-core-release.json');
+  const checksumPath = path.join(tempDir, 'ki-core-checksums.txt');
+  const archivePath = path.join(tempDir, archiveName);
+
+  try {
+    downloadFile(getReleaseUrl(pin.tag, 'ki-core-release.json'), manifestPath);
+    downloadFile(getReleaseUrl(pin.tag, 'ki-core-checksums.txt'), checksumPath);
+    downloadFile(getReleaseUrl(pin.tag, archiveName), archivePath);
+    const manifest = validateDownloadedAssets({
+      sourceType: 'stable',
+      platformKey: target.platformKey,
+      tag: pin.tag,
+      manifestPath,
+      checksumPath,
+      archivePath,
+      pinnedChecksums: pin.checksums,
+    });
+    const binaryPath = extractExpectedArchive(archivePath, tempDir, target.executable);
+    return {
+      binaryPath,
+      manifest,
+      tempDir,
+      source: {
+        policy: 'release-pinned',
+        type: 'github-release',
+        repository: KI_CORE_REPOSITORY,
+        tag: pin.tag,
+        assetName: archiveName,
+        url: getReleaseUrl(pin.tag, archiveName),
+      },
+    };
+  } catch (error) {
+    removeDirectorySafe(tempDir);
+    throw error;
+  }
+}
+
+function validateCandidateArtifactEntries(entries, target) {
+  const archivePattern = new RegExp(
+    `^ki-core-v(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)-${target.target.replaceAll('.', '\\.')}${target.extension.replaceAll('.', '\\.')}$`
   );
-  return Array.isArray(response?.artifacts) ? response.artifacts : [];
+  const archiveNames = entries.map((entry) => entry.name).filter((name) => archivePattern.test(name));
+  if (archiveNames.length !== 1) {
+    throw new Error('Ki-Core candidate artifact must contain exactly one canonical platform archive');
+  }
+  const expectedEntries = [archiveNames[0], 'ki-core-candidate.json', 'ki-core-checksums.txt'];
+  validateEntries(entries, expectedEntries);
+  return { archiveName: archiveNames[0], expectedEntries };
 }
 
-function downloadAndExtractActionsArtifact(platform, arch, runId) {
-  const expectedArtifactName = getActionsArtifactName(platform, arch);
-  if (!expectedArtifactName) {
-    throw new Error(`Unsupported AionCore Actions artifact target: ${platform}-${arch}`);
-  }
+function downloadAndVerifyCandidate(platform, arch, runId, expectedSha, token) {
+  if (!/^[1-9]\d*$/.test(runId)) throw new Error('Ki-Core candidate run ID must be numeric');
+  if (!/^[0-9a-f]{40}$/.test(expectedSha))
+    throw new Error('Ki-Core candidate head SHA must be a full lowercase commit SHA');
+  if (!token) throw new Error('KI_CORE_ACTIONS_TOKEN is required for Ki-Core candidate downloads');
 
-  const artifacts = listActionsArtifacts(runId);
-  const availableArtifactNames = artifacts
-    .map((artifact) => artifact.name)
-    .filter(Boolean)
-    .toSorted();
-  const artifact = artifacts.find((candidate) => candidate.name === expectedArtifactName);
-  if (!artifact) {
+  const target = getCanonicalTarget(platform, arch);
+  const run = githubApiGetJson(`repos/${KI_CORE_REPOSITORY}/actions/runs/${runId}`, token);
+  validateCandidateRun(run, { headSha: expectedSha });
+  const artifactResponse = githubApiGetJson(
+    `repos/${KI_CORE_REPOSITORY}/actions/runs/${runId}/artifacts?per_page=100`,
+    token
+  );
+  const artifacts = Array.isArray(artifactResponse?.artifacts) ? artifactResponse.artifacts : [];
+  const expectedArtifactName = getActionsArtifactName(platform, arch);
+  let artifact;
+  try {
+    artifact = selectCandidateArtifact(artifacts, expectedArtifactName);
+  } catch {
     throw new Error(
       getActionsArtifactMissingMessage({
         runId,
         platform,
         arch,
         expectedArtifactName,
-        availableArtifactNames,
+        availableArtifactNames: artifacts
+          .map((entry) => entry?.name)
+          .filter(Boolean)
+          .toSorted(),
       })
     );
   }
 
-  const tempDir = path.join(os.tmpdir(), 'aioncore-prepare-actions', runId, `${platform}-${arch}`);
+  const tempDir = createFreshTempDir('ki-core-candidate-');
   const artifactZipPath = path.join(tempDir, `${expectedArtifactName}.zip`);
-  const artifactExtractDir = path.join(tempDir, 'artifact');
-  const binaryExtractDir = path.join(tempDir, 'binary');
-
-  removeDirectorySafe(tempDir);
-  ensureDirectory(tempDir);
-
+  const artifactDir = path.join(tempDir, 'artifact');
   const downloadUrl =
     artifact.archive_download_url ||
-    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/artifacts/${artifact.id}/zip`;
-  console.log(`  Downloading aioncore from AionCore run ${runId} artifact ${expectedArtifactName}`);
-  downloadFileWithAuth(downloadUrl, artifactZipPath);
-  extractArchive(artifactZipPath, artifactExtractDir, platform);
+    `https://api.github.com/repos/${KI_CORE_REPOSITORY}/actions/artifacts/${artifact.id}/zip`;
 
-  const archivePath = findAioncoreArchiveInDir(artifactExtractDir);
-  if (!archivePath) {
-    throw new Error(`AionCore artifact ${expectedArtifactName} from run ${runId} does not contain an aioncore archive`);
+  try {
+    downloadFile(downloadUrl, artifactZipPath, token);
+    const { archiveName, expectedEntries } = validateCandidateArtifactEntries(
+      inspectArchiveSafely(artifactZipPath),
+      target
+    );
+    extractArchiveSafely(artifactZipPath, artifactDir, expectedEntries);
+    const archivePath = path.join(artifactDir, archiveName);
+    const manifestPath = path.join(artifactDir, 'ki-core-candidate.json');
+    const checksumPath = path.join(artifactDir, 'ki-core-checksums.txt');
+    const manifest = validateDownloadedAssets({
+      sourceType: 'candidate',
+      platformKey: target.platformKey,
+      runId,
+      headSha: expectedSha,
+      manifestPath,
+      checksumPath,
+      archivePath,
+    });
+    const binaryPath = extractExpectedArchive(archivePath, tempDir, target.executable);
+    return {
+      binaryPath,
+      manifest,
+      tempDir,
+      source: {
+        policy: 'candidate',
+        type: 'actions-artifact',
+        repository: KI_CORE_REPOSITORY,
+        workflow: 'build-manual.yml',
+        runId,
+        headSha: expectedSha,
+        artifactName: expectedArtifactName,
+        url: downloadUrl,
+      },
+    };
+  } catch (error) {
+    removeDirectorySafe(tempDir);
+    throw error;
   }
+}
 
-  extractArchive(archivePath, binaryExtractDir, platform);
+function downloadLegacyDevelopment(platform, arch, requestedVersion) {
+  const tag =
+    requestedVersion === 'latest'
+      ? resolveLatestLegacyTag()
+      : requestedVersion?.startsWith('v')
+        ? requestedVersion
+        : `v${requestedVersion}`;
+  if (!tag) throw new Error('Failed to resolve the legacy AionCore development release tag');
+  const assetName = getLegacyAssetName(platform, arch, tag);
+  if (!assetName) throw new Error(`Unsupported AionCore development target: ${platform}-${arch}`);
 
-  const binaryName = getBinaryName(platform);
-  const binaryPath = findBinaryInDir(binaryExtractDir, binaryName);
-  if (!binaryPath) {
-    throw new Error(`Binary ${binaryName} not found in AionCore artifact ${expectedArtifactName} from run ${runId}`);
+  const tempDir = createFreshTempDir('aioncore-development-');
+  const archivePath = path.join(tempDir, assetName);
+  const url = `https://github.com/${LEGACY_GITHUB_OWNER}/${LEGACY_GITHUB_REPO}/releases/download/${tag}/${assetName}`;
+  try {
+    downloadFile(url, archivePath);
+    return {
+      binaryPath: extractExpectedArchive(archivePath, tempDir, getBinaryName(platform)),
+      manifest: null,
+      tempDir,
+      source: { policy: 'development', type: 'legacy-release', repository: 'iOfficeAI/AionCore', tag, url },
+    };
+  } catch (error) {
+    removeDirectorySafe(tempDir);
+    throw error;
   }
+}
 
+function buildBundleManifest({ platform, arch, manifest, source, sourceType, binaryName }) {
   return {
-    binaryPath,
-    tempDir,
-    artifactName: expectedArtifactName,
-    archivePath,
-    url: downloadUrl,
+    ...createBundleProvenance(manifest, source),
+    platform,
+    arch,
+    generatedAt: new Date().toISOString(),
+    sourceType,
+    files: [binaryName, 'managed-resources/'],
   };
 }
 
-function downloadAndExtract(platform, arch, tag) {
-  const assetName = getAssetName(platform, arch, tag);
-  if (!assetName) {
-    throw new Error(`Unsupported aioncore target: ${platform}-${arch}`);
-  }
-
-  const url = getDownloadUrl(assetName, tag);
-  const tempDir = path.join(os.tmpdir(), 'aioncore-prepare', tag, `${platform}-${arch}`);
-  const archivePath = path.join(tempDir, assetName);
-  const extractDir = path.join(tempDir, 'extracted');
-
-  removeDirectorySafe(tempDir);
-  ensureDirectory(tempDir);
-
-  downloadFile(url, archivePath);
-  extractArchive(archivePath, extractDir, platform);
-
-  const binaryName = getBinaryName(platform);
-  const binaryPath = findBinaryInDir(extractDir, binaryName);
-  if (!binaryPath) {
-    throw new Error(`Binary ${binaryName} not found in downloaded archive`);
-  }
-
-  return { binaryPath, tempDir, url };
-}
-
-// ---------------------------------------------------------------------------
-// Main export
-// ---------------------------------------------------------------------------
-
 /**
- * Prepare aioncore binary for packaging.
- *
- * @param {object} options - Configuration options
- * @param {string} options.projectRoot - Project root directory
- * @param {string} options.platform - Target platform (process.platform)
- * @param {string} options.arch - Target architecture (process.arch)
- * @param {string} options.version - Backend version (default: 'latest')
+ * @param {object} options
+ * @param {string} options.projectRoot
+ * @param {string} options.platform
+ * @param {string} options.arch
+ * @param {string | null} [options.version]
+ * @param {'release-pinned' | 'candidate' | 'development'} [options.sourcePolicy]
  * @returns {{ prepared: true; dir: string; sourceType: string }}
  */
 function prepareAioncore(options) {
   const { projectRoot, platform, arch, version = 'latest' } = options;
+  const sourcePolicy = getSourcePolicy(options.sourcePolicy);
   const runtimeKey = `${platform}-${arch}`;
-  const actionsRunId = (process.env.AIONUI_BACKEND_RUN_ID || '').trim();
-
-  let tag = null;
-  if (!actionsRunId) {
-    // Resolve the actual version tag — release asset filenames include the tag.
-    if (version === 'latest') {
-      const resolved = resolveLatestTag();
-      if (!resolved) {
-        throw new Error('Failed to resolve latest aioncore release tag from GitHub API');
-      }
-      tag = resolved;
-      console.log(`Resolved aioncore "latest" → ${tag}`);
-    } else {
-      tag = version.startsWith('v') ? version : `v${version}`;
-    }
-  }
-
   const targetDir = path.join(projectRoot, 'resources', 'bundled-aioncore', runtimeKey);
   const binaryName = getBinaryName(platform);
   const targetBinaryPath = path.join(targetDir, binaryName);
-
-  console.log(
-    `Preparing aioncore for ${runtimeKey} (${actionsRunId ? `actions run: ${actionsRunId}` : `version: ${tag}`})`
-  );
+  let tempDir = null;
 
   removeDirectorySafe(targetDir);
   ensureDirectory(targetDir);
 
-  const localBundleDir = (process.env.AIONUI_BACKEND_LOCAL_BUNDLE_DIR || '').trim();
-  if (localBundleDir) {
-    const resolvedLocalBundleDir = path.resolve(localBundleDir);
-    const localBinaryPath = path.join(resolvedLocalBundleDir, binaryName);
-    const localManagedResourcesDir = path.join(resolvedLocalBundleDir, 'managed-resources');
-    if (
-      fs.existsSync(resolvedLocalBundleDir) &&
-      fs.statSync(resolvedLocalBundleDir).isDirectory() &&
-      fs.existsSync(localBinaryPath) &&
-      fs.existsSync(localManagedResourcesDir)
-    ) {
-      copyDirectorySafe(resolvedLocalBundleDir, targetDir);
-      ensureExecutableMode(targetBinaryPath);
-      const manifest = {
-        platform,
-        arch,
-        version: tag || `actions-run-${actionsRunId}` || 'local-bundle',
-        generatedAt: new Date().toISOString(),
-        sourceType: 'local-bundle',
-        source: { path: resolvedLocalBundleDir },
-        files: [binaryName, 'managed-resources/'],
-      };
-      writeJson(path.join(targetDir, 'manifest.json'), manifest);
-      verifyPreparedAioncoreBundle(projectRoot, platform, arch);
-      console.log(`  Using local aioncore bundle: ${resolvedLocalBundleDir}`);
-      return { prepared: true, dir: targetDir, sourceType: 'local-bundle' };
+  try {
+    if (sourcePolicy === 'development') {
+      const localBundleDir = (process.env.AIONUI_BACKEND_LOCAL_BUNDLE_DIR || '').trim();
+      if (localBundleDir) {
+        const resolvedLocalBundleDir = path.resolve(localBundleDir);
+        const localBinaryPath = path.join(resolvedLocalBundleDir, binaryName);
+        const localManagedResourcesDir = path.join(resolvedLocalBundleDir, 'managed-resources');
+        if (
+          fs.existsSync(resolvedLocalBundleDir) &&
+          fs.statSync(resolvedLocalBundleDir).isDirectory() &&
+          fs.existsSync(localBinaryPath) &&
+          fs.existsSync(localManagedResourcesDir)
+        ) {
+          copyDirectorySafe(resolvedLocalBundleDir, targetDir);
+          ensureExecutableMode(targetBinaryPath);
+          writeJson(
+            path.join(targetDir, 'manifest.json'),
+            buildBundleManifest({
+              platform,
+              arch,
+              manifest: null,
+              source: { policy: 'development', type: 'local-bundle', path: resolvedLocalBundleDir },
+              sourceType: 'local-bundle',
+              binaryName,
+            })
+          );
+          verifyPreparedAioncoreBundle(projectRoot, platform, arch);
+          return { prepared: true, dir: targetDir, sourceType: 'local-bundle' };
+        }
+        console.warn(`  Local aioncore bundle is incomplete or missing: ${resolvedLocalBundleDir}`);
+      }
+    } else if (process.env.AIONUI_BACKEND_LOCAL_BUNDLE_DIR || process.env.AIONUI_BACKEND_LOCAL_BINARY) {
+      throw new Error(`Local Ki-Core inputs are forbidden by the ${sourcePolicy} source policy`);
     }
-    console.warn(`  Local aioncore bundle is incomplete or missing: ${resolvedLocalBundleDir}`);
-  }
 
-  let sourcePath = null;
-  let sourceType = 'none';
-  let sourceDetail = {};
-  let tempDir = null;
-
-  // 1. Download from GitHub Actions artifacts when manual build run id is provided.
-  if (actionsRunId) {
-    const result = downloadAndExtractActionsArtifact(platform, arch, actionsRunId);
-    sourcePath = result.binaryPath;
-    tempDir = result.tempDir;
-    sourceType = 'actions-artifact';
-    sourceDetail = {
-      runId: actionsRunId,
-      artifactName: result.artifactName,
-      url: result.url,
-    };
-    console.log(`  Downloaded from GitHub Actions artifact`);
-  }
-
-  // 2. Download from GitHub releases.
-  if (!sourcePath && tag) {
-    try {
-      const result = downloadAndExtract(platform, arch, tag);
-      sourcePath = result.binaryPath;
-      tempDir = result.tempDir;
-      sourceType = 'download';
-      sourceDetail = { url: result.url };
-      console.log(`  Downloaded from GitHub releases`);
-    } catch (error) {
-      console.warn(`  Download failed: ${error.message}`);
-    }
-  }
-
-  // 3. Use an explicitly supplied local cache when network download is unavailable.
-  if (!sourcePath) {
-    const localBinary = (process.env.AIONUI_BACKEND_LOCAL_BINARY || '').trim();
-    if (localBinary) {
-      const resolvedLocalBinary = path.resolve(localBinary);
-      if (fs.existsSync(resolvedLocalBinary) && fs.statSync(resolvedLocalBinary).isFile()) {
-        sourcePath = resolvedLocalBinary;
-        sourceType = 'local-binary';
-        sourceDetail = { path: resolvedLocalBinary };
-        console.log(`  Using local aioncore binary: ${resolvedLocalBinary}`);
+    let result;
+    if (sourcePolicy === 'release-pinned') {
+      if (process.env.AIONUI_BACKEND_RUN_ID || process.env.AIONUI_BACKEND_VERSION) {
+        throw new Error('release-pinned policy forbids Actions run IDs and version overrides');
+      }
+      result = downloadAndVerifyStable(platform, arch, readKiCorePin(projectRoot));
+    } else if (sourcePolicy === 'candidate') {
+      if (process.env.AIONUI_BACKEND_VERSION) {
+        throw new Error('candidate policy forbids stable version overrides');
+      }
+      const runId = (process.env.AIONUI_BACKEND_RUN_ID || '').trim();
+      const expectedSha = (process.env.AIONUI_BACKEND_EXPECTED_SHA || '').trim();
+      const token = (process.env.KI_CORE_ACTIONS_TOKEN || '').trim();
+      result = downloadAndVerifyCandidate(platform, arch, runId, expectedSha, token);
+    } else {
+      const localBinary = (process.env.AIONUI_BACKEND_LOCAL_BINARY || '').trim();
+      if (localBinary) {
+        const resolvedLocalBinary = path.resolve(localBinary);
+        if (!fs.existsSync(resolvedLocalBinary) || !fs.statSync(resolvedLocalBinary).isFile()) {
+          throw new Error(`Local aioncore binary not found: ${resolvedLocalBinary}`);
+        }
+        result = {
+          binaryPath: resolvedLocalBinary,
+          manifest: null,
+          tempDir: null,
+          source: { policy: 'development', type: 'local-binary', path: resolvedLocalBinary },
+        };
       } else {
-        console.warn(`  Local aioncore binary not found: ${resolvedLocalBinary}`);
+        result = downloadLegacyDevelopment(platform, arch, version || 'latest');
       }
     }
-  }
 
-  // Write result
-  if (sourcePath) {
-    copyFileSafe(sourcePath, targetBinaryPath);
+    tempDir = result.tempDir;
+    copyFileSafe(result.binaryPath, targetBinaryPath);
     ensureExecutableMode(targetBinaryPath);
     const bundledManagedResourcesDir = prepareManagedResources(targetBinaryPath, targetDir);
-
-    // The release tag is the authoritative version — the aioncore
-    // binary does not expose a --version flag (it has --app-version which
-    // takes a value, not a self-report).
-    const manifest = {
-      platform,
-      arch,
-      version: tag || `actions-run-${actionsRunId}`,
-      generatedAt: new Date().toISOString(),
-      sourceType,
-      source: sourceDetail,
-      files: [binaryName, 'managed-resources/'],
-    };
-
-    writeJson(path.join(targetDir, 'manifest.json'), manifest);
-    verifyPreparedAioncoreBundle(projectRoot, platform, arch);
-    console.log(
-      `  Bundled aioncore prepared: resources/bundled-aioncore/${runtimeKey}/${binaryName} [source=${sourceType}]`
+    const sourceType = result.source.type;
+    writeJson(
+      path.join(targetDir, 'manifest.json'),
+      buildBundleManifest({ platform, arch, manifest: result.manifest, source: result.source, sourceType, binaryName })
     );
+    verifyPreparedAioncoreBundle(projectRoot, platform, arch);
+    console.log(`  Bundled aioncore prepared: resources/bundled-aioncore/${runtimeKey}/${binaryName}`);
     console.log(`  Bundled managed resources prepared: ${bundledManagedResourcesDir}`);
-
-    if (tempDir) removeDirectorySafe(tempDir);
     return { prepared: true, dir: targetDir, sourceType };
+  } catch (error) {
+    removeDirectorySafe(targetDir);
+    throw error;
+  } finally {
+    if (tempDir) removeDirectorySafe(tempDir);
   }
-
-  throw new Error(`aioncore binary not found for ${runtimeKey} (tag: ${tag})`);
 }
 
 module.exports = {

@@ -167,6 +167,7 @@
     "streamdown": "^1.5.1",
     "strip-json-comments": "^3.1.1",
     "swr": "^2.3.6",
+    "tar": "^7.5.7",
     "tiny-csrf": "^1.1.6",
     "turndown": "^7.2.2",
     "turndown-plugin-gfm": "^1.0.2",
@@ -260,6 +261,11 @@
   "aioncoreVersion": "v0.1.58",
   "electronRebuild": {
     "electronVersion": "^37.3.1"
+  },
+  "kiCore": {
+    "repository": "xlihub/Ki-Core",
+    "tag": null,
+    "checksums": {}
   },
   "patchedDependencies": {
     "7zip-bin@5.2.0": "patches/7zip-bin@5.2.0.patch"
