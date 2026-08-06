@@ -52,7 +52,6 @@ export interface IConfigStorageRefer {
   // 阻止系统休眠以保证定时任务执行 / Prevent system sleep to ensure scheduled tasks run
   'system.keepAwake'?: boolean;
   // Automatically preview newly created Office files in the current workspace
-  'system.autoPreviewOfficeFiles'?: boolean;
   // Skills Market: whether the external skills market source is enabled
   'skillsMarket.enabled'?: boolean;
   /**
@@ -174,6 +173,13 @@ interface IChatConversation<T, Extra> {
    * be forked (codex), otherwise only the latest turn (claude / ACP HEAD fork).
    */
   fork_capability?: { at_turn: boolean };
+  /**
+   * Prompt media capability (from `ConversationResponse.prompt_capability`).
+   * Filled ONLY on the single-conversation detail response (never on lists).
+   * Absent = unknown/unsupported — media attachments are delivered to the
+   * agent as file paths instead of native image/audio content blocks.
+   */
+  prompt_capability?: { image: boolean; audio: boolean };
 }
 
 /**

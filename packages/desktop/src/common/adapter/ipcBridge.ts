@@ -15,6 +15,7 @@
 import type { IConfirmation } from '@/common/chat/chatLib';
 import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
+import { buildListTasksPath } from './teamTaskPath';
 import type { OpenDialogOptions } from 'electron';
 import type {
   ICssTheme,
@@ -34,7 +35,6 @@ import type {
   SetAssistantStateRequest,
   UpdateAssistantRequest,
 } from '../types/agent/assistantTypes';
-import type { PreviewHistoryTarget, PreviewSnapshotInfo } from '../types/office/preview';
 import type {
   EnsureConversationRuntimeResponse,
   GetConfigOptionsResponse,
@@ -55,9 +55,12 @@ import type {
   ITeamAgentRuntimeStatusEvent,
   ITeamAgentSpawnedEvent,
   ITeamAgentStatusEvent,
+  ITeamActivityPage,
   ITeamChildTurnEvent,
   ITeamCreatedEvent,
   ITeamListChangedEvent,
+  ITeamMailboxChangedEvent,
+  ITeamMailboxMessage,
   ITeamRemovedEvent,
   ITeamRenamedEvent,
   ITeamRunAck,
@@ -67,6 +70,7 @@ import type {
   ITeamSessionStatusChangedEvent,
   ITeamSlotWorkChangedEvent,
   ITeamTaskChangedEvent,
+  ITeamTaskItem,
   ICancelTeamChildTurnParams,
   ICancelTeamRunParams,
   IPauseTeamSlotParams,
@@ -260,6 +264,10 @@ export const conversation = {
     (p) => `/api/conversations/${p.conversation_id}/cancel`,
     (p) => ({ turn_id: p.turn_id })
   ),
+  killTerminal: httpPost<void, { conversation_id: string; terminal_id: string }>(
+    (p) => `/api/conversations/${p.conversation_id}/terminals/${encodeURIComponent(p.terminal_id)}/kill`,
+    () => undefined
+  ),
   activeCount: httpGet<{ count: number }>('/api/conversations/active-count'),
   sendMessage: httpPost<ISendMessageResult, ISendMessageParams>(
     (p) => `/api/conversations/${p.conversation_id}/messages`,
@@ -292,6 +300,13 @@ export const conversation = {
   confirmMessage: httpPost<void, IConfirmMessageParams>(
     (p) => `/api/conversations/${p.conversation_id}/confirmations/${encodeURIComponent(p.call_id)}/confirm`,
     (p) => ({ msg_id: p.msg_id, data: p.confirm_key })
+  ),
+  // Dedicated answer channel for the structured question card (AskUserQuestion)
+  // — question answers must not ride the permission confirm endpoint
+  // (2026-08-05 ruling). Send either answers[] or decline:true, never both.
+  answerAsk: httpPost<void, IAnswerAskParams>(
+    (p) => `/api/conversations/${p.conversation_id}/asks/${encodeURIComponent(p.request_id)}/answer`,
+    (p) => (p.decline ? { decline: true } : { answers: p.answers ?? [] })
   ),
   listArtifacts: httpGet<IConversationArtifact[], { conversation_id: string }>(
     (p) => `/api/conversations/${p.conversation_id}/artifacts`
@@ -413,6 +428,27 @@ export const project = {
    * for a subdir, the existing focused) entry. 409 `project_explorer_duplicate` /
    * `project_explorer_overlap` surface via BackendHttpError.code.
    */
+  /**
+   * POST /api/projects/{id}/resolve-ref → the strongest identity for a file.
+   *
+   * The explorer and a chat link describe the same file differently (`project` vs
+   * `local`), so anything keyed on the ref — tab identity, change subscriptions —
+   * would otherwise treat one file as two. This resolves a local path that lives
+   * under one of the project's roots into its project form.
+   *
+   * Always answers with a usable ref: `project` and `upload` come back untouched,
+   * and a path outside every root — or one that does not exist — is echoed back
+   * rather than raising, so a caller mid-way through opening a missing file still
+   * has something to render with. `upgraded` says whether it changed.
+   *
+   * The comparison stays server-side because case folding is a compile-time
+   * platform decision; comparing path strings here would miss matches on macOS and
+   * merge distinct files on Linux.
+   */
+  resolveRef: httpPost<{ file: ChatFileRef; upgraded: boolean }, { project_id: string; file: ChatFileRef }>(
+    (p) => `/api/projects/${encodeURIComponent(p.project_id)}/resolve-ref`,
+    (p) => ({ file: p.file })
+  ),
   attachFolder: httpPost<ProjectEntryDto, { project_id: string } & AttachFolderRequest>(
     (p) => `/api/projects/${encodeURIComponent(p.project_id)}/folders`,
     (p) => (p.display_name ? { uri: p.uri, display_name: p.display_name } : { uri: p.uri })
@@ -431,12 +467,6 @@ export interface ICdpStatus {
   enabled: boolean;
   port: number | null;
   startupEnabled: boolean;
-  instances: Array<{
-    pid: number;
-    port: number;
-    cwd: string;
-    startTime: number;
-  }>;
   configEnabled: boolean;
   isDevMode: boolean;
 }
@@ -540,6 +570,32 @@ export const application = {
   setZoomFactor: bridge.buildProvider<number, { factor: number }>('app.set-zoom-factor'),
   getCdpStatus: bridge.buildProvider<IBridgeResponse<ICdpStatus>, void>('app.get-cdp-status'),
   updateCdpConfig: bridge.buildProvider<IBridgeResponse<ICdpConfig>, Partial<ICdpConfig>>('app.update-cdp-config'),
+  /**
+   * 清空应用内浏览器的登录态与缓存（cookie / localStorage / 缓存）。
+   * 登录态是全局共享的，所以这是唯一的"退出所有网站登录"入口。
+   *
+   * Clear the in-app browser's sign-in state and cache (cookies / localStorage /
+   * caches). Sign-in state is globally shared, so this is the only way to sign out
+   * of every site the agent or user logged into.
+   */
+  clearBrowserData: bridge.buildProvider<IBridgeResponse<void>, void>('app.clear-browser-data'),
+  /**
+   * 渲染进程把侧边浏览器 webview 的 webContents id 报给主进程，用于把单目标 CDP 通道
+   * 附加到它。
+   *
+   * 为什么必须由渲染进程报：webview 的句柄只存在于渲染进程（webviewRef），主进程无法
+   * 凭空知道哪个 webContents 是「侧边浏览器」。主进程会校验 getType() === 'webview'，
+   * 所以即使这个通道被误用也无法拿主窗口去附加。
+   *
+   * The renderer reports the in-app browser webview's webContents id so the single-target
+   * CDP bridge can attach to it. It must come from the renderer because the webview handle
+   * only exists there (webviewRef); main cannot otherwise tell which WebContents is the
+   * in-app browser. Main validates getType() === 'webview', so even a misused call cannot
+   * attach to the main window.
+   */
+  reportBrowserWebContentsId: bridge.buildProvider<IBridgeResponse<void>, { webContentsId: number }>(
+    'app.report-browser-webcontents-id'
+  ),
   getStartOnBootStatus: bridge.buildProvider<IBridgeResponse<IStartOnBootStatus>, void>('app.get-start-on-boot-status'),
   setStartOnBoot: bridge.buildProvider<IBridgeResponse<IStartOnBootStatus>, { enabled: boolean }>(
     'app.set-start-on-boot'
@@ -663,6 +719,14 @@ export const fs = {
   // calls shell.showItemInFolder — the front end never builds the absolute path
   // (avoids the Windows verbatim `\\?\` pitfall). Electron-only at the call site.
   reveal: httpPost<void, { pe_id: string; relative_path: string }>('/api/fs/reveal'),
+  // Open a file in the OS default application, addressed by ChatFileRef so it
+  // works for all three ref kinds (project / local / upload). The backend
+  // resolves the ref and shells out; the front end never receives an absolute
+  // path — errors come back as codes only (FILE_NOT_FOUND / REVEAL_FAILED /
+  // INTERNAL_ERROR), never a message containing a path. This is the escape hatch
+  // for tabs that cannot be previewed (oversized, unsupported), including
+  // explorer-opened files that deliberately carry no file_path.
+  openSystem: httpPost<void, { file: ChatFileRef }>('/api/fs/open-system'),
   listWorkspaceFiles: withResponseMap(
     httpPost<Array<RawWorkspaceFlatFile>, { root: string }>('/api/fs/list'),
     fromBackendWorkspaceFlatFiles
@@ -806,12 +870,13 @@ export const fs = {
 // File Watch — routed to /api/fs/watch/*
 // ---------------------------------------------------------------------------
 
-// Workspace Office file watch
-export const workspaceOfficeWatch = {
-  start: httpPost<void, { workspace: string }>('/api/fs/office-watch/start'),
-  stop: httpPost<void, { workspace: string }>('/api/fs/office-watch/stop'),
-  fileAdded: wsEmitter<{ file_path: string; workspace: string }>('workspaceOfficeWatch.fileAdded'),
-};
+// Note for whoever next compares a watch event's path against a local one: the
+// workspace Office watch removed here carried the repo's only macOS
+// `/private/var` → `/var` (and `/private/tmp` → `/tmp`) normalizer. macOS reports
+// watch events under the `/private` symlink while a workspace path usually is not,
+// so a naive string comparison silently never matches on that platform. The fold
+// survives as `normalizeWatchPath` in `renderer/utils/workspace/workspace.ts` —
+// use it on both sides of the comparison.
 
 // File streaming updates (real-time content push when agent writes)
 export const fileStream = {
@@ -1175,28 +1240,6 @@ export const database = {
   ),
 };
 
-// ---------------------------------------------------------------------------
-// Preview History — routed to /api/preview-history/*
-// ---------------------------------------------------------------------------
-
-function mapPreviewTarget(target: PreviewHistoryTarget): Record<string, unknown> {
-  return { ...target, content_type: target.contentType, contentType: undefined };
-}
-
-export const previewHistory = {
-  list: httpPost<PreviewSnapshotInfo[], { target: PreviewHistoryTarget }>('/api/preview-history/list', (p) => ({
-    target: mapPreviewTarget(p.target),
-  })),
-  save: httpPost<PreviewSnapshotInfo, { target: PreviewHistoryTarget; content: string }>(
-    '/api/preview-history/save',
-    (p) => ({ target: mapPreviewTarget(p.target), content: p.content })
-  ),
-  getContent: httpPost<
-    { snapshot: PreviewSnapshotInfo; content: string } | null,
-    { target: PreviewHistoryTarget; snapshot_id: string }
-  >('/api/preview-history/get-content', (p) => ({ target: mapPreviewTarget(p.target), snapshot_id: p.snapshot_id })),
-};
-
 // Preview panel
 export const preview = {
   open: wsEmitter<{
@@ -1314,10 +1357,6 @@ export const systemSettings = {
   getSaveUploadToWorkspace: httpGetClientSetting<boolean>('saveUploadToWorkspace'),
   setSaveUploadToWorkspace: httpPut<void, { enabled: boolean }>('/api/settings/client', (p) => ({
     saveUploadToWorkspace: p.enabled,
-  })),
-  getAutoPreviewOfficeFiles: httpGetClientSetting<boolean>('autoPreviewOfficeFiles'),
-  setAutoPreviewOfficeFiles: httpPut<void, { enabled: boolean }>('/api/settings/client', (p) => ({
-    autoPreviewOfficeFiles: p.enabled,
   })),
   getPetEnabled: bridge.buildProvider<boolean, void>('system-settings:get-pet-enabled'),
   setPetEnabled: bridge.buildProvider<void, { enabled: boolean }>('system-settings:set-pet-enabled'),
@@ -1578,6 +1617,13 @@ export interface ISendMessageResult {
   msg_id: string;
   turn_id: string;
   runtime: TConversationRuntimeSummary;
+}
+
+export interface IAnswerAskParams {
+  conversation_id: string;
+  request_id: string;
+  answers?: Array<{ question: string; labels: string[] }>;
+  decline?: boolean;
 }
 
 export interface IConfirmMessageParams {
@@ -2073,6 +2119,31 @@ export const team = {
     (p) => ({ mode: p.session_mode })
   ),
   getRunState: httpGet<ITeamRunStateResponse, { team_id: string }>((p) => `/api/teams/${p.team_id}/run-state`),
+  listMailbox: httpGet<ITeamMailboxMessage[], { team_id: string; limit?: number }>(
+    (p) => `/api/teams/${p.team_id}/mailbox?limit=${p.limit ?? 500}`
+  ),
+  listTasks: httpGet<ITeamTaskItem[], { team_id: string; limit?: number; ids?: string[] }>((p) =>
+    buildListTasksPath(p)
+  ),
+  listActivity: httpGet<
+    ITeamActivityPage,
+    {
+      team_id: string;
+      limit?: number;
+      cursor_ts?: number;
+      cursor_id?: string;
+      direction?: 'desc' | 'asc';
+      kind?: 'all' | 'message' | 'task';
+    }
+  >((p) => {
+    const q = new URLSearchParams();
+    if (p.limit != null) q.set('limit', String(p.limit));
+    if (p.cursor_ts != null) q.set('cursor_ts', String(p.cursor_ts));
+    if (p.cursor_id != null) q.set('cursor_id', p.cursor_id);
+    if (p.direction) q.set('direction', p.direction);
+    if (p.kind) q.set('kind', p.kind);
+    return `/api/teams/${p.team_id}/activity?${q.toString()}`;
+  }),
   sendMessage: httpPost<ITeamRunAck, ISendTeamMessageParams>(
     (p) => `/api/teams/${p.team_id}/messages`,
     (p) => ({
@@ -2121,6 +2192,7 @@ export const team = {
   teammateMessage: wsEmitter<ITeamTeammateMessageEvent>('team.teammateMessage'),
   sessionStatusChanged: wsEmitter<ITeamSessionStatusChangedEvent>('team.sessionStatusChanged'),
   taskChanged: wsEmitter<ITeamTaskChangedEvent>('team.taskChanged'),
+  mailboxChanged: wsEmitter<ITeamMailboxChangedEvent>('team.mailboxChanged'),
   sessionChanged: wsEmitter<ITeamSessionChangedEvent>('team.sessionChanged'),
   runAccepted: wsEmitter<ITeamRunEvent>('team.runAccepted'),
   runStarted: wsEmitter<ITeamRunEvent>('team.runStarted'),
