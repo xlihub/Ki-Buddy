@@ -16,7 +16,7 @@
  * reveal / explicit add-to-chat; see {@link SearchPanel}).
  */
 
-import { Button, Input, Message, Modal, Spin } from '@arco-design/web-react';
+import { Button, Input, Message, Modal, Spin, Tooltip } from '@arco-design/web-react';
 import { FolderPlus } from '@icon-park/react';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,7 +29,7 @@ import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { PROJECT_ERROR_DUPLICATE, PROJECT_ERROR_OVERLAP } from '@/common/types/project';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import WorkspaceOpenButton from '@/renderer/pages/conversation/components/ChatLayout/WorkspaceOpenButton';
-import { getContentTypeByExtension } from '@/renderer/pages/conversation/Preview/fileUtils';
+import { getFileTypeInfo } from '@/renderer/utils/file/fileType';
 import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/previewError';
 // PATCH(ELECTRON-3SZ): used only by the preview payload patch below — remove with it.
 import type { PreviewContentType } from '@/common/types/office/preview';
@@ -38,6 +38,7 @@ import { emitter } from '@/renderer/utils/emitter';
 import { projectFileRef } from '@/common/types/chatFile';
 import type { ChatFileRef } from '@/common/types/chatFile';
 import type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
+import { resolvePreviewPayload } from '@/renderer/utils/file/previewPayload';
 
 import { ExplorerPanel } from './ExplorerPanel';
 import { buildRemoveRequest, buildRenameRequest, parentRel, peKey, type RenameRequest } from './explorerModel';
@@ -74,42 +75,57 @@ export type ExplorerPreviewPayload = {
     fileRef: ChatFileRef;
     language: string;
     editable?: boolean;
+    oversized?: boolean;
+    sizeBytes?: number;
+    thresholdBytes?: number;
+    lastModified?: number;
   };
 };
 
 // The Explorer tree knows `{pe_id, relative_path}`, mapped straight to a Project
-// ChatFileRef. Text/image read their content eagerly over `/api/fs/content`
-// (utf8 / dataurl — the backend prepends the image data-URL prefix); pdf and
-// office carry no content (pdf renders from the stream URL, office resolves the
-// ref server-side for its watch). No absolute path is ever exposed — the old WS
-// path-resolve patch is gone.
+// ChatFileRef. Reading goes through the shared `resolvePreviewPayload` gate, so
+// this entry point applies the same size ceiling and picks up the same
+// save-conflict timestamp as every other way of opening a file. No absolute path
+// is ever exposed — the old WS path-resolve patch is gone.
 export const buildExplorerPreviewPayload = async (
   peId: string,
   relativePath: string
 ): Promise<ExplorerPreviewPayload> => {
   const name = relativePath.split('/').pop() || relativePath;
-  const contentType = getContentTypeByExtension(name);
+  const { contentType, editable } = getFileTypeInfo(name);
   const fileRef = projectFileRef(peId, relativePath);
 
-  let content = '';
-  if (contentType === 'image') {
-    content = await ipcBridge.fs.readContent.invoke({ file: fileRef, encoding: 'dataurl' });
-  } else if (contentType === 'pdf' || contentType === 'word' || contentType === 'excel' || contentType === 'ppt') {
-    // Binary preview: no content read. pdf renders via the /api/fs/stream URL
-    // built from fileRef; office resolves fileRef server-side for its watch.
-  } else {
-    content = await ipcBridge.fs.readContent.invoke({ file: fileRef, encoding: 'utf8' });
-  }
+  const payload = await resolvePreviewPayload(fileRef, contentType);
 
   return {
-    content,
+    content: payload.content,
     contentType,
     metadata: {
       title: name,
       file_name: name,
       fileRef,
       language: name.split('.').pop() || '',
-      editable: contentType === 'markdown' || contentType === 'image' ? false : undefined,
+      // Taken from the type table, then tightened — never decided here.
+      //
+      // This entry point used to compute editability itself, which made it a second
+      // source for one fact. It happened to agree with the table on everything that
+      // mattered, and "happened to agree" is the whole problem: nothing kept the two in
+      // step, and the day they diverged the symptom would be one file behaving
+      // differently depending on whether it was opened from the tree or from a message.
+      // It also produced a wrong answer that something else then reasoned from —
+      // markdown was marked read-only here, and persistence nearly took that to mean
+      // its content could not have been edited.
+      //
+      // `oversized` still has to be applied on top, because it is a fact about this
+      // read rather than about the type: the file was never fully loaded, so letting a
+      // fragment reach a saveable editor is what destroyed files before. Tightening is
+      // the only direction available here, so this can restrict what the table allows
+      // and can never contradict it.
+      editable: payload.oversized ? false : editable,
+      oversized: payload.oversized,
+      sizeBytes: payload.sizeBytes,
+      thresholdBytes: payload.thresholdBytes,
+      lastModified: payload.lastModified,
     },
   };
 };
@@ -325,32 +341,60 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
           Tabs are left-aligned and scroll horizontally when they overflow; the
           attach + open-externally cluster is pinned right (flex-shrink-0) with
           container padding, so it never scrolls with the tabs nor clips at narrow
-          widths. */}
-      <div className='flex items-center gap-4px px-8px py-4px flex-shrink-0 border-b border-[var(--bg-3)]'>
+          widths.
+
+          左内边距 12px 是本面板的对齐基准线，三处必须一致（见下方 SearchPanel 与
+          arco-override.css 的 .workspace-tree 规则）：外框一律从 12px 起，框内内容
+          （tab 文字 / 搜索图标 / 树箭头）一律从 20px 起。12px 不是随手取的——侧栏
+          的拖宽把手正好盖住最左 12px 且层级更高，任何落在其左侧的东西都点不到。
+
+          The 12px left padding is this panel's alignment baseline and must match in
+          all three places (see SearchPanel below and the .workspace-tree rules in
+          arco-override.css): outer boxes start at 12px, their inner content (tab
+          text / search icon / tree arrow) starts at 20px. 12px is not arbitrary —
+          the sider's resize handle covers the leftmost 12px and sits above this
+          content, so anything placed to its left cannot be clicked. */}
+      <div className='flex items-center gap-4px pl-12px pr-8px py-4px flex-shrink-0 border-b border-[var(--bg-3)]'>
         <div className='flex items-center gap-2px overflow-x-auto flex-1 min-w-0'>
           {tabButton('files', t('conversation.explorer.tabs.files'))}
           {tabButton('changes', t('conversation.explorer.tabs.changes'))}
         </div>
         <div className='flex items-center gap-2px flex-shrink-0'>
-          <Button
-            type='text'
-            size='mini'
-            icon={<FolderPlus theme='outline' size='16' />}
-            aria-label={t('conversation.explorer.addFolder')}
-            title={t('conversation.explorer.addFolder')}
-            onClick={handleAddFolder}
-          />
+          {/* Tooltip 与右侧「打开工作区」按钮保持同一形态（mini），让相邻按钮的
+              悬浮提示观感一致。注意：Arco 的 Tooltip 不能包裹 Dropdown（会取到
+              非 DOM 节点而崩），这里包的是普通 Button，安全。
+              Same `mini` Tooltip as the neighboring workspace-open button so
+              adjacent buttons feel consistent. Note: an Arco Tooltip must not wrap
+              a Dropdown (it would resolve a non-DOM node and crash); wrapping a
+              plain Button like this is safe. */}
+          <Tooltip content={t('conversation.explorer.addFolder')} mini>
+            <Button
+              type='text'
+              size='small'
+              className='flex items-center justify-center'
+              icon={<FolderPlus theme='outline' size='16' />}
+              aria-label={t('conversation.explorer.addFolder')}
+              onClick={handleAddFolder}
+            />
+          </Tooltip>
           {workspacePath && <WorkspaceOpenButton workspacePath={workspacePath} isTemporary={false} />}
         </div>
       </div>
       {/* Files tab (explorer): kept mounted across tab switches so the tree + WS
-          state survive (only hidden when the changes tab is active). Left padding
-          clears the sider's col-resize drag handle overlay. */}
+          state survive (only hidden when the changes tab is active). */}
       {/* Search area is persistent at the top of the files tab; the tree renders
           underneath (children slot) and stays mounted while searching so its WS
           subscriptions never thrash. SearchPanel owns the scroll region, so this
-          container no longer sets overflow. */}
-      <div className='flex-1 min-h-0 pl-16px' style={activeTab === 'files' ? undefined : { display: 'none' }}>
+          container no longer sets overflow.
+
+          没有左内边距是刻意的：搜索框和文件树各自对齐到 12px 基准线（前者靠自身
+          padding，后者靠 arco-override.css 里的 .workspace-tree 规则），在这里再加
+          一层会把两者一起推离基准线。
+          Deliberately no left padding: the search box and the tree each align to
+          the 12px baseline on their own (the former via its own padding, the latter
+          via the .workspace-tree rules in arco-override.css). Adding a layer here
+          would push both off that baseline. */}
+      <div className='flex-1 min-h-0' style={activeTab === 'files' ? undefined : { display: 'none' }}>
         <SearchPanel
           roots={searchRoots}
           peNames={searchPeNames}
