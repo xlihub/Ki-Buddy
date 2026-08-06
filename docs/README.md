@@ -15,6 +15,7 @@ Documentation is organized by reader intent, not by document type.
 
 - New to the project? Start with [`architecture/overview.md`](architecture/overview.md).
 - Setting up a dev environment? See [`contributing/development.md`](contributing/development.md).
+- Maintaining the Ki-Buddy/Ki-Core fork? Read the [`upstream release analysis and target alignment`](contributing/upstream-release-analysis-and-target-alignment.zh-CN.md) and the [`maintainer release handbook`](contributing/maintainer-release-and-maintenance-handbook.zh-CN.md).
 - Writing code? The entry point for code-style, linting, formatting, and commit rules is [`AGENTS.md`](../AGENTS.md) at the repo root.
 - Deploying a server? [`guides/deploy-server.md`](guides/deploy-server.md).
 
