@@ -11,7 +11,7 @@ status: superseded
 
 # Ki-Core Independent Release and Ki-Buddy Integration - Plan
 
-> **已废弃（2026-08-06）**  
+> **已废弃（2026-08-06）**
 > 本计划保留为历史记录，不再作为实施或发版依据。Candidate Build 前置、复杂发布状态和多阶段资产发布要求已经被后续对齐方案替代。当前有效方案见[上游发版流程分析与 Ki 双仓目标流程](../contributing/upstream-release-analysis-and-target-alignment.zh-CN.md)，实际操作见[仓库管理者发版和维护手册](../contributing/maintainer-release-and-maintenance-handbook.zh-CN.md)。
 
 ## Goal Capsule

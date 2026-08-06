@@ -1,7 +1,7 @@
 # 上游发版流程分析与 Ki 双仓目标流程
 
-> 最近核对时间：2026-08-05  
-> 适用仓库：`xlihub/Ki-Buddy`、`xlihub/Ki-Core`  
+> 最近核对时间：2026-08-05
+> 适用仓库：`xlihub/Ki-Buddy`、`xlihub/Ki-Core`
 > 上游仓库：`iOfficeAI/AionUi`、`iOfficeAI/AionCore`
 
 本文面向后续参与双仓维护的开发者。读完后，读者应当能够判断一项发版相关改动属于上游同步、Ki 产品版本管理，还是不必要的发布基础设施，并能按本文描述实现后续流程。
