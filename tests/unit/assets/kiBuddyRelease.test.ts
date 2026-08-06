@@ -15,8 +15,8 @@ const {
 const projectRoot = resolve(__dirname, '../../..');
 
 describe('Ki-Buddy product release identity', () => {
-  it('keeps root package.json at the mapped AionUi commit', () => {
-    expect(() => verifyKiBuddyRelease(projectRoot)).not.toThrow();
+  it('validates the current product mapping without requiring repository history', () => {
+    expect(() => verifyKiBuddyRelease(projectRoot, { skipGit: true })).not.toThrow();
   });
 
   it('combines upstream package data with independent Ki-Buddy product metadata', () => {

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { crc32 } from 'node:zlib';
-import * as tar from 'tar';
 
 const {
   getActionsArtifactName,
@@ -13,6 +13,12 @@ const {
 const { selectCandidateArtifact, validateCandidateRun } = require('../../../packages/shared-scripts/src/kiCoreRelease');
 const { readKiBuddyRelease } = require('../../../packages/shared-scripts/src/kiBuddyRelease');
 
+type TarModule = {
+  c: (options: { cwd: string; file: string; gzip: true }, files: string[]) => Promise<void>;
+};
+
+const requireFromSharedScripts = createRequire(join(process.cwd(), 'packages/shared-scripts/package.json'));
+const tar = requireFromSharedScripts('tar') as TarModule;
 const VALID_SHA = 'a'.repeat(40);
 const CANDIDATE_VERSION = '7.8.9';
 

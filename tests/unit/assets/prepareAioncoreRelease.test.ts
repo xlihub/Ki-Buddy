@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crc32 } from 'node:zlib';
-import * as tar from 'tar';
 
 const {
   CANONICAL_PLATFORMS,
@@ -21,6 +21,12 @@ const { prepareAioncore } = require('../../../packages/shared-scripts/src/prepar
 const { readKiBuddyRelease } = require('../../../packages/shared-scripts/src/kiBuddyRelease');
 const { resolveAioncoreVersion } = require('../../../scripts/resolveAioncoreVersion');
 
+type TarModule = {
+  c: (options: { cwd: string; file: string; gzip: true }, files: string[]) => Promise<void>;
+};
+
+const requireFromSharedScripts = createRequire(join(process.cwd(), 'packages/shared-scripts/package.json'));
+const tar = requireFromSharedScripts('tar') as TarModule;
 const VERSION = '7.8.9';
 const TAG = `ki-core-v${VERSION}`;
 const RELEASE_SHA = 'a'.repeat(40);
