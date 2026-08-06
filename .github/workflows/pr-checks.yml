@@ -85,6 +85,17 @@ jobs:
       - name: Run prek checks
         run: prek run --from-ref origin/${{ env.PR_BASE_REF }} --to-ref HEAD
 
+      - name: Fetch mapped AionUi tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          IDENTITY=$(node packages/shared-scripts/src/kiBuddyRelease.js verify --skip-git true)
+          AIONUI_REPOSITORY=$(jq -r '.aionUi.repository' <<< "$IDENTITY")
+          AIONUI_TAG=$(jq -r '.aionUi.tag' <<< "$IDENTITY")
+          git fetch --force --no-tags \
+            "https://github.com/${AIONUI_REPOSITORY}.git" \
+            "refs/tags/${AIONUI_TAG}:refs/tags/${AIONUI_TAG}"
+
       - name: Validate Ki-Buddy product release mapping
         run: node packages/shared-scripts/src/kiBuddyRelease.js verify
 
