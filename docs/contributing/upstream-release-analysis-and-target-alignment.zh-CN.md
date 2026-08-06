@@ -167,7 +167,7 @@ Build and Release workflow 监听 `dev` push 和所有 tag push：
 
 当前事实：
 
-- `product/main` 的首个产品版本为 `0.1.0`，映射 AionCore `v0.1.58`。
+- 第一次正式发布目标为 `Ki-Core 0.1.0 ↔ AionCore v0.1.59`；流程改造合并前，远端元数据仍可能显示旧的 `v0.1.58` 基线。
 - Release PR #3 已合并，但还没有 `ki-core-v0.1.0` tag 或公开 Ki-Core Release。
 - Release Please 随后创建了错误的 [PR #6](https://github.com/xlihub/Ki-Core/pull/6)：`0.2.0`。
 - 正式发布 workflow 尚未完成一次远端真实发版。
@@ -203,9 +203,8 @@ AionCore 发布正式 tag
   → product/main 固定到该 AionCore tag
   → Release Please 创建或更新 Ki-Core Release PR
   → xlihub 合并并批准发布
-  → 创建 ki-core-vX.Y.Z
-  → 六平台构建与 checksums
-  → 发布 Ki-Core GitHub Release
+  → 创建 ki-core-vX.Y.Z 和公开 GitHub Release
+  → 六平台构建并上传 archive 与 checksums
 ```
 
 ### 6.1 版本规则
@@ -213,7 +212,7 @@ AionCore 发布正式 tag
 - 每个被接受的 AionCore 正式版本对应一个 Ki-Core 正式版本。
 - Ki-Core 与 AionCore 的数字不需要相同。
 - 纯上游同步默认作为 Ki-Core patch，例如：
-  `Ki-Core 0.1.1 ↔ AionCore 0.1.59`。
+  `Ki-Core 0.1.1 ↔ AionCore v0.1.60`（仅作版本关系示例）。
 - 未来 Ki-Core 自有 `feat`、`fix` 继续参与 Ki-Core SemVer 计算。
 - AionCore 的 Cargo workspace version、API 和协议版本不改写为 Ki-Core 版本。
 
@@ -225,9 +224,8 @@ AionCore 发布正式 tag
 - Ki-Core tag
 - AionCore tag
 - AionCore peeled commit
-- 发布日期
 
-映射是 append-only。已经发布的记录不得修改。`prepared`、`candidate-built` 等过程状态不写入长期映射，以免失败后留下错误状态。
+已经发布的映射是 append-only，不得修改。当前尚未发布的版本允许在正式 tag 创建前修正映射。`prepared`、`candidate-built` 等过程状态不写入长期映射，以免失败后留下错误状态。
 
 ### 6.3 CHANGELOG 规则
 
@@ -247,9 +245,11 @@ AionCore 发布正式 tag
 Ki-Core Release Please 应与 AionCore 保持同一状态机：
 
 - 普通 `product/main` push：创建或更新 Release PR。
-- Release PR 合并：创建 tag/Release并显式 dispatch构建。
+- Release PR 合并：创建 tag/Release，并显式 dispatch 构建。
 - Release merge commit 不得再生成下一版本 PR。
 - `xlihub` 的发布审批保留在正式发布入口。
+
+Ki-Core 同时支持 GitHub 默认 merge commit 和 squash merge。发布判断检查完整提交信息是否包含 Release Please 的 `chore(product/main): release ...` 标题，因此合并时不得删除该标题。
 
 ## 7. 已确认的 Ki-Buddy 目标流程
 

@@ -1,24 +1,24 @@
 # Ki-Buddy 与 Ki-Core 仓库管理者发版和维护手册
 
-> 当前管理者：`xlihub`  
-> 最近核对时间：2026-08-05  
+> 当前管理者：`xlihub`
+> 最近核对时间：2026-08-06
 > 适用仓库：`xlihub/Ki-Buddy`、`xlihub/Ki-Core`
 
 本文按实际工作场景说明仓库管理者每天、每次上游更新和每次发版需要处理的事项。读完后，管理者应当能够判断下一步该同步哪个仓库、合并哪个 PR、批准哪个 workflow，以及遇到失败时是否允许重试或必须创建新版本。
 
 流程依据见[上游发版流程分析与 Ki 双仓目标流程](upstream-release-analysis-and-target-alignment.zh-CN.md)。
 
-## 1. 当前过渡状态
+## 1. 首次迁移状态
 
-2026-08-05 时，目标流程尚未全部实现。当前不得直接按后文的正式发版步骤发布产品。
+2026-08-06 时，远端仍未完成第一次 Ki-Core 正式发布。发布流程改造合并前，不得直接按后文的常规发版步骤发布产品。
 
 ### Ki-Core 当前状态
 
-- `product/main` 已包含 `0.1.0` 发布元数据，映射 AionCore `v0.1.58`。
+- 第一次正式发布的目标是 `Ki-Core 0.1.0 ↔ AionCore v0.1.59`。
 - Release PR #3 已合并。
 - 没有 `ki-core-v0.1.0` tag，也没有公开 Ki-Core Release。
 - [PR #6](https://github.com/xlihub/Ki-Core/pull/6) 是 Release Please 状态错误生成的 `0.2.0` PR，不应合并。
-- 正式发布 workflow 依赖 Candidate run，后续将按确认方案简化。
+- 发布流程改造将 Candidate 从正式发布前置条件中移除，并增加 `release-current` 手动入口处理第一次发布。
 - `ki-core-stable` Environment 已配置 `xlihub` 为 required reviewer，允许自审，管理员不能绕过审批。
 
 ### Ki-Buddy 当前状态
@@ -28,14 +28,14 @@
 - `kiCore.tag` 仍为空，没有可用于正式构建的 Ki-Core Release。
 - 没有 Ki-Buddy 产品 CHANGELOG 和版本映射。
 
-### 过渡期允许的操作
+### 首次发布前允许的操作
 
 - 查询、同步和比较上游。
 - 修改并验证发布 workflow。
 - 运行手工 Candidate Build 做联调。
 - 创建实现目标流程的普通 PR。
 
-### 过渡期禁止的操作
+### 首次发布前禁止的操作
 
 - 合并 Ki-Core PR #6。
 - 为当前 `0.1.0` 手工创建正式 tag。
@@ -134,8 +134,9 @@ Ki-Core `main` 只承担上游镜像职责。同步时应记录：
 
 - 合入指定 AionCore tag。
 - 更新当前上游 tag 和 peeled commit。
-- 为下一 Ki-Core 版本准备映射记录。
-- 更新 `CHANGELOG.ki-core.md` 的上游同步说明。
+- 保持 Ki-Core 产品发布配置不被上游文件覆盖。
+
+纯上游同步应使用能够产生 patch 版本的 Conventional Commit，例如 `fix(upstream): sync AionCore vX.Y.Z`。该提交会由 Release Please 写入下一版 `CHANGELOG.ki-core.md`，并在 Release PR 分支自动增加版本映射。不要使用不会触发版本变化的 `chore(upstream)` 作为常规同步提交标题。
 
 短期没有 Ki-Core 源码二次开发时，PR 相对 AionCore tag 不应出现 Rust 源码、API、协议或数据库迁移差异。
 
@@ -153,7 +154,7 @@ Ki-Core `main` 只承担上游镜像职责。同步时应记录：
 
 ## 4. 场景：准备 Ki-Core 正式版本
 
-本节描述目标流程。过渡期应先完成流程简化。
+本节描述流程改造合并后的常规流程。
 
 ### 4.1 检查 Release PR 版本
 
@@ -181,11 +182,13 @@ Release PR 应满足：
 - 本次 Ki-Core CHANGELOG。
 - 随后创建正式 tag 和 GitHub Release。
 
-合并后检查 Release Please run，确认它进入发布 job，没有继续生成下一版本 PR。
+保留 Release Please 生成的 `chore(product/main): release ...` 标题。使用 GitHub 默认 merge commit 或 squash merge 都可以，但不要把该标题从最终提交信息中删除。
+
+合并后检查 Release Please run，确认它进入 `Create Ki-Core Release` job，没有继续生成下一版本 PR。
 
 ### 4.3 批准正式发布
 
-当 `ki-core-stable` Environment 请求审批时，`xlihub` 需要核对：
+当 Release Please 的 `Create Ki-Core Release` job 请求 `ki-core-stable` Environment 审批时，`xlihub` 需要核对：
 
 - 请求来自 Ki-Core 正式发布 workflow。
 - commit 是刚合并的 `product/main` Release commit。
@@ -194,7 +197,19 @@ Release PR 应满足：
 
 确认后批准。当前 Environment 允许 `xlihub` 审批自己的部署请求，符合单维护者阶段的实际情况。
 
-### 4.4 检查发布结果
+### 4.4 第一次发布 `0.1.0`
+
+流程改造 PR 合并并通过 CI 后，第一次发布不再创建新的 Release PR：
+
+1. 关闭错误的 PR #6，不合并。
+2. 在 Actions 中打开 `Release Please`。
+3. 选择 `Run workflow`，分支选择 `product/main`，`operation` 选择 `release-current`。
+4. 在 `ki-core-stable` Environment 审批 `Create Ki-Core Release` job。
+5. Release Please 创建 `ki-core-v0.1.0` 和公开 Release，并显式启动 `Ki-Core Stable Release` 构建。
+
+不得用 `git tag` 或 GitHub Release 页面代替该入口。
+
+### 4.5 检查发布结果
 
 ```bash
 gh release view <ki-core-tag> \
@@ -231,7 +246,7 @@ AionCore 上游允许公开 Release 先于资产上传。Ki-Core 目标流程采
 - 明确的临时 runner 失败可以重跑同一个 workflow。
 - 不得用不同 commit 重建同一个 tag。
 - 已公开 Release 若最终无法完成，应标记问题并创建新的 Ki-Core patch 版本。
-- 不覆盖已经发布的同名资产。
+- 只允许对同一 tag、同一 commit 重跑 `Ki-Core Stable Release`。workflow 会按上游方式覆盖同名资产并重新生成 checksums；不得手工上传来源不同的文件。
 
 ### 5.3 单个平台持续失败
 
@@ -407,7 +422,7 @@ Ki-Buddy 已进行定制开发，冲突需要按用户行为处理：
 4. 检查上一 Release PR 合并后是否执行了创建 tag/Release 的 job。
 5. 修复 workflow 状态机并通过普通 PR 合并。
 6. 关闭错误 Release PR。
-7. 重新运行 Release Please，让它基于正确的已发布状态生成版本。
+7. 首次发布使用 `release-current`；后续再运行 `update-pr`，让 Release Please 基于正确的已发布状态生成版本。
 
 不要直接编辑错误 PR 把版本号改小。Release Please 的已发布状态仍然错误，下一次还会重复发生。
 
@@ -439,13 +454,13 @@ Ki-Buddy 已进行定制开发，冲突需要按用户行为处理：
 - 网络下载失败。
 - GitHub runner 临时故障。
 - 同一 commit、同一 tag、同一 workflow 的可重复构建。
-- Draft Release 尚未公开，且重跑不会覆盖不可变资产。
+- 同一 tag 和 commit 的正式资产构建，允许由 `Ki-Core Stable Release` 使用 `--clobber` 重建整套资产和 checksums。
 
 不允许直接重跑并覆盖：
 
 - 代码或 lockfile 已变化。
 - tag 已指向不同 commit。
-- 已公开资产内容需要变化。
+- 需要使用不同 commit 或人工替换部分公开资产。
 - checksums 与原资产不一致。
 
 后一类情况必须创建新 patch 版本。
