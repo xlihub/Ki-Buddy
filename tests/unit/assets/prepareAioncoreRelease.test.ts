@@ -124,6 +124,19 @@ afterEach(() => {
 });
 
 describe('Ki-Core stable release naming and pin', () => {
+  it('loads the published Ki-Core 0.1.0 product pin', () => {
+    expect(readKiCorePin(process.cwd())).toMatchObject({
+      repository: 'xlihub/Ki-Core',
+      tag: 'ki-core-v0.1.0',
+      commit: '209e6844d39bac0762c61e198c1ba3a007f9dd2e',
+      aionCore: {
+        repository: 'iOfficeAI/AionCore',
+        tag: 'v0.1.59',
+        peeledCommit: '815e61ed9bbe942339347dc1e69ddce176cded76',
+      },
+    });
+  });
+
   it.each([
     ['darwin', 'x64', 'ki-core-v0.1.0-x86_64-apple-darwin.tar.gz'],
     ['darwin', 'arm64', 'ki-core-v0.1.0-aarch64-apple-darwin.tar.gz'],

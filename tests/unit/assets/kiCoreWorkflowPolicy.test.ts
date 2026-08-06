@@ -7,11 +7,20 @@ function workflow(name: string) {
 }
 
 describe('Ki-Core workflow source policies', () => {
-  it('requires candidate run ID and full head SHA only in the manual build workflow', () => {
+  it('lets the manual build select a stable release or a verified candidate', () => {
     const manual = workflow('build-manual.yml');
+    expect(manual).toContain('ki_core_source_policy:');
+    expect(manual).toContain('- release-pinned');
+    expect(manual).toContain('- candidate');
+    expect(manual).toContain('default: release-pinned');
     expect(manual).toContain('ki_core_candidate_run_id:');
     expect(manual).toContain('ki_core_candidate_head_sha:');
-    expect(manual).toContain('ki_core_source_policy: candidate');
+    expect(manual).toContain('KI_CORE_SOURCE_POLICY: ${{ inputs.ki_core_source_policy }}');
+    expect(manual).toContain('KI_CORE_CANDIDATE_RUN_ID: ${{ inputs.ki_core_candidate_run_id }}');
+    expect(manual).toContain('KI_CORE_CANDIDATE_HEAD_SHA: ${{ inputs.ki_core_candidate_head_sha }}');
+    expect(manual).toContain('^[0-9]+$');
+    expect(manual).toContain('^[0-9a-f]{40}$');
+    expect(manual).toContain('ki_core_source_policy: ${{ inputs.ki_core_source_policy }}');
     expect(manual).toContain('contents: read');
     expect(manual).not.toContain('pull_request:');
   });
@@ -28,7 +37,13 @@ describe('Ki-Core workflow source policies', () => {
   it('does not expose a cross-repository token to branch-controlled build commands', () => {
     const reusable = workflow('_build-reusable.yml');
     expect(reusable).toContain("default: 'release-pinned'");
+    expect(reusable).toContain("npm_config_registry: 'https://registry.npmjs.org/'");
     expect(reusable).not.toContain('aioncore_run_id:');
     expect(reusable).not.toContain('KI_CORE_ACTIONS_TOKEN');
+  });
+
+  it('uses the npm registry for managed CLI platform packages in Web CLI builds', () => {
+    const webCli = workflow('pack-web-cli.yml');
+    expect(webCli).toContain("npm_config_registry: 'https://registry.npmjs.org/'");
   });
 });
