@@ -265,6 +265,8 @@
   "kiCore": {
     "repository": "xlihub/Ki-Core",
     "tag": null,
+    "commit": null,
+    "aionCore": null,
     "checksums": {}
   },
   "patchedDependencies": {

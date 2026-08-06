@@ -213,27 +213,27 @@ function downloadAndVerifyStable(platform, arch, pin) {
   const target = getCanonicalTarget(platform, arch);
   const archiveName = getArchiveName(pin.tag, target);
   const tempDir = createFreshTempDir('ki-core-release-');
-  const manifestPath = path.join(tempDir, 'ki-core-release.json');
   const checksumPath = path.join(tempDir, 'ki-core-checksums.txt');
   const archivePath = path.join(tempDir, archiveName);
 
   try {
-    downloadFile(getReleaseUrl(pin.tag, 'ki-core-release.json'), manifestPath);
     downloadFile(getReleaseUrl(pin.tag, 'ki-core-checksums.txt'), checksumPath);
     downloadFile(getReleaseUrl(pin.tag, archiveName), archivePath);
-    const manifest = validateDownloadedAssets({
-      sourceType: 'stable',
+    validateDownloadedAssets({
       platformKey: target.platformKey,
       tag: pin.tag,
-      manifestPath,
       checksumPath,
       archivePath,
       pinnedChecksums: pin.checksums,
     });
     const binaryPath = extractExpectedArchive(archivePath, tempDir, target.executable);
+    const version = pin.tag.replace(/^ki-core-v/, '');
     return {
       binaryPath,
-      manifest,
+      manifest: {
+        product: { version, tag: pin.tag, releaseCommit: pin.commit },
+        upstream: pin.aionCore,
+      },
       tempDir,
       source: {
         policy: 'release-pinned',
@@ -258,9 +258,10 @@ function validateCandidateArtifactEntries(entries, target) {
   if (archiveNames.length !== 1) {
     throw new Error('Ki-Core candidate artifact must contain exactly one canonical platform archive');
   }
-  const expectedEntries = [archiveNames[0], 'ki-core-candidate.json', 'ki-core-checksums.txt'];
+  const expectedEntries = [archiveNames[0]];
   validateEntries(entries, expectedEntries);
-  return { archiveName: archiveNames[0], expectedEntries };
+  const version = archivePattern.exec(archiveNames[0]).slice(1, 4).join('.');
+  return { archiveName: archiveNames[0], expectedEntries, version };
 }
 
 function downloadAndVerifyCandidate(platform, arch, runId, expectedSha, token) {
@@ -303,27 +304,16 @@ function downloadAndVerifyCandidate(platform, arch, runId, expectedSha, token) {
 
   try {
     downloadFile(downloadUrl, artifactZipPath, token);
-    const { archiveName, expectedEntries } = validateCandidateArtifactEntries(
+    const { archiveName, expectedEntries, version } = validateCandidateArtifactEntries(
       inspectArchiveSafely(artifactZipPath),
       target
     );
     extractArchiveSafely(artifactZipPath, artifactDir, expectedEntries);
     const archivePath = path.join(artifactDir, archiveName);
-    const manifestPath = path.join(artifactDir, 'ki-core-candidate.json');
-    const checksumPath = path.join(artifactDir, 'ki-core-checksums.txt');
-    const manifest = validateDownloadedAssets({
-      sourceType: 'candidate',
-      platformKey: target.platformKey,
-      runId,
-      headSha: expectedSha,
-      manifestPath,
-      checksumPath,
-      archivePath,
-    });
     const binaryPath = extractExpectedArchive(archivePath, tempDir, target.executable);
     return {
       binaryPath,
-      manifest,
+      manifest: null,
       tempDir,
       source: {
         policy: 'candidate',
@@ -332,6 +322,7 @@ function downloadAndVerifyCandidate(platform, arch, runId, expectedSha, token) {
         workflow: 'build-manual.yml',
         runId,
         headSha: expectedSha,
+        version,
         artifactName: expectedArtifactName,
         url: downloadUrl,
       },

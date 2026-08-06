@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
@@ -14,10 +13,6 @@ const {
 const { selectCandidateArtifact, validateCandidateRun } = require('../../../packages/shared-scripts/src/kiCoreRelease');
 
 const VALID_SHA = 'a'.repeat(40);
-
-function sha256(value: string | Buffer) {
-  return createHash('sha256').update(value).digest('hex');
-}
 
 function writeStoredZip(filePath: string, entries: Array<{ name: string; content: string | Buffer }>) {
   const localParts: Buffer[] = [];
@@ -101,34 +96,7 @@ JSON
   chmodSync(binaryPath, 0o755);
   await tar.c({ cwd: sourceDir, file: archivePath, gzip: true }, ['aioncore']);
 
-  const archiveHash = sha256(readFileSync(archivePath));
-  const manifest = {
-    schemaVersion: 1,
-    release: {
-      type: 'candidate',
-      repository: 'xlihub/Ki-Core',
-      workflow: 'build-manual.yml',
-      runId: '123',
-      headSha: VALID_SHA,
-    },
-    product: { name: 'Ki-Core', version: '0.1.0', tag: null, releaseCommit: null },
-    upstream: { repository: 'iOfficeAI/AionCore', tag: 'v0.1.58', peeledCommit: 'b'.repeat(40) },
-    platforms: {
-      'linux-x64': {
-        target: 'x86_64-unknown-linux-gnu',
-        archive: archiveName,
-        executable: 'aioncore',
-        sha256: archiveHash,
-      },
-    },
-  };
-  const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
-  const checksumText = `${archiveHash}  ${archiveName}\n${sha256(manifestText)}  ki-core-candidate.json\n`;
-  writeStoredZip(artifactZip, [
-    { name: archiveName, content: readFileSync(archivePath) },
-    { name: 'ki-core-candidate.json', content: manifestText },
-    { name: 'ki-core-checksums.txt', content: checksumText },
-  ]);
+  writeStoredZip(artifactZip, [{ name: archiveName, content: readFileSync(archivePath) }]);
 
   const binDir = join(root, 'bin');
   const curlPath = join(binDir, 'curl');
@@ -278,10 +246,11 @@ describe('Ki-Core candidate source policy', () => {
         repository: 'xlihub/Ki-Core',
         runId: '123',
         headSha: VALID_SHA,
+        version: '0.1.0',
         artifactName: 'ki-core-candidate-linux-x64',
       });
       expect(manifest.kiCore).toEqual({ version: '0.1.0', tag: null, releaseCommit: null });
-      expect(manifest.aionCore.peeledCommit).toBe('b'.repeat(40));
+      expect(manifest.aionCore).toEqual({ repository: null, tag: null, peeledCommit: null });
     } finally {
       if (previousPath === undefined) delete process.env.PATH;
       else process.env.PATH = previousPath;

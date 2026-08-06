@@ -88,85 +88,33 @@ async function createStableFixture() {
   const archivePath = join(root, archiveName);
   await tar.c({ cwd: binaryDir, file: archivePath, gzip: true }, ['aioncore']);
   const selectedHash = sha256(readFileSync(archivePath));
-
-  const platforms = Object.fromEntries(
-    Object.entries(CANONICAL_PLATFORMS).map(([platformKey, contract], index) => {
-      const name = `${TAG}-${contract.target}${contract.extension}`;
-      return [
-        platformKey,
-        {
-          target: contract.target,
-          archive: name,
-          executable: contract.executable,
-          sha256: platformKey === selected.platformKey ? selectedHash : String(index + 1).repeat(64),
-        },
-      ];
-    })
+  const checksums = Object.fromEntries(
+    Object.entries(CANONICAL_PLATFORMS).map(([platformKey, _contract], index) => [
+      platformKey,
+      platformKey === selected.platformKey ? selectedHash : String(index + 1).repeat(64),
+    ])
   );
-  const manifest = {
-    schemaVersion: 1,
-    release: {
-      type: 'stable',
-      repository: 'xlihub/Ki-Core',
-      workflow: 'release.yml',
-      runId: '12345',
-      headSha: RELEASE_SHA,
-    },
-    product: { name: 'Ki-Core', version: VERSION, tag: TAG, releaseCommit: RELEASE_SHA },
-    upstream: { repository: 'iOfficeAI/AionCore', tag: 'v0.1.58', peeledCommit: UPSTREAM_SHA },
-    platforms,
-  };
-  const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
-  const manifestPath = join(root, 'ki-core-release.json');
   const checksumPath = join(root, 'ki-core-checksums.txt');
-  writeFileSync(manifestPath, manifestText);
   writeFileSync(
     checksumPath,
-    `${Object.values(platforms)
-      .map((entry) => `${entry.sha256}  ${entry.archive}`)
-      .join('\n')}\n${sha256(manifestText)}  ki-core-release.json\n`
+    `${Object.entries(CANONICAL_PLATFORMS)
+      .map(([platformKey, contract]) => `${checksums[platformKey]}  ${TAG}-${contract.target}${contract.extension}`)
+      .join('\n')}\n`
   );
 
   return {
     archivePath,
     checksumPath,
-    manifest,
-    manifestPath,
     pin: {
       repository: 'xlihub/Ki-Core',
       tag: TAG,
-      checksums: Object.fromEntries(
-        Object.entries(platforms).map(([platformKey, entry]) => [platformKey, entry.sha256])
-      ),
+      commit: RELEASE_SHA,
+      aionCore: { repository: 'iOfficeAI/AionCore', tag: 'v0.1.59', peeledCommit: UPSTREAM_SHA },
+      checksums,
     },
     root,
     selected,
   };
-}
-
-async function createCandidateFixture() {
-  const fixture = await createStableFixture();
-  const selectedEntry = fixture.manifest.platforms[fixture.selected.platformKey];
-  const manifest = {
-    ...fixture.manifest,
-    release: {
-      type: 'candidate',
-      repository: 'xlihub/Ki-Core',
-      workflow: 'build-manual.yml',
-      runId: '54321',
-      headSha: RELEASE_SHA,
-    },
-    product: { name: 'Ki-Core', version: VERSION, tag: null, releaseCommit: null },
-    platforms: { [fixture.selected.platformKey]: selectedEntry },
-  };
-  const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
-  const manifestPath = join(fixture.root, 'ki-core-candidate.json');
-  writeFileSync(manifestPath, manifestText);
-  writeFileSync(
-    fixture.checksumPath,
-    `${selectedEntry.sha256}  ${selectedEntry.archive}\n${sha256(manifestText)}  ki-core-candidate.json\n`
-  );
-  return { ...fixture, manifest, manifestPath };
 }
 
 afterEach(() => {
@@ -175,7 +123,7 @@ afterEach(() => {
   delete process.env.AIONUI_BACKEND_VERSION;
 });
 
-describe('Ki-Core stable release naming', () => {
+describe('Ki-Core stable release naming and pin', () => {
   it.each([
     ['darwin', 'x64', 'ki-core-v0.1.0-x86_64-apple-darwin.tar.gz'],
     ['darwin', 'arm64', 'ki-core-v0.1.0-aarch64-apple-darwin.tar.gz'],
@@ -183,7 +131,7 @@ describe('Ki-Core stable release naming', () => {
     ['linux', 'arm64', 'ki-core-v0.1.0-aarch64-unknown-linux-gnu.tar.gz'],
     ['win32', 'x64', 'ki-core-v0.1.0-x86_64-pc-windows-msvc.zip'],
     ['win32', 'arm64', 'ki-core-v0.1.0-aarch64-pc-windows-msvc.zip'],
-  ])('maps %s-%s to the xlihub/Ki-Core asset %s', (platform, arch, expectedAsset) => {
+  ])('maps %s-%s to the release asset %s', (platform, arch, expectedAsset) => {
     const asset = getArchiveName(TAG, getCanonicalTarget(platform, arch));
     expect(asset).toBe(expectedAsset);
     expect(getReleaseUrl(TAG, asset)).toBe(
@@ -191,11 +139,25 @@ describe('Ki-Core stable release naming', () => {
     );
   });
 
+  it('accepts a complete product pin with explicit upstream mapping', async () => {
+    const fixture = await createStableFixture();
+    const projectRoot = mkdtempSync(join(tmpdir(), 'ki-core-complete-pin-'));
+    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ kiCore: fixture.pin }));
+    try {
+      expect(readKiCorePin(projectRoot)).toEqual(fixture.pin);
+    } finally {
+      rmSync(projectRoot, { recursive: true, force: true });
+      rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
   it('fails when the checked-in stable pin is incomplete', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'ki-core-missing-pin-'));
     writeFileSync(
       join(projectRoot, 'package.json'),
-      JSON.stringify({ kiCore: { repository: 'xlihub/Ki-Core', tag: null, checksums: {} } })
+      JSON.stringify({
+        kiCore: { repository: 'xlihub/Ki-Core', tag: null, commit: null, aionCore: null, checksums: {} },
+      })
     );
     try {
       expect(() => readKiCorePin(projectRoot)).toThrow(/full ki-core-vX\.Y\.Z tag/);
@@ -220,85 +182,73 @@ describe('Ki-Core stable release naming', () => {
 });
 
 describe('Ki-Core stable asset verification', () => {
-  it('accepts matching manifest, checksum file, archive, and checked-in platform pins', async () => {
+  it('accepts the exact six release checksums and the selected archive', async () => {
     const fixture = await createStableFixture();
     try {
-      const manifest = validateDownloadedAssets({
-        sourceType: 'stable',
-        platformKey: fixture.selected.platformKey,
-        tag: TAG,
-        manifestPath: fixture.manifestPath,
-        checksumPath: fixture.checksumPath,
-        archivePath: fixture.archivePath,
-        pinnedChecksums: fixture.pin.checksums,
-      });
-      expect(manifest.product.releaseCommit).toBe(RELEASE_SHA);
-      expect(manifest.upstream.peeledCommit).toBe(UPSTREAM_SHA);
-    } finally {
-      rmSync(fixture.root, { recursive: true, force: true });
-    }
-  });
-
-  it('accepts a stable manifest whose platform object uses a different key order', async () => {
-    const fixture = await createStableFixture();
-    try {
-      fixture.manifest.platforms = Object.fromEntries(Object.entries(fixture.manifest.platforms).toReversed());
-      const manifestText = `${JSON.stringify(fixture.manifest, null, 2)}\n`;
-      writeFileSync(fixture.manifestPath, manifestText);
-      writeFileSync(
-        fixture.checksumPath,
-        `${Object.values(fixture.manifest.platforms)
-          .map((entry) => `${entry.sha256}  ${entry.archive}`)
-          .join('\n')}\n${sha256(manifestText)}  ki-core-release.json\n`
-      );
-
-      expect(() =>
+      expect(
         validateDownloadedAssets({
-          sourceType: 'stable',
           platformKey: fixture.selected.platformKey,
           tag: TAG,
-          manifestPath: fixture.manifestPath,
           checksumPath: fixture.checksumPath,
           archivePath: fixture.archivePath,
           pinnedChecksums: fixture.pin.checksums,
         })
-      ).not.toThrow();
+      ).toEqual({ version: VERSION, tag: TAG });
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });
     }
   });
 
-  it('rejects a duplicate checksum before extraction', async () => {
+  it('rejects duplicate or incomplete release checksums', async () => {
     const fixture = await createStableFixture();
     try {
-      const firstLine = readFileSync(fixture.checksumPath, 'utf8').split('\n')[0];
-      writeFileSync(fixture.checksumPath, `${readFileSync(fixture.checksumPath, 'utf8')}${firstLine}\n`);
+      const lines = readFileSync(fixture.checksumPath, 'utf8').trimEnd().split('\n');
+      writeFileSync(fixture.checksumPath, `${lines.join('\n')}\n${lines[0]}\n`);
       expect(() =>
         validateDownloadedAssets({
-          sourceType: 'stable',
           platformKey: fixture.selected.platformKey,
           tag: TAG,
-          manifestPath: fixture.manifestPath,
           checksumPath: fixture.checksumPath,
           archivePath: fixture.archivePath,
           pinnedChecksums: fixture.pin.checksums,
         })
       ).toThrow(/Duplicate Ki-Core checksum/);
+
+      writeFileSync(fixture.checksumPath, `${lines.slice(1).join('\n')}\n`);
+      expect(() =>
+        validateDownloadedAssets({
+          platformKey: fixture.selected.platformKey,
+          tag: TAG,
+          checksumPath: fixture.checksumPath,
+          archivePath: fixture.archivePath,
+          pinnedChecksums: fixture.pin.checksums,
+        })
+      ).toThrow(/exact six-platform asset set/);
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });
     }
   });
 
-  it('rejects a tampered archive before extraction', async () => {
+  it('rejects a tampered archive and a mismatched checked-in checksum', async () => {
     const fixture = await createStableFixture();
     try {
+      fixture.pin.checksums['macos-x64'] = 'f'.repeat(64);
+      expect(() =>
+        validateDownloadedAssets({
+          platformKey: fixture.selected.platformKey,
+          tag: TAG,
+          checksumPath: fixture.checksumPath,
+          archivePath: fixture.archivePath,
+          pinnedChecksums: fixture.pin.checksums,
+        })
+      ).toThrow(/checked-in checksum/);
+
+      fixture.pin.checksums['macos-x64'] = readFileSync(fixture.checksumPath, 'utf8').split('  ')[0];
       writeFileSync(fixture.archivePath, 'tampered');
       expect(() =>
         validateDownloadedAssets({
-          sourceType: 'stable',
           platformKey: fixture.selected.platformKey,
           tag: TAG,
-          manifestPath: fixture.manifestPath,
           checksumPath: fixture.checksumPath,
           archivePath: fixture.archivePath,
           pinnedChecksums: fixture.pin.checksums,
@@ -308,85 +258,22 @@ describe('Ki-Core stable asset verification', () => {
       rmSync(fixture.root, { recursive: true, force: true });
     }
   });
-
-  it('rejects a manifest that disagrees with the checked-in platform checksum', async () => {
-    const fixture = await createStableFixture();
-    try {
-      fixture.pin.checksums['macos-x64'] = 'f'.repeat(64);
-      expect(() =>
-        validateDownloadedAssets({
-          sourceType: 'stable',
-          platformKey: fixture.selected.platformKey,
-          tag: TAG,
-          manifestPath: fixture.manifestPath,
-          checksumPath: fixture.checksumPath,
-          archivePath: fixture.archivePath,
-          pinnedChecksums: fixture.pin.checksums,
-        })
-      ).toThrow(/checked-in checksum/);
-    } finally {
-      rmSync(fixture.root, { recursive: true, force: true });
-    }
-  });
-});
-
-describe('Ki-Core candidate asset verification', () => {
-  it('accepts artifact provenance only for the requested run and head SHA', async () => {
-    const fixture = await createCandidateFixture();
-    try {
-      const manifest = validateDownloadedAssets({
-        sourceType: 'candidate',
-        platformKey: fixture.selected.platformKey,
-        runId: '54321',
-        headSha: RELEASE_SHA,
-        manifestPath: fixture.manifestPath,
-        checksumPath: fixture.checksumPath,
-        archivePath: fixture.archivePath,
-      });
-      expect(manifest.product.tag).toBeNull();
-      expect(manifest.release.workflow).toBe('build-manual.yml');
-    } finally {
-      rmSync(fixture.root, { recursive: true, force: true });
-    }
-  });
-
-  it.each([
-    ['run ID', '99999', RELEASE_SHA],
-    ['head SHA', '54321', 'c'.repeat(40)],
-  ])('rejects candidate manifest %s substitution', async (expectedError, runId, headSha) => {
-    const fixture = await createCandidateFixture();
-    try {
-      expect(() =>
-        validateDownloadedAssets({
-          sourceType: 'candidate',
-          platformKey: fixture.selected.platformKey,
-          runId,
-          headSha,
-          manifestPath: fixture.manifestPath,
-          checksumPath: fixture.checksumPath,
-          archivePath: fixture.archivePath,
-        })
-      ).toThrow(expectedError);
-    } finally {
-      rmSync(fixture.root, { recursive: true, force: true });
-    }
-  });
 });
 
 describe('Ki-Core bundle provenance', () => {
-  it('carries stable Ki-Core and AionCore identity from the verified release manifest', async () => {
+  it('records stable Ki-Core and AionCore identity from the checked-in pin', async () => {
     const fixture = await createStableFixture();
+    const identity = {
+      product: { version: VERSION, tag: TAG, releaseCommit: RELEASE_SHA },
+      upstream: fixture.pin.aionCore,
+    };
     try {
-      const provenance = createBundleProvenance(fixture.manifest, {
+      const provenance = createBundleProvenance(identity, {
         policy: 'release-pinned',
         repository: 'xlihub/Ki-Core',
       });
       expect(provenance.kiCore).toEqual({ version: VERSION, tag: TAG, releaseCommit: RELEASE_SHA });
-      expect(provenance.aionCore).toEqual({
-        repository: 'iOfficeAI/AionCore',
-        tag: 'v0.1.58',
-        peeledCommit: UPSTREAM_SHA,
-      });
+      expect(provenance.aionCore).toEqual(fixture.pin.aionCore);
       expect(provenance.version).toBe(VERSION);
     } finally {
       rmSync(fixture.root, { recursive: true, force: true });
@@ -413,12 +300,9 @@ describe('Ki-Core archive extraction safety', () => {
     ).toThrow(/Archive entry/);
   });
 
-  it('rejects symbolic links, hard links, normalized duplicates, and unexpected content', () => {
+  it('rejects symbolic links, normalized duplicates, and unexpected content', () => {
     expect(() =>
       validateEntries([{ name: 'aioncore', isFile: false, isSymbolicLink: true, isHardLink: false }], ['aioncore'])
-    ).toThrow(/regular file/);
-    expect(() =>
-      validateEntries([{ name: 'aioncore', isFile: false, isSymbolicLink: false, isHardLink: true }], ['aioncore'])
     ).toThrow(/regular file/);
     expect(() =>
       validateEntries(
@@ -434,7 +318,7 @@ describe('Ki-Core archive extraction safety', () => {
     ).toThrow(/unexpected entry/);
   });
 
-  it('extracts one verified executable into a newly created temporary directory', async () => {
+  it('extracts one verified executable from tar.gz', async () => {
     const root = mkdtempSync(join(tmpdir(), 'ki-core-safe-extract-'));
     const sourceDir = join(root, 'source');
     const archivePath = join(root, 'valid.tar.gz');
@@ -450,7 +334,7 @@ describe('Ki-Core archive extraction safety', () => {
     }
   });
 
-  it('extracts a verified Windows executable from ZIP without invoking a system unzip command', () => {
+  it('extracts one verified Windows executable from ZIP', () => {
     const root = mkdtempSync(join(tmpdir(), 'ki-core-safe-zip-'));
     const archivePath = join(root, 'valid.zip');
     const outputDir = join(root, 'output');
@@ -463,27 +347,19 @@ describe('Ki-Core archive extraction safety', () => {
     }
   });
 
-  it('rejects a ZIP symbolic link before creating the output directory', () => {
+  it('rejects symbolic-link and encrypted ZIP entries', () => {
     const root = mkdtempSync(join(tmpdir(), 'ki-core-unsafe-zip-'));
-    const archivePath = join(root, 'link.zip');
-    const outputDir = join(root, 'output');
-    writeStoredZip(archivePath, [{ name: 'aioncore.exe', content: 'outside.exe', mode: 0o120777 }]);
+    const linkArchive = join(root, 'link.zip');
+    const encryptedArchive = join(root, 'encrypted.zip');
+    writeStoredZip(linkArchive, [{ name: 'aioncore.exe', content: 'outside.exe', mode: 0o120777 }]);
+    writeStoredZip(encryptedArchive, [{ name: 'aioncore.exe', content: 'encrypted', encrypted: true }]);
     try {
-      expect(() => extractArchiveSafely(archivePath, outputDir, ['aioncore.exe'])).toThrow(/regular file/);
-      expect(() => readFileSync(join(outputDir, 'aioncore.exe'))).toThrow();
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it('rejects an encrypted ZIP entry before creating the output directory', () => {
-    const root = mkdtempSync(join(tmpdir(), 'ki-core-encrypted-zip-'));
-    const archivePath = join(root, 'encrypted.zip');
-    const outputDir = join(root, 'output');
-    writeStoredZip(archivePath, [{ name: 'aioncore.exe', content: 'encrypted', encrypted: true }]);
-    try {
-      expect(() => extractArchiveSafely(archivePath, outputDir, ['aioncore.exe'])).toThrow(/Encrypted/);
-      expect(() => readFileSync(join(outputDir, 'aioncore.exe'))).toThrow();
+      expect(() => extractArchiveSafely(linkArchive, join(root, 'link-output'), ['aioncore.exe'])).toThrow(
+        /regular file/
+      );
+      expect(() => extractArchiveSafely(encryptedArchive, join(root, 'encrypted-output'), ['aioncore.exe'])).toThrow(
+        /Encrypted/
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

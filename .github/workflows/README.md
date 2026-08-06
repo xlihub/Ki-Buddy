@@ -4,11 +4,11 @@
 
 Ki-Buddy 打包只允许三种显式来源策略：
 
-- `release-pinned`：正式桌面包与 Web CLI 使用。读取 `package.json` 的完整 Ki-Core tag 和六平台 SHA-256；禁止 `latest`、Actions run ID 和本地 binary。
+- `release-pinned`：正式桌面包与 Web CLI 使用。读取 `package.json` 的完整 Ki-Core tag、tag commit、AionCore 映射和六平台 SHA-256；下载 Release checksums 后与固定值逐项比对。禁止 `latest`、Actions run ID 和本地 binary。
 - `candidate`：仅 `build-manual.yml` 使用。必须提供 Ki-Core Candidate Build run ID 和完整 `product/main` commit SHA。Ki-Core 是公开仓库，候选读取使用公开 Actions API，不向目标构建分支传递跨仓 token。
 - `development`：仅本地开发使用。允许显式 local bundle、local binary 或旧 AionCore 下载路径，不得写入稳定 Ki-Core provenance。
 
-首次 Ki-Core release 发布并验证六个平台后，才能填写 `package.json.kiCore.tag` 与 `checksums` 并启用正式构建。
+首次 Ki-Core release 发布并验证六个平台后，才能填写 `package.json.kiCore.tag`、`commit`、`aionCore` 与 `checksums` 并启用正式构建。Candidate artifact 只包含当前平台 archive；其可信身份来自指定的 Actions run、workflow、`product/main` commit 和 artifact 名称，不依赖额外 provenance manifest。
 
 本项目使用 GPT 驱动的 GitHub Actions 工作流辅助 PR 审查。
 
