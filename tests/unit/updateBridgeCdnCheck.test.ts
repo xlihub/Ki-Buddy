@@ -157,7 +157,7 @@ describe('update.check CDN-first', () => {
   it('reports an update from the CDN manifest and attaches GitHub notes', async () => {
     stubFetch({ cdn: () => ymlResponse(CDN_YML), github: () => jsonResponse(GITHUB_RELEASES) });
     const handler = await getCheckHandler();
-    const res = await handler({});
+    const res = await handler({ repo: 'iOfficeAI/AionUi' });
     expect(res.success).toBe(true);
     expect(res.data?.updateAvailable).toBe(true);
     expect(res.data?.latest?.version).toBe('2.1.45');
@@ -171,7 +171,7 @@ describe('update.check CDN-first', () => {
   it('succeeds without notes when GitHub is unreachable', async () => {
     stubFetch({ cdn: () => ymlResponse(CDN_YML) });
     const handler = await getCheckHandler();
-    const res = await handler({});
+    const res = await handler({ repo: 'iOfficeAI/AionUi' });
     expect(res.success).toBe(true);
     expect(res.data?.updateAvailable).toBe(true);
     expect(res.data?.latest?.body).toBeUndefined();
@@ -185,7 +185,7 @@ describe('update.check CDN-first', () => {
       github: () => jsonResponse([{ ...GITHUB_RELEASES[0], tag_name: 'v9.9.9' }]),
     });
     const handler = await getCheckHandler();
-    const res = await handler({});
+    const res = await handler({ repo: 'iOfficeAI/AionUi' });
     expect(res.success).toBe(true);
     expect(res.data?.latest?.body).toBeUndefined();
   });
@@ -196,7 +196,7 @@ describe('update.check CDN-first', () => {
       github: () => jsonResponse([]),
     });
     const handler = await getCheckHandler();
-    const res = await handler({});
+    const res = await handler({ repo: 'iOfficeAI/AionUi' });
     expect(res.success).toBe(true);
     expect(res.data?.updateAvailable).toBe(false);
   });
@@ -204,14 +204,47 @@ describe('update.check CDN-first', () => {
   it('fails the check when the CDN manifest request fails', async () => {
     stubFetch({ cdn: () => new Response('nope', { status: 502 }), github: () => jsonResponse(GITHUB_RELEASES) });
     const handler = await getCheckHandler();
-    const res = await handler({});
+    const res = await handler({ repo: 'iOfficeAI/AionUi' });
     expect(res.success).toBe(false);
   });
 
   it('fails the check when the CDN manifest is malformed', async () => {
     stubFetch({ cdn: () => ymlResponse('not: [valid'), github: () => jsonResponse(GITHUB_RELEASES) });
     const handler = await getCheckHandler();
-    const res = await handler({});
+    const res = await handler({ repo: 'iOfficeAI/AionUi' });
     expect(res.success).toBe(false);
+  });
+});
+
+describe('update.check Ki-Buddy GitHub releases', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('uses the product tag prefix and repository without depending on the current release version', async () => {
+    const release = {
+      tag_name: 'ki-buddy-v9.9.9',
+      name: 'Ki-Buddy test release',
+      body: 'product notes',
+      html_url: 'https://github.com/xlihub/Ki-Buddy/releases/tag/ki-buddy-v9.9.9',
+      prerelease: false,
+      draft: false,
+      assets: [
+        {
+          name: 'Ki-Buddy-9.9.9-mac-arm64.dmg',
+          browser_download_url:
+            'https://github.com/xlihub/Ki-Buddy/releases/download/ki-buddy-v9.9.9/Ki-Buddy-9.9.9-mac-arm64.dmg',
+          size: 200,
+        },
+      ],
+    };
+    const fetchMock = stubFetch({ github: () => jsonResponse([release]) });
+    const handler = await getCheckHandler();
+    const res = await handler({});
+
+    expect(res.success).toBe(true);
+    expect(res.data?.latest?.tagName).toBe(release.tag_name);
+    expect(res.data?.latest?.recommendedAsset?.url).toBe(release.assets[0].browser_download_url);
+    expect(fetchMock).toHaveBeenCalledWith('https://api.github.com/repos/xlihub/Ki-Buddy/releases', expect.any(Object));
   });
 });

@@ -492,46 +492,25 @@ function isValidPackageVersion(value) {
   );
 }
 
-function applyDebugAutoUpdateVersionOverride(packageJsonPath) {
+function getBuildVersionOverride() {
   const debugAutoUpdateCurrentVersion = process.env[DEBUG_AUTO_UPDATE_CURRENT_VERSION_ENV]?.trim();
-  if (!debugAutoUpdateCurrentVersion) {
-    return () => {};
-  }
+  if (!debugAutoUpdateCurrentVersion) return undefined;
   if (!isValidPackageVersion(debugAutoUpdateCurrentVersion)) {
     throw new Error(`${DEBUG_AUTO_UPDATE_CURRENT_VERSION_ENV} must be a valid semver version`);
   }
-
-  const originalPackageJsonText = fs.readFileSync(packageJsonPath, 'utf8');
-  const packageJson = JSON.parse(originalPackageJsonText);
-  const originalPackageVersion = packageJson.version;
-  if (originalPackageVersion === debugAutoUpdateCurrentVersion) {
-    console.log(`Debug auto-update build version already set to ${debugAutoUpdateCurrentVersion}`);
-    return () => {};
-  }
-
-  packageJson.version = debugAutoUpdateCurrentVersion;
-  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
-  console.log(
-    `Debug auto-update build version override: ${originalPackageVersion} -> ${debugAutoUpdateCurrentVersion}`
-  );
-
-  return () => {
-    if (fs.readFileSync(packageJsonPath, 'utf8') !== originalPackageJsonText) {
-      fs.writeFileSync(packageJsonPath, originalPackageJsonText);
-      console.log(`Restored package.json version to ${originalPackageVersion}`);
-    }
-  };
+  console.log(`Debug auto-update build version override: ${debugAutoUpdateCurrentVersion}`);
+  return debugAutoUpdateCurrentVersion;
 }
 
 // Create macOS distributables using electron-builder --prepackaged with .app path.
 // This preserves DMG styling and still emits the zip required by MacUpdater.
-function createMacArtifactsWithPrepackaged(appDir, targetArch) {
+function createMacArtifactsWithPrepackaged(appDir, targetArch, builderConfigPath) {
   const appName = fs.readdirSync(appDir).find((f) => f.endsWith('.app'));
   if (!appName) throw new Error(`No .app found in ${appDir}`);
   const appPath = path.join(appDir, appName);
 
   execSync(
-    `bunx electron-builder --config packages/desktop/electron-builder.yml --mac dmg zip --${targetArch} --prepackaged "${appPath}" --publish=never`,
+    `bunx electron-builder --config "${builderConfigPath}" --mac dmg zip --${targetArch} --prepackaged "${appPath}" --publish=never`,
     {
       stdio: 'inherit',
       shell: process.platform === 'win32',
@@ -539,7 +518,7 @@ function createMacArtifactsWithPrepackaged(appDir, targetArch) {
   );
 }
 
-function buildWithDmgRetry(cmd, targetArch) {
+function buildWithDmgRetry(cmd, targetArch, builderConfigPath) {
   const isMac = process.platform === 'darwin';
   const outDir = path.resolve(__dirname, '../out');
 
@@ -561,7 +540,7 @@ function buildWithDmgRetry(cmd, targetArch) {
 
       try {
         console.log(`\n📀 DMG retry attempt ${attempt}/${DMG_RETRY_MAX}...`);
-        createMacArtifactsWithPrepackaged(appDir, targetArch);
+        createMacArtifactsWithPrepackaged(appDir, targetArch, builderConfigPath);
         console.log('✅ macOS distributables created successfully on retry');
         return;
       } catch (retryError) {
@@ -698,17 +677,14 @@ if (packOnly) console.log('⚡ --pack-only: Will skip electron-builder distribut
 if (forceBuild) console.log('⚡ --force: Force full rebuild');
 
 const packageJsonPath = path.resolve(__dirname, '../package.json');
-let restorePackageVersionOverride = () => {};
-let buildFailed = false;
 
 try {
-  restorePackageVersionOverride = applyDebugAutoUpdateVersionOverride(packageJsonPath);
+  const buildVersionOverride = getBuildVersionOverride();
 
   // 1. Ensure package.json main entry is correct for electron-vite
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
   if (packageJson.main !== './out/main/index.js') {
-    packageJson.main = './out/main/index.js';
-    fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
+    throw new Error('Upstream package.json main entry must be ./out/main/index.js');
   }
 
   // 2. Check if we can skip Vite build (incremental build)
@@ -765,8 +741,16 @@ try {
 
   // 5. Prepare aioncore binary (for packaged runtime usage)
   const { prepareAioncore } = require('../packages/shared-scripts/src/prepare-aioncore.js');
+  const {
+    createElectronBuilderConfig,
+    readProductConfig,
+  } = require('../packages/shared-scripts/src/kiBuddyRelease.js');
   const { resolveAioncoreVersion } = require('./resolveAioncoreVersion.js');
   const projectRoot = path.resolve(__dirname, '..');
+  const builderConfigPath = path.join(projectRoot, 'out', 'ki-buddy-electron-builder.json');
+  const productConfig = readProductConfig(projectRoot);
+  const productExecutableName = productConfig.electronBuilder.executableName;
+  createElectronBuilderConfig(projectRoot, builderConfigPath, { version: buildVersionOverride });
   writeGeneratedSentryDsnInclude(projectRoot);
   prepareAioncore({
     projectRoot,
@@ -844,11 +828,12 @@ try {
     const winUnpackedDir = path.join(outDir, 'win-unpacked');
     let cleaned = tryRemoveDir(winUnpackedDir);
     if (!cleaned) {
-      const aionRunning = isProcessRunningWindows('AionUi.exe');
+      const productExecutable = `${productExecutableName}.exe`;
+      const aionRunning = isProcessRunningWindows(productExecutable);
       const electronRunning = isProcessRunningWindows('electron.exe');
       if (aionRunning || electronRunning) {
         console.log('⚠️  Detected running AionUi/Electron process. Attempting to close...');
-        killWindowsProcesses(['AionUi.exe', 'electron.exe']);
+        killWindowsProcesses([productExecutable, 'electron.exe']);
         cleaned = tryRemoveDir(winUnpackedDir);
         if (!cleaned) {
           console.log('⚠️  Directory still locked. Please close any running AionUi/Electron processes and retry.');
@@ -863,11 +848,11 @@ try {
     cleanupWindowsPackOutput();
   }
 
-  const builderCommand = `bunx electron-builder --config packages/desktop/electron-builder.yml ${builderArgs} ${archFlag} ${nsisInclude} ${publishArg}`;
+  const builderCommand = `bunx electron-builder --config "${builderConfigPath}" ${builderArgs} ${archFlag} ${nsisInclude} ${publishArg}`;
   try {
-    buildWithDmgRetry(builderCommand, targetArch);
+    buildWithDmgRetry(builderCommand, targetArch, builderConfigPath);
   } catch (error) {
-    const winExePath = path.join(outDir, 'win-unpacked', 'AionUi.exe');
+    const winExePath = path.join(outDir, 'win-unpacked', `${productExecutableName}.exe`);
     const firstError = formatExecError(error);
     const canRetryWithoutExecutableEdit =
       process.platform === 'win32' && isWindowsBuild && process.env.CI !== 'true' && fs.existsSync(winExePath);
@@ -889,11 +874,11 @@ try {
     }
     console.log('   Retrying local build with win.signAndEditExecutable=false...');
     console.log('   This fallback is intended for transient rcedit / file-lock failures on developer machines.');
-    killWindowsProcesses(['AionUi.exe', 'electron.exe']);
+    killWindowsProcesses([`${productExecutableName}.exe`, 'electron.exe']);
     cleanupWindowsPackOutput();
 
     try {
-      buildWithDmgRetry(`${builderCommand} --config.win.signAndEditExecutable=false`, targetArch);
+      buildWithDmgRetry(`${builderCommand} --config.win.signAndEditExecutable=false`, targetArch, builderConfigPath);
     } catch (retryError) {
       const retryFailure = formatExecError(retryError);
       throw new Error(
@@ -910,16 +895,6 @@ try {
 
   console.log('✅ Build completed!');
 } catch (error) {
-  buildFailed = true;
   console.error('❌ Build failed:', error.message);
   process.exitCode = 1;
-} finally {
-  try {
-    restorePackageVersionOverride();
-  } catch (restoreError) {
-    console.error('❌ Failed to restore package.json version:', restoreError.message);
-    if (!buildFailed) {
-      process.exitCode = 1;
-    }
-  }
 }

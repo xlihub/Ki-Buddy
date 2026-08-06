@@ -23,6 +23,7 @@ import * as fs from 'fs';
 import { load as loadYaml } from 'js-yaml';
 import * as path from 'path';
 import semver from 'semver';
+import productConfig from '../../../../../ki-buddy-product.json';
 import { autoUpdaterService } from '../services/autoUpdaterService';
 import { consumeInstallerLastFailure } from '../services/installerLastFailure';
 
@@ -60,8 +61,9 @@ interface AutoUpdateCheckParams {
   includePrerelease?: boolean;
 }
 
-const DEFAULT_REPO = 'iOfficeAI/AionUi';
-const DEFAULT_USER_AGENT = 'AionUi';
+const DEFAULT_REPO = productConfig.updates.repository;
+const PRODUCT_TAG_PREFIX = productConfig.updates.tagPrefix;
+const DEFAULT_USER_AGENT = productConfig.packageMetadata.productName;
 const ALLOWED_ASSET_EXTS = new Set(['.exe', '.msi', '.dmg', '.zip', '.deb', '.rpm']);
 const CDN_HOST = 'static.aionui.com';
 const CDN_BASE_URL = `https://${CDN_HOST}/releases`;
@@ -81,7 +83,11 @@ const isAllowedAssetName = (name: string) => {
 
 const normalizeTagToSemver = (tag: string): string | null => {
   const trimmed = tag.trim();
-  const withoutV = trimmed.startsWith('v') ? trimmed.slice(1) : trimmed;
+  const withoutV = trimmed.startsWith(PRODUCT_TAG_PREFIX)
+    ? trimmed.slice(PRODUCT_TAG_PREFIX.length)
+    : trimmed.startsWith('v')
+      ? trimmed.slice(1)
+      : trimmed;
   // Ensure it looks like a semver prefix at least.
   if (!/^\d+\.\d+\.\d+/.test(withoutV)) return null;
   return semver.valid(withoutV);
@@ -238,6 +244,7 @@ export const parseCdnManifest = (raw: string): CdnLatestManifest | null => {
 export const mapCdnManifestToRelease = (manifest: CdnLatestManifest, repo: string): UpdateReleaseInfo | null => {
   const version = semver.valid(manifest.version);
   if (!version) return null;
+  const tagPrefix = repo === DEFAULT_REPO ? PRODUCT_TAG_PREFIX : 'v';
   const assets: GitHubReleaseAsset[] = [];
   for (const file of manifest.files) {
     const name = path.basename(file.url.trim());
@@ -245,12 +252,12 @@ export const mapCdnManifestToRelease = (manifest: CdnLatestManifest, repo: strin
     assets.push({
       name,
       url: rewriteAssetUrlToCDN(name, version),
-      fallbackUrl: `https://github.com/${repo}/releases/download/v${version}/${name}`,
+      fallbackUrl: `https://github.com/${repo}/releases/download/${tagPrefix}${version}/${name}`,
       size: file.size ?? 0,
     });
   }
   return {
-    tagName: `v${version}`,
+    tagName: `${tagPrefix}${version}`,
     version,
     htmlUrl: '',
     publishedAt: manifest.releaseDate,
@@ -259,6 +266,44 @@ export const mapCdnManifestToRelease = (manifest: CdnLatestManifest, repo: strin
     assets,
     recommendedAsset: pickRecommendedAsset(assets),
   };
+};
+
+const mapGitHubReleaseToUpdate = (release: GitHubReleaseApi): UpdateReleaseInfo | null => {
+  const version = normalizeTagToSemver(release.tag_name);
+  if (!version) return null;
+  const assets = (release.assets || [])
+    .filter((asset) => isAllowedAssetName(asset.name))
+    .map((asset) => ({
+      name: asset.name,
+      url: asset.browser_download_url,
+      size: asset.size,
+      contentType: asset.content_type,
+    }));
+  return {
+    tagName: release.tag_name,
+    version,
+    name: release.name,
+    body: release.body,
+    htmlUrl: release.html_url,
+    publishedAt: release.published_at,
+    prerelease: release.prerelease,
+    draft: release.draft,
+    assets,
+    recommendedAsset: pickRecommendedAsset(assets),
+  };
+};
+
+const selectLatestGitHubRelease = (
+  releases: GitHubReleaseApi[],
+  includePrerelease: boolean
+): UpdateReleaseInfo | null => {
+  return (
+    releases
+      .filter((release) => !release.draft && (includePrerelease || !release.prerelease))
+      .map(mapGitHubReleaseToUpdate)
+      .filter((release): release is UpdateReleaseInfo => Boolean(release))
+      .toSorted((left, right) => semver.rcompare(left.version, right.version))[0] || null
+  );
 };
 
 const resolveRepo = (requestRepo?: string): string => {
@@ -350,34 +395,18 @@ const fetchGitHubReleases = async (repo: string, timeoutMs = 30000): Promise<Git
 const CDN_MANIFEST_TIMEOUT_MS = 15000;
 const GITHUB_NOTES_TIMEOUT_MS = 10000;
 
-/**
- * Fetch and parse the authoritative CDN channel manifest for the current
- * platform/arch. Any failure here fails the manual check — the CDN is the
- * single source of truth for "is there an update".
- */
 const fetchCdnManifest = async (): Promise<CdnLatestManifest> => {
   const url = `${CDN_BASE_URL}/${resolveCdnChannelFile()}`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), CDN_MANIFEST_TIMEOUT_MS);
-
-  log.info('[manual-update] Checking CDN manifest:', url);
   try {
     const res = await fetch(url, {
       headers: { 'User-Agent': DEFAULT_USER_AGENT },
       signal: controller.signal,
     });
-    if (!res.ok) {
-      throw new Error((await getI18n()).t('update.errors.cdnManifestFailed', { status: res.status }));
-    }
+    if (!res.ok) throw new Error((await getI18n()).t('update.errors.cdnManifestFailed', { status: res.status }));
     const manifest = parseCdnManifest(await res.text());
-    if (!manifest) {
-      throw new Error((await getI18n()).t('update.errors.cdnManifestInvalid'));
-    }
-    log.info('[manual-update] CDN manifest resolved:', {
-      url,
-      version: manifest.version,
-      files: manifest.files.length,
-    });
+    if (!manifest) throw new Error((await getI18n()).t('update.errors.cdnManifestInvalid'));
     return manifest;
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'AbortError') {
@@ -389,24 +418,13 @@ const fetchCdnManifest = async (): Promise<CdnLatestManifest> => {
   }
 };
 
-type ReleaseNotesEnrichment = { body?: string; htmlUrl?: string; name?: string; publishedAt?: string };
-
-/**
- * Best-effort GitHub lookup for the release matching the CDN version. The
- * manual check must work without GitHub (the repo stays the changelog source
- * but may be unreachable), so every failure path resolves to an empty object.
- */
-const fetchReleaseNotesEnrichment = async (repo: string, version: string): Promise<ReleaseNotesEnrichment> => {
+const fetchReleaseNotesEnrichment = async (repo: string, version: string) => {
   try {
     const releases = await fetchGitHubReleases(repo, GITHUB_NOTES_TIMEOUT_MS);
-    const match = releases.find((rel) => rel && !rel.draft && normalizeTagToSemver(rel.tag_name) === version);
-    if (!match) return {};
-    return {
-      body: match.body,
-      htmlUrl: match.html_url,
-      name: match.name,
-      publishedAt: match.published_at,
-    };
+    const match = releases.find((release) => !release.draft && normalizeTagToSemver(release.tag_name) === version);
+    return match
+      ? { body: match.body, htmlUrl: match.html_url, name: match.name, publishedAt: match.published_at }
+      : {};
   } catch {
     return {};
   }
@@ -431,7 +449,7 @@ const sanitizeFileName = (name: string): string => {
   // Keep only base name and trim weird whitespace.
   const base = path.basename(name).trim();
   // Avoid empty names.
-  return base || `AionUi-update-${Date.now()}`;
+  return base || `Ki-Buddy-update-${Date.now()}`;
 };
 
 const ensureUniquePath = (target: string): string => {
@@ -689,31 +707,30 @@ export function initUpdateBridge(): void {
         // 若要 dev/预发布版本更新可靠生效，需要 CI 在 dev 构建时把 `package.json#version`
         // 注入为带 prerelease 的 semver（如 `1.7.2-dev.1234+sha.abcdef0`），以保证比较顺序正确。
 
-        // The CDN channel manifest is the authoritative source. It serves a single
-        // stable channel, so `includePrerelease` no longer affects detection.
-        const manifest = await fetchCdnManifest();
-        const latest = mapCdnManifestToRelease(manifest, repo);
+        let latest: UpdateReleaseInfo | null;
+        if (repo === DEFAULT_REPO) {
+          const releases = await fetchGitHubReleases(repo);
+          latest = selectLatestGitHubRelease(releases, Boolean(params?.includePrerelease));
+        } else {
+          const manifest = await fetchCdnManifest();
+          latest = mapCdnManifestToRelease(manifest, repo);
+          if (latest) {
+            const enrichment = await fetchReleaseNotesEnrichment(repo, latest.version);
+            latest = { ...latest, ...enrichment };
+          }
+        }
 
         const currentSemver = semver.valid(currentVersion) || semver.coerce(currentVersion)?.version;
         if (!currentSemver || !latest) {
           return { success: true, data: { currentVersion, updateAvailable: false } };
         }
 
-        // GitHub only enriches the result with release notes; it never blocks.
-        const enrichment = await fetchReleaseNotesEnrichment(repo, latest.version);
-
         return {
           success: true,
           data: {
             currentVersion,
             updateAvailable: semver.gt(latest.version, currentSemver),
-            latest: {
-              ...latest,
-              body: enrichment.body,
-              name: enrichment.name,
-              htmlUrl: enrichment.htmlUrl ?? '',
-              publishedAt: enrichment.publishedAt ?? latest.publishedAt,
-            },
+            latest,
           },
         };
       } catch (err: unknown) {

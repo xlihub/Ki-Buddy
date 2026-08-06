@@ -246,7 +246,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(tr -d '[:space:]' < ki-buddy-version.txt)
 
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             RELEASE_NAME="${GITHUB_REF_NAME}"
@@ -707,7 +707,7 @@ jobs:
             out/*.msi
             out/*.dmg
             out/*.deb
-            out/AionUi-*-mac-*.zip
+            out/Ki-Buddy-*-mac-*.zip
             out/*.yml
           if-no-files-found: warn
           retention-days: 7

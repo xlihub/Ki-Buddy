@@ -9,7 +9,8 @@ import type { UpdateInfo } from 'electron-updater';
 import type { AppUpdater } from 'electron-updater/out/AppUpdater';
 import type { ProviderRuntimeOptions } from 'electron-updater/out/providers/Provider';
 import { CdnGenericProvider } from '@/process/services/cdnGenericProvider';
-import { buildCdnFeedOptions, CDN_UPDATE_BASE_URL } from '@/process/services/updateFeed';
+import { buildProductFeedOptions } from '@/process/services/updateFeed';
+import productConfig from '../../../../ki-buddy-product.json';
 
 const makeRuntimeOptions = (): ProviderRuntimeOptions => ({
   isUseMultipleRangeRequest: true,
@@ -19,13 +20,17 @@ const makeRuntimeOptions = (): ProviderRuntimeOptions => ({
   } as unknown as ProviderRuntimeOptions['executor'],
 });
 
-describe('CDN update feed options', () => {
-  it('builds a custom electron-updater provider pointed at the release CDN', () => {
-    const options = buildCdnFeedOptions();
+describe('Ki-Buddy update feed options', () => {
+  it('builds a GitHub provider from the current product configuration', () => {
+    const options = buildProductFeedOptions();
+    const [owner, repo] = productConfig.updates.repository.split('/');
 
-    expect(options.provider).toBe('custom');
-    expect(options.url).toBe(CDN_UPDATE_BASE_URL);
-    expect(options.updateProvider).toBe(CdnGenericProvider);
+    expect(options).toEqual({
+      provider: 'github',
+      owner,
+      repo,
+      tagNamePrefix: productConfig.updates.tagPrefix,
+    });
   });
 });
 

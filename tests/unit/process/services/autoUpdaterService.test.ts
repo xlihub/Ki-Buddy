@@ -8,6 +8,7 @@ import path from 'path';
 import { rmSync } from 'fs';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import productConfig from '../../../../ki-buddy-product.json';
 
 const autoUpdaterMock = vi.hoisted(() => ({
   logger: null as unknown,
@@ -129,16 +130,18 @@ describe('AutoUpdaterService', () => {
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled();
   });
 
-  it('configures electron-updater to read stable metadata from the CDN', async () => {
+  it('configures electron-updater from the Ki-Buddy product repository', async () => {
     const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
-    const { CdnGenericProvider } = await import('@/process/services/cdnGenericProvider');
 
     autoUpdaterService.resetForTest();
 
+    const [owner, repo] = productConfig.updates.repository.split('/');
+
     expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
-      provider: 'custom',
-      url: 'https://static.aionui.com/releases',
-      updateProvider: CdnGenericProvider,
+      provider: 'github',
+      owner,
+      repo,
+      tagNamePrefix: productConfig.updates.tagPrefix,
     });
   });
 

@@ -36,6 +36,17 @@ describe('Ki-Core workflow source policies', () => {
     expect(webCli).not.toContain('KI_CORE_ACTIONS_TOKEN');
   });
 
+  it('creates only an approved Ki-Buddy Draft Release from a product tag', () => {
+    const stable = workflow('build-and-release.yml');
+    expect(stable).toContain("- 'ki-buddy-v*'");
+    expect(stable).toContain('environment: ki-buddy-stable');
+    expect(stable).toContain('draft: true');
+    expect(stable).toContain('overwrite_files: false');
+    expect(stable).toContain('git merge-base --is-ancestor "$GITHUB_SHA" origin/product/main');
+    expect(stable).not.toContain('branches: [dev]');
+    expect(stable).not.toContain('git tag $TAG_NAME');
+  });
+
   it('does not expose a cross-repository token to branch-controlled build commands', () => {
     const reusable = workflow('_build-reusable.yml');
     expect(reusable).toContain("default: 'release-pinned'");

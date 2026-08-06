@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { collectBackendInstallDiagnostics } from '@/process/startup/backendInstallDiagnostics';
 import { appendAutoUpdateDiagnosticEvent } from '@/process/services/autoUpdateDiagnostics';
 
+const FIXTURE_KI_BUDDY_VERSION = '7.8.9';
+const FIXTURE_KI_CORE_VERSION = '4.3.2';
+const FIXTURE_AION_UI_TAG = 'v6.5.4';
+const FIXTURE_AION_CORE_TAG = 'v3.2.1';
+
 describe('collectBackendInstallDiagnostics', () => {
   it('records packaged runtime manifest and missing backend binary metadata', () => {
     const files = new Map<string, { mtimeMs: number; size: number; content?: string }>([
@@ -80,11 +85,11 @@ describe('collectBackendInstallDiagnostics', () => {
           filePath === manifestPath
             ? JSON.stringify({
                 schemaVersion: 2,
-                version: '0.1.0',
+                version: FIXTURE_KI_CORE_VERSION,
                 generatedAt: '2026-08-05T00:00:00.000Z',
                 sourceType: 'actions-artifact',
                 files: ['aioncore', 'managed-resources/'],
-                kiCore: { version: '0.1.0', tag: null, releaseCommit: null },
+                kiCore: { version: FIXTURE_KI_CORE_VERSION, tag: null, releaseCommit: null },
                 aionCore: {
                   repository: 'iOfficeAI/AionCore',
                   tag: 'v0.1.58',
@@ -105,7 +110,7 @@ describe('collectBackendInstallDiagnostics', () => {
       }
     );
 
-    expect(diagnostics.kiCoreVersion).toBe('0.1.0');
+    expect(diagnostics.kiCoreVersion).toBe(FIXTURE_KI_CORE_VERSION);
     expect(diagnostics.aionCoreTag).toBe('v0.1.58');
     expect(diagnostics.aionCorePeeledCommit).toBe('b'.repeat(40));
     expect(diagnostics.manifestSourceRunId).toBe('12345');
@@ -124,6 +129,48 @@ describe('collectBackendInstallDiagnostics', () => {
 
     expect(diagnostics.manifestValidationError).toBe('Bundle manifest provenance objects are malformed');
     expect(diagnostics.manifestParseError).toBeUndefined();
+  });
+
+  it('exposes Ki-Buddy and mapped AionUi identity from schema 3 manifests', () => {
+    const diagnostics = collectBackendInstallDiagnostics(
+      { runtimeKey: 'linux-x64', resourcesPath: '/resources' },
+      {
+        platform: 'linux',
+        readFile: () =>
+          JSON.stringify({
+            schemaVersion: 3,
+            version: FIXTURE_KI_BUDDY_VERSION,
+            kiBuddy: {
+              repository: 'xlihub/Ki-Buddy',
+              version: FIXTURE_KI_BUDDY_VERSION,
+              tag: `ki-buddy-v${FIXTURE_KI_BUDDY_VERSION}`,
+              releaseCommit: null,
+            },
+            aionUi: {
+              repository: 'iOfficeAI/AionUi',
+              tag: FIXTURE_AION_UI_TAG,
+              commit: 'a'.repeat(40),
+            },
+            kiCore: {
+              version: FIXTURE_KI_CORE_VERSION,
+              tag: `ki-core-v${FIXTURE_KI_CORE_VERSION}`,
+              releaseCommit: 'b'.repeat(40),
+            },
+            aionCore: {
+              repository: 'iOfficeAI/AionCore',
+              tag: FIXTURE_AION_CORE_TAG,
+              peeledCommit: 'c'.repeat(40),
+            },
+            source: { policy: 'release-pinned', type: 'github-release' },
+          }),
+        stat: () => ({ mtimeMs: 1, size: 2 }),
+      }
+    );
+
+    expect(diagnostics.manifestSchemaVersion).toBe(3);
+    expect(diagnostics.kiBuddyTag).toBe(`ki-buddy-v${FIXTURE_KI_BUDDY_VERSION}`);
+    expect(diagnostics.aionUiTag).toBe(FIXTURE_AION_UI_TAG);
+    expect(diagnostics.manifestValidationError).toBeUndefined();
   });
 });
 

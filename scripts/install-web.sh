@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # ============================================================================
-# AionUi WebUI — One-Click Installation Script
+# Ki-Buddy Web CLI — One-Click Installation Script
 # ============================================================================
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/iOfficeAI/AionUi/main/scripts/install-web.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/xlihub/Ki-Buddy/product/main/scripts/install-web.sh | bash
 #   # Or specify version:
 #   VERSION=1.0.0 bash install-web.sh
 #   # Or install to custom directory:
-#   INSTALL_DIR=/opt/aionui-web bash install-web.sh
+#   INSTALL_DIR=/opt/ki-buddy-web bash install-web.sh
 # ============================================================================
 
 set -euo pipefail
@@ -18,9 +18,9 @@ VERSION="${VERSION:-__VERSION__}"
 # occurrences above into e.g. "1.9.19". The resolve_version() function uses a
 # regex-based check (looks for letters) to detect the unreplaced placeholder,
 # so never add a literal "__VERSION__" string to any comparison below.
-INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/share/aionui-web}"
+INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/share/ki-buddy-web}"
 BIN_DIR="${BIN_DIR:-${HOME}/.local/bin}"
-MIRROR="${MIRROR:-https://github.com/iOfficeAI/AionUi/releases/download}"
+MIRROR="${MIRROR:-https://github.com/xlihub/Ki-Buddy/releases/download}"
 CREATE_SYMLINK="${CREATE_SYMLINK:-1}"
 UPDATE_PATH="${UPDATE_PATH:-1}"
 
@@ -43,7 +43,7 @@ die()     { error "$*"; exit 1; }
 banner() {
     echo -e "${CYAN}${BOLD}"
     echo "  ╔══════════════════════════════════════════════╗"
-    echo "  ║     AionUi WebUI Installer (No Electron)     ║"
+    echo "  ║    Ki-Buddy Web CLI Installer (No Electron)  ║"
     echo "  ╚══════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
@@ -92,7 +92,7 @@ Usage: install-web.sh [OPTIONS]
 Options:
   --version <version>       Specify version to install (default: latest or CI-embedded)
   --mirror <url>            Specify mirror URL (default: GitHub releases)
-  --install-dir <path>      Specify installation directory (default: ~/.local/share/aionui-web)
+  --install-dir <path>      Specify installation directory (default: ~/.local/share/ki-buddy-web)
   --no-symlink              Do not create symlink in ~/.local/bin
   --no-path                 Do not add PATH to shell profile
   --help                    Show this help message
@@ -104,13 +104,13 @@ Environment Variables:
 
 Examples:
   # Install latest version
-  curl -fsSL https://raw.githubusercontent.com/iOfficeAI/AionUi/main/scripts/install-web.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/xlihub/Ki-Buddy/product/main/scripts/install-web.sh | bash
 
   # Install specific version
   VERSION=1.0.0 bash install-web.sh
 
   # Install to custom directory
-  INSTALL_DIR=/opt/aionui-web bash install-web.sh
+  INSTALL_DIR=/opt/ki-buddy-web bash install-web.sh
 
   # Use local file mirror (for offline installation)
   MIRROR=file:///path/to/releases bash install-web.sh
@@ -154,7 +154,7 @@ detect_platform_arch() {
     info "Detected platform: ${BOLD}${PLATFORM}-${ARCH}${NC}"
 
     # Build tarball filename
-    TARBALL_NAME="aionui-web-${VERSION}-${PLATFORM}-${ARCH}.tar.gz"
+    TARBALL_NAME="ki-buddy-web-${VERSION}-${PLATFORM}-${ARCH}.tar.gz"
     CHECKSUM_NAME="${TARBALL_NAME}.sha256"
 }
 
@@ -171,11 +171,11 @@ resolve_version() {
         info "Resolving latest version from GitHub API..."
 
         if command -v curl &>/dev/null; then
-            VERSION=$(curl -fsSL "https://api.github.com/repos/iOfficeAI/AionUi/releases/latest" \
-                | grep '"tag_name"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
+            VERSION=$(curl -fsSL "https://api.github.com/repos/xlihub/Ki-Buddy/releases/latest" \
+                | grep '"tag_name"' | head -1 | sed 's/.*"ki-buddy-v\([^"]*\)".*/\1/')
         elif command -v wget &>/dev/null; then
-            VERSION=$(wget -qO- "https://api.github.com/repos/iOfficeAI/AionUi/releases/latest" \
-                | grep '"tag_name"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
+            VERSION=$(wget -qO- "https://api.github.com/repos/xlihub/Ki-Buddy/releases/latest" \
+                | grep '"tag_name"' | head -1 | sed 's/.*"ki-buddy-v\([^"]*\)".*/\1/')
         else
             die "curl or wget is required to resolve version. Please install curl or wget."
         fi
@@ -190,7 +190,7 @@ resolve_version() {
     fi
 
     # Rebuild tarball name (VERSION may have changed)
-    TARBALL_NAME="aionui-web-${VERSION}-${PLATFORM}-${ARCH}.tar.gz"
+    TARBALL_NAME="ki-buddy-web-${VERSION}-${PLATFORM}-${ARCH}.tar.gz"
     CHECKSUM_NAME="${TARBALL_NAME}.sha256"
 }
 
@@ -202,7 +202,7 @@ download_tarball() {
 
     # Build download URL
     # MIRROR formats:
-    #   - GitHub: https://github.com/iOfficeAI/AionUi/releases/download
+    #   - GitHub: https://github.com/xlihub/Ki-Buddy/releases/download
     #   - file: file:///path/to/releases
     if [[ "$MIRROR" == file://* ]]; then
         # Local file mirror (for offline installation or testing)
@@ -211,8 +211,8 @@ download_tarball() {
         CHECKSUM_URL="file://${base_path}/v${VERSION}/${CHECKSUM_NAME}"
     else
         # GitHub releases
-        TARBALL_URL="${MIRROR}/v${VERSION}/${TARBALL_NAME}"
-        CHECKSUM_URL="${MIRROR}/v${VERSION}/${CHECKSUM_NAME}"
+        TARBALL_URL="${MIRROR}/ki-buddy-v${VERSION}/${TARBALL_NAME}"
+        CHECKSUM_URL="${MIRROR}/ki-buddy-v${VERSION}/${CHECKSUM_NAME}"
     fi
 
     info "Downloading ${BOLD}${TARBALL_NAME}${NC}..."
@@ -345,7 +345,7 @@ extract_tarball() {
 }
 
 create_symlink() {
-    local symlink_path="${BIN_DIR}/aionui-web"
+    local symlink_path="${BIN_DIR}/ki-buddy-web"
     local target_path="${INSTALL_DIR}/aionui-web"
 
     info "Creating symlink: ${BOLD}${symlink_path}${NC} -> ${target_path}"
@@ -417,7 +417,7 @@ update_shell_profile() {
 
     # Add to profile
     echo "" >> "$profile_file"
-    echo "# Added by aionui-web installer" >> "$profile_file"
+    echo "# Added by Ki-Buddy Web CLI installer" >> "$profile_file"
     echo "$path_line" >> "$profile_file"
 
     success "Added PATH to $profile_file"
@@ -427,37 +427,37 @@ update_shell_profile() {
 print_summary() {
     echo ""
     echo -e "${GREEN}${BOLD}══════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}${BOLD}  🎉 AionUi WebUI v${VERSION} Installed!${NC}"
+    echo -e "${GREEN}${BOLD}  🎉 Ki-Buddy Web CLI v${VERSION} Installed!${NC}"
     echo -e "${GREEN}${BOLD}══════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  ${BOLD}📍 Installation directory:${NC}  ${INSTALL_DIR}"
     if [[ "$CREATE_SYMLINK" == "1" ]]; then
-        echo -e "  ${BOLD}📍 Symlink:${NC}                ${BIN_DIR}/aionui-web"
+        echo -e "  ${BOLD}📍 Symlink:${NC}                ${BIN_DIR}/ki-buddy-web"
     fi
     echo ""
     echo -e "  ${BOLD}🚀 Usage:${NC}"
     echo ""
     if [[ "$CREATE_SYMLINK" == "1" && ":$PATH:" == *":${BIN_DIR}:"* ]]; then
-        echo "    # Start AionUi WebUI"
-        echo "    aionui-web start"
+        echo "    # Start Ki-Buddy Web CLI"
+        echo "    ki-buddy-web start"
         echo ""
         echo "    # Check version"
-        echo "    aionui-web version"
+        echo "    ki-buddy-web version"
     else
-        echo "    # Start AionUi WebUI (using full path)"
+        echo "    # Start Ki-Buddy Web CLI (using full path)"
         echo "    ${INSTALL_DIR}/aionui-web start"
         echo ""
         echo "    # Or add symlink to PATH:"
         if [[ "$CREATE_SYMLINK" == "1" ]]; then
             echo "    export PATH=\"${BIN_DIR}:\$PATH\""
         else
-            echo "    ln -s ${INSTALL_DIR}/aionui-web ~/.local/bin/aionui-web"
+            echo "    ln -s ${INSTALL_DIR}/aionui-web ~/.local/bin/ki-buddy-web"
             echo "    export PATH=\"~/.local/bin:\$PATH\""
         fi
     fi
     echo ""
-    echo -e "  ${BOLD}📖 Documentation:${NC}  https://github.com/iOfficeAI/AionUi"
-    echo -e "  ${BOLD}🐛 Report issues:${NC}  https://github.com/iOfficeAI/AionUi/issues"
+    echo -e "  ${BOLD}📖 Documentation:${NC}  https://github.com/xlihub/Ki-Buddy"
+    echo -e "  ${BOLD}🐛 Report issues:${NC}  https://github.com/xlihub/Ki-Buddy/issues"
     echo ""
     echo -e "  ${BOLD}🗑️  Uninstall:${NC}"
     echo ""
@@ -466,7 +466,7 @@ print_summary() {
     if [[ "$CREATE_SYMLINK" == "1" ]]; then
         echo ""
         echo "    # Remove symlink"
-        echo "    rm ${BIN_DIR}/aionui-web"
+        echo "    rm ${BIN_DIR}/ki-buddy-web"
     fi
     if [[ "$UPDATE_PATH" == "1" ]]; then
         echo ""

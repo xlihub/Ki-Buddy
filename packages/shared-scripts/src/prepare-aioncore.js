@@ -2,7 +2,7 @@
  * Prepare the aioncore runtime binary for Ki-Buddy packaging.
  *
  * Source policies:
- *  - release-pinned: immutable xlihub/Ki-Core release configured in package.json
+ *  - release-pinned: immutable xlihub/Ki-Core release configured in ki-buddy-product.json
  *  - candidate: verified xlihub/Ki-Core Actions candidate run
  *  - development: explicit local inputs or the legacy AionCore development release path
  *
@@ -29,6 +29,7 @@ const {
 } = require('./kiCoreRelease');
 const { validateEntries } = require('./safeExtractArchive');
 const { verifyBundledAioncoreResources } = require('./verify-bundled-aioncore-resources');
+const { readKiBuddyRelease } = require('./kiBuddyRelease');
 
 const LEGACY_GITHUB_OWNER = 'iOfficeAI';
 const LEGACY_GITHUB_REPO = 'AionCore';
@@ -361,9 +362,9 @@ function downloadLegacyDevelopment(platform, arch, requestedVersion) {
   }
 }
 
-function buildBundleManifest({ platform, arch, manifest, source, sourceType, binaryName }) {
+function buildBundleManifest({ projectRoot, platform, arch, manifest, source, sourceType, binaryName }) {
   return {
-    ...createBundleProvenance(manifest, source),
+    ...createBundleProvenance(manifest, source, readKiBuddyRelease(projectRoot)),
     platform,
     arch,
     generatedAt: new Date().toISOString(),
@@ -411,6 +412,7 @@ function prepareAioncore(options) {
           writeJson(
             path.join(targetDir, 'manifest.json'),
             buildBundleManifest({
+              projectRoot,
               platform,
               arch,
               manifest: null,
@@ -467,7 +469,15 @@ function prepareAioncore(options) {
     const sourceType = result.source.type;
     writeJson(
       path.join(targetDir, 'manifest.json'),
-      buildBundleManifest({ platform, arch, manifest: result.manifest, source: result.source, sourceType, binaryName })
+      buildBundleManifest({
+        projectRoot,
+        platform,
+        arch,
+        manifest: result.manifest,
+        source: result.source,
+        sourceType,
+        binaryName,
+      })
     );
     verifyPreparedAioncoreBundle(projectRoot, platform, arch);
     console.log(`  Bundled aioncore prepared: resources/bundled-aioncore/${runtimeKey}/${binaryName}`);

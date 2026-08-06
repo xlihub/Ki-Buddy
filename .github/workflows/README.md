@@ -4,13 +4,31 @@
 
 Ki-Buddy 打包只允许三种显式来源策略：
 
-- `release-pinned`：正式桌面包与 Web CLI 使用。读取 `package.json` 的完整 Ki-Core tag、tag commit、AionCore 映射和六平台 SHA-256；下载 Release checksums 后与固定值逐项比对。禁止 `latest`、Actions run ID 和本地 binary。
+- `release-pinned`：正式桌面包与 Web CLI 使用。读取 `ki-buddy-product.json` 的完整 Ki-Core tag、tag commit、AionCore 映射和六平台 SHA-256；下载 Release checksums 后与固定值逐项比对。禁止 `latest`、Actions run ID 和本地 binary。
 - `candidate`：仅 `build-manual.yml` 使用。必须提供 Ki-Core Candidate Build run ID 和完整 `product/main` commit SHA。Ki-Core 是公开仓库，候选读取使用公开 Actions API，不向目标构建分支传递跨仓 token。
 - `development`：仅本地开发使用。允许显式 local bundle、local binary 或旧 AionCore 下载路径，不得写入稳定 Ki-Core provenance。
 
 `build-manual.yml` 默认使用 `release-pinned` 验证已发布版本；选择 `candidate` 时才填写 run ID 与 head SHA，两项必须同时提供。Candidate artifact 只包含当前平台 archive；其可信身份来自指定的 Actions run、workflow、`product/main` commit 和 artifact 名称，不依赖额外 provenance manifest。
 
-当前正式 pin 为 Ki-Core `ki-core-v0.1.0`，对应 AionCore `v0.1.59`。`package.json.kiCore` 固定 Ki-Core tag、tag commit、AionCore tag/commit 和六个平台 SHA-256；更新任何一项都必须作为一次明确的版本消费变更进行验证。
+当前正式 pin 由 `ki-buddy-product.json.kiCore` 管理。更新 tag、commit、AionCore 映射或六个平台 SHA-256 时，必须同步更新 `ki-buddy-versions.json`，并通过版本准备校验。
+
+## Ki-Buddy 产品配置
+
+根 `package.json` 必须与 `ki-buddy-versions.json` 中映射的 AionUi commit 完全一致，不保存 Ki-Buddy 版本、名称或 Core pin。这样同步上游时不需要反复解决产品字段冲突。
+
+- `ki-buddy-version.txt`：当前 Ki-Buddy SemVer。
+- `ki-buddy-product.json`：包名、桌面应用身份、协议、Web CLI 身份和 Ki-Core pin。
+- `ki-buddy-versions.json`：Ki-Buddy → AionUi → Ki-Core → AionCore 的发布映射。
+- `CHANGELOG.ki-buddy.md`：Ki-Buddy 产品 Release Notes 来源。
+- `packages/shared-scripts/src/kiBuddyRelease.js`：生成最终 package metadata 和 electron-builder overlay，并校验上述文件的一致性。
+
+`build-with-builder.js` 在 `out/ki-buddy-electron-builder.json` 生成临时配置。electron-builder 通过 `extraMetadata` 把 Ki-Buddy 产品语义写入安装包内的最终 `package.json`，源码根目录的 `package.json` 不会被修改。
+
+## Ki-Buddy 正式发布
+
+`build-and-release.yml` 只响应 `ki-buddy-v*` tag。它先校验 tag、版本映射、上游 `package.json` 和 `product/main` 来源，再执行代码质量、六平台桌面构建及 Web CLI 构建。所有构建成功后，发布任务进入 `ki-buddy-stable` Environment；审批通过后只创建 Draft Release，由维护者检查并手工公开。
+
+应用内更新默认直接读取 `xlihub/Ki-Buddy` GitHub Releases，并理解 `ki-buddy-v` tag 前缀。`release-distribute.yml` 的外部分发由独立变量 `KI_ENABLE_RELEASE_DISTRIBUTION` 控制；未配置 Ki-Buddy 自己的 S3/OIDC 目标前应保持关闭，防止复用 AionUi 的发布目标。
 
 正式桌面包与 Web CLI workflow 同时固定 `BUN_INSTALL_REGISTRY` 和 `npm_config_registry` 到 npm 官方 registry。后者用于 Ki-Core 的 `prepare-managed-resources` 安装 Codex、Claude 等平台包，避免 runner 用户级 `.npmrc` 改变正式构建来源。
 

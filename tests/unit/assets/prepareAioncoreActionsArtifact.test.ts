@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { crc32 } from 'node:zlib';
@@ -11,8 +11,22 @@ const {
   prepareAioncore,
 } = require('../../../packages/shared-scripts/src/prepare-aioncore');
 const { selectCandidateArtifact, validateCandidateRun } = require('../../../packages/shared-scripts/src/kiCoreRelease');
+const { readKiBuddyRelease } = require('../../../packages/shared-scripts/src/kiBuddyRelease');
 
 const VALID_SHA = 'a'.repeat(40);
+const CANDIDATE_VERSION = '7.8.9';
+
+function copyProductIdentity(projectRoot: string) {
+  mkdirSync(projectRoot, { recursive: true });
+  for (const file of [
+    'ki-buddy-product.json',
+    'ki-buddy-version.txt',
+    'ki-buddy-versions.json',
+    'CHANGELOG.ki-buddy.md',
+  ]) {
+    copyFileSync(join(process.cwd(), file), join(projectRoot, file));
+  }
+}
 
 function writeStoredZip(filePath: string, entries: Array<{ name: string; content: string | Buffer }>) {
   const localParts: Buffer[] = [];
@@ -64,7 +78,7 @@ function shellQuote(value: string) {
 
 async function createCandidateToolchain(root: string) {
   const sourceDir = join(root, 'source');
-  const archiveName = 'ki-core-v0.1.0-x86_64-unknown-linux-gnu.tar.gz';
+  const archiveName = `ki-core-v${CANDIDATE_VERSION}-x86_64-unknown-linux-gnu.tar.gz`;
   const archivePath = join(root, archiveName);
   const artifactZip = join(root, 'candidate.zip');
   const binaryPath = join(sourceDir, 'aioncore');
@@ -234,6 +248,7 @@ describe('Ki-Core candidate source policy', () => {
     process.env.AIONUI_BACKEND_RUN_ID = '123';
     process.env.AIONUI_BACKEND_EXPECTED_SHA = VALID_SHA;
     process.env.KI_CORE_ACTIONS_TOKEN = 'must-not-reach-candidate-binary';
+    copyProductIdentity(projectRoot);
 
     try {
       const result = prepareAioncore({ projectRoot, platform: 'linux', arch: 'x64', version: null });
@@ -246,11 +261,18 @@ describe('Ki-Core candidate source policy', () => {
         repository: 'xlihub/Ki-Core',
         runId: '123',
         headSha: VALID_SHA,
-        version: '0.1.0',
+        version: CANDIDATE_VERSION,
         artifactName: 'ki-core-candidate-linux-x64',
       });
-      expect(manifest.kiCore).toEqual({ version: '0.1.0', tag: null, releaseCommit: null });
+      expect(manifest.kiCore).toEqual({ version: CANDIDATE_VERSION, tag: null, releaseCommit: null });
       expect(manifest.aionCore).toEqual({ repository: null, tag: null, peeledCommit: null });
+      const productIdentity = readKiBuddyRelease(process.cwd());
+      expect(manifest).toMatchObject({
+        schemaVersion: 3,
+        version: productIdentity.kiBuddy.version,
+        kiBuddy: productIdentity.kiBuddy,
+        aionUi: productIdentity.aionUi,
+      });
     } finally {
       if (previousPath === undefined) delete process.env.PATH;
       else process.env.PATH = previousPath;
@@ -267,9 +289,10 @@ describe('Ki-Core candidate source policy', () => {
     writeFileSync(localBinary, '#!/usr/bin/env bash\nexit 0\n');
     chmodSync(localBinary, 0o755);
     process.env.AIONUI_BACKEND_LOCAL_BINARY = localBinary;
+    copyProductIdentity(projectRoot);
 
     try {
-      expect(() => prepareAioncore({ projectRoot, platform: 'linux', arch: 'x64', version: 'v0.1.58' })).toThrow(
+      expect(() => prepareAioncore({ projectRoot, platform: 'linux', arch: 'x64', version: 'v8.7.6' })).toThrow(
         /managed-resources\/manifest\.json/
       );
     } finally {

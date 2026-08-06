@@ -22,6 +22,7 @@ import { getIncludePrerelease, runUpdateCheck, type CheckUpdateOutcome } from '.
 import { setUpdateReadyState } from './updateReadyState';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import { OPEN_MIGRATION_DIALOG_EVENT } from './UpdateMigrationDialog';
+import productConfig from '../../../../../../ki-buddy-product.json';
 
 type AvailableOutcome = Extract<CheckUpdateOutcome, { kind: 'available' }>;
 
@@ -70,7 +71,7 @@ const reduceNotificationState = (
   event: UpdateNotificationEvent
 ): UpdateNotificationState => updateNotificationReducer(current, event).state;
 
-const RELEASES_PAGE_URL = 'https://github.com/iOfficeAI/AionUi/releases';
+const RELEASES_PAGE_URL = productConfig.updates.releasePageUrl;
 
 const getVersionLabelFromState = (state: UpdateNotificationState): string =>
   state.updateInfo?.version || state.autoUpdateInfo?.version || '';

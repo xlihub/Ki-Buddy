@@ -4,12 +4,15 @@ const path = require('path');
 const crypto = require('crypto');
 const { execSync } = require('child_process');
 const { prepareAioncore } = require('../packages/shared-scripts/src/prepare-aioncore.js');
+const { readProductConfig, readProductVersion } = require('../packages/shared-scripts/src/kiBuddyRelease.js');
 const { resolveAioncoreVersion } = require('./resolveAioncoreVersion.js');
 
 const projectRoot = path.resolve(__dirname, '..');
 const platform = process.env.PACK_PLATFORM || process.platform;
 const arch = process.env.PACK_ARCH || process.arch;
-const version = require('../package.json').version;
+const version = readProductVersion(projectRoot);
+const productConfig = readProductConfig(projectRoot);
+const webCliIdentity = productConfig.webCli;
 
 // Normalize platform/arch names for tarball filename
 const platformMap = { darwin: 'darwin', linux: 'linux', win32: 'win' };
@@ -17,7 +20,7 @@ const archMap = { arm64: 'arm64', x64: 'x86_64', ia32: 'x86' };
 const normalizedPlatform = platformMap[platform] || platform;
 const normalizedArch = archMap[arch] || arch;
 
-const tarballName = `aionui-web-${version}-${normalizedPlatform}-${normalizedArch}.tar.gz`;
+const tarballName = `${webCliIdentity.archiveName}-${version}-${normalizedPlatform}-${normalizedArch}.tar.gz`;
 const distDir = path.join(projectRoot, 'dist-web-cli');
 const tarballPath = path.join(distDir, tarballName);
 
@@ -38,7 +41,7 @@ const stagingDir = path.join(distDir, 'staging');
 fs.rmSync(stagingDir, { recursive: true, force: true });
 fs.mkdirSync(stagingDir, { recursive: true });
 
-const tarballContentDir = path.join(stagingDir, 'aionui-web');
+const tarballContentDir = path.join(stagingDir, webCliIdentity.bundleDirectory);
 fs.mkdirSync(tarballContentDir, { recursive: true });
 
 // 4. Compile web-cli into a standalone executable with bun
@@ -49,7 +52,7 @@ console.log('4. Compiling web-cli into standalone executable...');
 const bunTargetPlatform = { darwin: 'darwin', linux: 'linux', win32: 'windows' }[platform] || platform;
 const bunTargetArch = { arm64: 'arm64', x64: 'x64', ia32: 'x64' }[arch] || arch;
 const bunTarget = `bun-${bunTargetPlatform}-${bunTargetArch}`;
-const executableName = platform === 'win32' ? 'aionui-web.exe' : 'aionui-web';
+const executableName = platform === 'win32' ? `${webCliIdentity.executableName}.exe` : webCliIdentity.executableName;
 const executablePath = path.join(tarballContentDir, executableName);
 const webCliEntry = path.join(projectRoot, 'packages/web-cli/src/index.ts');
 execSync(`bun build --compile --target=${bunTarget} --outfile="${executablePath}" "${webCliEntry}"`, {
@@ -64,6 +67,7 @@ console.log(`  → ${executablePath}`);
 // `aionui-web version` match the tarball filename.
 const srcPkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'packages/web-cli/package.json'), 'utf8'));
 srcPkg.version = version;
+srcPkg.name = webCliIdentity.packageName;
 fs.writeFileSync(path.join(tarballContentDir, 'package.json'), JSON.stringify(srcPkg, null, 2) + '\n');
 
 // 6. Copy static files (SPA) from desktop renderer build output
@@ -88,7 +92,7 @@ fs.cpSync(backendSrc, backendDest, { recursive: true });
 
 // 8. Create tarball
 fs.mkdirSync(distDir, { recursive: true });
-execSync(`tar -czf ${path.basename(tarballPath)} -C ${stagingDir} aionui-web`, {
+execSync(`tar -czf ${path.basename(tarballPath)} -C ${stagingDir} ${webCliIdentity.bundleDirectory}`, {
   cwd: path.dirname(tarballPath),
   stdio: 'inherit',
 });

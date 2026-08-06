@@ -24,6 +24,9 @@ type BackendInstallDiagnosticEnv = {
 };
 
 export type BackendInstallDiagnostics = {
+  aionUiCommit?: string;
+  aionUiRepository?: string;
+  aionUiTag?: string;
   aionCorePeeledCommit?: string;
   aionCoreRepository?: string;
   aionCoreTag?: string;
@@ -57,6 +60,10 @@ export type BackendInstallDiagnostics = {
   kiCoreReleaseCommit?: string;
   kiCoreTag?: string;
   kiCoreVersion?: string;
+  kiBuddyReleaseCommit?: string;
+  kiBuddyRepository?: string;
+  kiBuddyTag?: string;
+  kiBuddyVersion?: string;
   platform: NodeJS.Platform;
   resourcesDirMtimeMs?: number;
   resourcesPath?: string;
@@ -103,6 +110,23 @@ function hasValidProvenanceShape(
     isNullableString(aionCore.peeledCommit) &&
     getString(source.policy) &&
     getString(source.type)
+  );
+}
+
+function hasValidProductProvenanceShape(
+  kiBuddy: Record<string, unknown> | undefined,
+  aionUi: Record<string, unknown> | undefined
+): boolean {
+  return Boolean(
+    kiBuddy &&
+    aionUi &&
+    getString(kiBuddy.repository) &&
+    getString(kiBuddy.version) &&
+    getString(kiBuddy.tag) &&
+    isNullableString(kiBuddy.releaseCommit) &&
+    getString(aionUi.repository) &&
+    getString(aionUi.tag) &&
+    getString(aionUi.commit)
   );
 }
 
@@ -166,6 +190,8 @@ function applyManifest(diagnostics: BackendInstallDiagnostics, manifestText: str
     const sourceType = getString(manifest.sourceType);
     const files = getStringArray(manifest.files);
     const schemaVersion = typeof manifest.schemaVersion === 'number' ? manifest.schemaVersion : undefined;
+    const kiBuddy = getRecord(manifest.kiBuddy);
+    const aionUi = getRecord(manifest.aionUi);
     const kiCore = getRecord(manifest.kiCore);
     const aionCore = getRecord(manifest.aionCore);
     const source = getRecord(manifest.source);
@@ -174,13 +200,23 @@ function applyManifest(diagnostics: BackendInstallDiagnostics, manifestText: str
     if (sourceType) diagnostics.manifestSourceType = sourceType;
     if (files) diagnostics.manifestFiles = files;
     if (schemaVersion !== undefined) diagnostics.manifestSchemaVersion = schemaVersion;
-    if (schemaVersion !== undefined && schemaVersion !== 2) {
+    if (schemaVersion !== undefined && schemaVersion !== 2 && schemaVersion !== 3) {
       diagnostics.manifestValidationError = `Unsupported bundle manifest schemaVersion: ${schemaVersion}`;
     }
-    if (schemaVersion === 2 && !hasValidProvenanceShape(kiCore, aionCore, source)) {
+    if ((schemaVersion === 2 || schemaVersion === 3) && !hasValidProvenanceShape(kiCore, aionCore, source)) {
       diagnostics.manifestValidationError = 'Bundle manifest provenance objects are malformed';
     }
+    if (schemaVersion === 3 && !hasValidProductProvenanceShape(kiBuddy, aionUi)) {
+      diagnostics.manifestValidationError = 'Bundle manifest product provenance objects are malformed';
+    }
 
+    const kiBuddyRepository = getString(kiBuddy?.repository);
+    const kiBuddyVersion = getString(kiBuddy?.version);
+    const kiBuddyTag = getString(kiBuddy?.tag);
+    const kiBuddyReleaseCommit = getString(kiBuddy?.releaseCommit);
+    const aionUiRepository = getString(aionUi?.repository);
+    const aionUiTag = getString(aionUi?.tag);
+    const aionUiCommit = getString(aionUi?.commit);
     const kiCoreVersion = getString(kiCore?.version);
     const kiCoreTag = getString(kiCore?.tag);
     const kiCoreReleaseCommit = getString(kiCore?.releaseCommit);
@@ -193,6 +229,13 @@ function applyManifest(diagnostics: BackendInstallDiagnostics, manifestText: str
     const sourceRunId = getString(source?.runId);
     const sourceHeadSha = getString(source?.headSha);
     const sourceArtifactName = getString(source?.artifactName);
+    if (kiBuddyRepository) diagnostics.kiBuddyRepository = kiBuddyRepository;
+    if (kiBuddyVersion) diagnostics.kiBuddyVersion = kiBuddyVersion;
+    if (kiBuddyTag) diagnostics.kiBuddyTag = kiBuddyTag;
+    if (kiBuddyReleaseCommit) diagnostics.kiBuddyReleaseCommit = kiBuddyReleaseCommit;
+    if (aionUiRepository) diagnostics.aionUiRepository = aionUiRepository;
+    if (aionUiTag) diagnostics.aionUiTag = aionUiTag;
+    if (aionUiCommit) diagnostics.aionUiCommit = aionUiCommit;
     if (kiCoreVersion) diagnostics.kiCoreVersion = kiCoreVersion;
     if (kiCoreTag) diagnostics.kiCoreTag = kiCoreTag;
     if (kiCoreReleaseCommit) diagnostics.kiCoreReleaseCommit = kiCoreReleaseCommit;
