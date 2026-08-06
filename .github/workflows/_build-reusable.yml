@@ -23,6 +23,10 @@ on:
         description: 'Only upload primary installers (exe/msi/dmg/deb), skip zip/yml/blockmap'
         type: boolean
         default: false
+      upload_source_maps:
+        description: 'Upload desktop source maps from linux-x64; official release builds only'
+        type: boolean
+        default: false
       ki_core_source_policy:
         description: 'Ki-Core source policy: release-pinned for official builds or candidate for manual integration'
         type: string
@@ -260,7 +264,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${{ matrix.platform }}" == "linux-x64" ]]; then
+          if [[ "${{ inputs.upload_source_maps }}" == "true" && "${{ matrix.platform }}" == "linux-x64" ]]; then
             echo "SENTRY_UPLOAD_SOURCE_MAPS=true" >> "$GITHUB_ENV"
             echo "Sentry source maps will be uploaded by linux-x64"
           else
@@ -269,7 +273,7 @@ jobs:
           fi
 
       - name: Validate Sentry source map upload configuration
-        if: matrix.platform == 'linux-x64'
+        if: inputs.upload_source_maps && matrix.platform == 'linux-x64'
         shell: bash
         run: |
           set -euo pipefail

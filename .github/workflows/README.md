@@ -14,6 +14,8 @@ Ki-Buddy 打包只允许三种显式来源策略：
 
 正式桌面包与 Web CLI workflow 同时固定 `BUN_INSTALL_REGISTRY` 和 `npm_config_registry` 到 npm 官方 registry。后者用于 Ki-Core 的 `prepare-managed-resources` 安装 Codex、Claude 等平台包，避免 runner 用户级 `.npmrc` 改变正式构建来源。
 
+Reusable desktop build 的 source map 上传默认关闭，只有 `build-and-release.yml` 显式传入 `upload_source_maps: true`。手工六平台验证因此不依赖 Sentry secrets；正式发布仍在 Linux x64 job 中强制验证 Sentry 配置并上传 source maps。
+
 本项目使用 GPT 驱动的 GitHub Actions 工作流辅助 PR 审查。
 
 ## 架构概览
