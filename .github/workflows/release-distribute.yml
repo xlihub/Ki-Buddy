@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing release tag to redistribute (e.g. v1.9.21)'
+        description: 'Existing release tag to redistribute (e.g. ki-buddy-v0.1.0)'
         required: true
         type: string
 
@@ -40,7 +40,7 @@ jobs:
     name: Distribute release assets
     runs-on: ubuntu-latest
     # Skip prereleases: manual dispatch always runs, automatic event runs only when not a prerelease.
-    if: vars.KI_ENABLE_RELEASE_AUTOMATION == 'true' && (github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false)
+    if: vars.KI_ENABLE_RELEASE_DISTRIBUTION == 'true' && (github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false)
     steps:
       - name: Extract version from tag
         id: version
@@ -53,7 +53,11 @@ jobs:
             echo "::error::No tag provided (event did not supply one)."
             exit 1
           fi
-          VERSION="${TAG#v}"
+          if [[ "$TAG" != ki-buddy-v* ]]; then
+            echo "::error::Only ki-buddy-v* tags can be distributed."
+            exit 1
+          fi
+          VERSION="${TAG#ki-buddy-v}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Tag: $TAG / Version: $VERSION"

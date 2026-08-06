@@ -92,18 +92,18 @@ function getSourcePolicy(explicitPolicy) {
 }
 
 function readKiCorePin(projectRoot) {
-  let packageJson;
+  let productConfig;
   try {
-    packageJson = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
+    productConfig = JSON.parse(fs.readFileSync(path.join(projectRoot, 'ki-buddy-product.json'), 'utf8'));
   } catch (error) {
     throw new Error(`Cannot read Ki-Core product pin: ${error instanceof Error ? error.message : String(error)}`, {
       cause: error,
     });
   }
 
-  const pin = packageJson.kiCore;
+  const pin = productConfig.kiCore;
   if (!pin || typeof pin !== 'object' || Array.isArray(pin)) {
-    throw new Error('package.json must define a kiCore product pin');
+    throw new Error('ki-buddy-product.json must define a kiCore product pin');
   }
   if (pin.repository !== KI_CORE_REPOSITORY) {
     throw new Error(`Ki-Core product pin repository must be ${KI_CORE_REPOSITORY}`);
@@ -239,25 +239,38 @@ function inspectArchiveSafely(archivePath) {
   }
 }
 
-function createBundleProvenance(manifest, source) {
+function createBundleProvenance(manifest, source, productIdentity) {
   const candidateVersion = source?.policy === 'candidate' ? source.version : null;
+  const kiCore = manifest
+    ? {
+        version: manifest.product.version,
+        tag: manifest.product.tag,
+        releaseCommit: manifest.product.releaseCommit,
+      }
+    : { version: candidateVersion, tag: null, releaseCommit: null };
+  const aionCore = manifest
+    ? {
+        repository: manifest.upstream.repository,
+        tag: manifest.upstream.tag,
+        peeledCommit: manifest.upstream.peeledCommit,
+      }
+    : { repository: null, tag: null, peeledCommit: null };
+  if (productIdentity) {
+    return {
+      schemaVersion: 3,
+      version: productIdentity.kiBuddy.version,
+      kiBuddy: productIdentity.kiBuddy,
+      aionUi: productIdentity.aionUi,
+      kiCore,
+      aionCore,
+      source,
+    };
+  }
   return {
     schemaVersion: 2,
     version: manifest?.product?.version || candidateVersion || 'local',
-    kiCore: manifest
-      ? {
-          version: manifest.product.version,
-          tag: manifest.product.tag,
-          releaseCommit: manifest.product.releaseCommit,
-        }
-      : { version: candidateVersion, tag: null, releaseCommit: null },
-    aionCore: manifest
-      ? {
-          repository: manifest.upstream.repository,
-          tag: manifest.upstream.tag,
-          peeledCommit: manifest.upstream.peeledCommit,
-        }
-      : { repository: null, tag: null, peeledCommit: null },
+    kiCore,
+    aionCore,
     source,
   };
 }

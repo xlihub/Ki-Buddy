@@ -303,12 +303,14 @@ Ki-Buddy 不要求等待 AionUi 发布一个正好对应最新 AionCore 的版�
 
 ### 6.4 创建 Ki-Buddy 版本准备 PR
 
-版本准备 PR应同时更新：
+版本准备 PR 应同时更新：
 
 - Ki-Buddy 自身版本。
 - 固定的 Ki-Core tag。
 - Ki-Buddy 与 AionUi、Ki-Core、AionCore 的映射。
 - `CHANGELOG.ki-buddy.md`。
+
+根 `package.json` 不属于 Ki-Buddy 版本准备文件，必须保持与本次映射的 AionUi commit 完全一致。产品包名、appId、协议、桌面可执行文件名和 Ki-Core pin 统一由 `ki-buddy-product.json` 管理，构建时动态生成最终 package metadata。
 
 `CHANGELOG.ki-buddy.md` 的单个版本条目使用以下结构：
 
@@ -329,7 +331,7 @@ Ki-Buddy 不要求等待 AionUi 发布一个正好对应最新 AionCore 的版�
 
 ## 7. 场景：发布 Ki-Buddy
 
-本节描述目标流程，当前尚未建立对应正式 workflow。
+正式 workflow 为 `.github/workflows/build-and-release.yml`，只响应 `ki-buddy-v*` tag。
 
 ### 7.1 合并版本准备 PR
 
@@ -340,6 +342,9 @@ Ki-Buddy 不要求等待 AionUi 发布一个正好对应最新 AionCore 的版�
 - 所有 checksums 与 Ki-Core Release 一致。
 - `bun.lock` 仅包含当前依赖变化，没有无关的大范围重写。
 - Ki-Buddy CHANGELOG 同时包含定制、AionUi 上游和 Ki-Core 三类变化。
+- 根 `package.json` 与映射的 AionUi commit 完全一致。
+- `node packages/shared-scripts/src/kiBuddyRelease.js verify` 成功。
+- 仓库变量 `KI_ENABLE_SENTRY` 保持 `false`；当前版本不要求配置 Sentry secrets，也不会上传 source maps。
 
 ### 7.2 创建正式 tag
 
@@ -355,8 +360,11 @@ Ki-Buddy 不要求等待 AionUi 发布一个正好对应最新 AionCore 的版�
 - 六平台桌面构建。
 - 固定 Ki-Core Release 下载与 checksum 验证。
 - Draft Release 创建。
+- `ki-buddy-stable` Environment 审批。
 
 Candidate run 只用于版本准备前联调，不得传入正式构建。
+
+Ki-Buddy 接入自己的 Sentry 项目后，先配置 `SENTRY_DSN`、`SENTRY_AUTH_TOKEN`、`SENTRY_ORG` 和 `SENTRY_PROJECT`，再将仓库变量 `KI_ENABLE_SENTRY` 改为 `true`。从下一次正式 tag 构建开始，应用会注入 DSN，Linux x64 job 会校验配置并上传 source maps。
 
 ### 7.4 审批和发布 Draft
 
@@ -539,6 +547,8 @@ Ki-Buddy 已进行定制开发，冲突需要按用户行为处理：
 - [ ] Ki-Buddy 定制变化已汇总。
 - [ ] 固定的是完整 Ki-Core Release tag。
 - [ ] Ki-Core 与 AionCore 映射正确。
+- [ ] 根 `package.json` 与映射的 AionUi commit 完全一致。
+- [ ] `ki-buddy-product.json` 与当前版本映射一致。
 - [ ] `CHANGELOG.ki-buddy.md` 包含三类变化。
 - [ ] `bun.lock` 没有无关的大范围变化。
 - [ ] CI 和六平台构建成功。

@@ -24,7 +24,8 @@ import {
   recordAutoUpdateQuitAndInstall,
   recordAutoUpdateStatus,
 } from './autoUpdateDiagnostics';
-import { buildCdnFeedOptions } from './updateFeed';
+import { buildProductFeedOptions } from './updateFeed';
+import productConfig from '../../../../../ki-buddy-product.json';
 
 const FORCE_DEV_AUTO_UPDATE_ENV = 'AIONUI_FORCE_DEV_AUTO_UPDATE';
 const DEBUG_AUTO_UPDATE_CURRENT_VERSION_ENV = 'AIONUI_DEBUG_AUTO_UPDATE_CURRENT_VERSION';
@@ -131,7 +132,7 @@ class AutoUpdaterService extends EventEmitter {
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
     this.configureDevAutoUpdateDebug();
-    const cdnFeedOptions = buildCdnFeedOptions();
+    const productFeedOptions = buildProductFeedOptions();
 
     // Set the correct update channel based on platform and architecture before
     // any update checks are performed
@@ -140,11 +141,12 @@ class AutoUpdaterService extends EventEmitter {
       autoUpdater.channel = channel;
       log.info(`Update channel set to: ${channel}`);
     }
-    autoUpdater.setFeedURL(cdnFeedOptions);
-    log.info('Update feed set to CDN provider');
-    log.debug('[auto-update] CDN feed configured', {
-      provider: cdnFeedOptions.provider,
-      url: cdnFeedOptions.url,
+    autoUpdater.setFeedURL(productFeedOptions);
+    log.info('Update feed set to Ki-Buddy GitHub provider');
+    log.debug('[auto-update] product feed configured', {
+      provider: productFeedOptions.provider,
+      repository: `${productFeedOptions.owner}/${productFeedOptions.repo}`,
+      tagNamePrefix: productFeedOptions.tagNamePrefix,
       channel: channel ?? 'latest',
       platform: process.platform,
       arch: process.arch,
@@ -194,11 +196,13 @@ class AutoUpdaterService extends EventEmitter {
    */
   private ensureDevUpdateConfig(): void {
     try {
-      const cdnFeedOptions = buildCdnFeedOptions();
+      const productFeedOptions = buildProductFeedOptions();
       const devConfig = [
-        'provider: generic',
-        `url: ${cdnFeedOptions.url}`,
-        'updaterCacheDirName: com.aionui.app',
+        `provider: ${productFeedOptions.provider}`,
+        `owner: ${productFeedOptions.owner}`,
+        `repo: ${productFeedOptions.repo}`,
+        `tagNamePrefix: ${productFeedOptions.tagNamePrefix}`,
+        `updaterCacheDirName: ${productConfig.electronBuilder.appId}`,
         '',
       ].join('\n');
       const configPath = path.join(app.getPath('userData'), 'dev-app-update.yml');

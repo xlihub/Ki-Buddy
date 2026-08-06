@@ -4,19 +4,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CdnGenericProvider } from './cdnGenericProvider';
-import type { CdnGenericProviderConfiguration } from './cdnGenericProvider';
+import type { GithubOptions } from 'builder-util-runtime';
+import productConfig from '../../../../../ki-buddy-product.json';
 
-export const CDN_UPDATE_BASE_URL = 'https://static.aionui.com/releases';
+const [owner, repo] = productConfig.updates.repository.split('/');
 
-export type CdnFeedOptions = CdnGenericProviderConfiguration & {
-  updateProvider: typeof CdnGenericProvider;
-};
+export type ProductFeedOptions = GithubOptions & { owner: string; repo: string };
 
-export function buildCdnFeedOptions(): CdnFeedOptions {
+export function buildProductFeedOptions(): ProductFeedOptions {
+  if (!owner || !repo) throw new Error('Ki-Buddy update repository must use owner/repo format');
   return {
-    provider: 'custom',
-    url: CDN_UPDATE_BASE_URL,
-    updateProvider: CdnGenericProvider,
+    provider: 'github',
+    owner,
+    repo,
+    tagNamePrefix: productConfig.updates.tagPrefix,
   };
 }

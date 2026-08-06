@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -11,6 +11,15 @@ describe('prepare-aioncore local bundle input', () => {
     const projectRoot = join(tmp, 'project');
     const localBundle = join(tmp, 'bundle');
     mkdirSync(join(localBundle, 'managed-resources'), { recursive: true });
+    mkdirSync(projectRoot, { recursive: true });
+    for (const file of [
+      'ki-buddy-product.json',
+      'ki-buddy-version.txt',
+      'ki-buddy-versions.json',
+      'CHANGELOG.ki-buddy.md',
+    ]) {
+      copyFileSync(join(process.cwd(), file), join(projectRoot, file));
+    }
     writeFileSync(join(localBundle, 'aioncore.exe'), '');
 
     const previous = process.env.AIONUI_BACKEND_LOCAL_BUNDLE_DIR;

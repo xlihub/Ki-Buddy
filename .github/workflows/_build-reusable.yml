@@ -27,6 +27,10 @@ on:
         description: 'Upload desktop source maps from linux-x64; official release builds only'
         type: boolean
         default: false
+      enable_sentry:
+        description: 'Inject the Sentry DSN into desktop builds; disabled for products without Sentry'
+        type: boolean
+        default: false
       ki_core_source_policy:
         description: 'Ki-Core source policy: release-pinned for official builds or candidate for manual integration'
         type: string
@@ -246,7 +250,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(tr -d '[:space:]' < ki-buddy-version.txt)
 
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             RELEASE_NAME="${GITHUB_REF_NAME}"
@@ -472,10 +476,10 @@ jobs:
           WindowsTargetPlatformVersion: 10.0.19041.0
           _WIN32_WINNT: 0x0A00
           # Sentry DSN (injected at build time via vite define)
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_DSN: ${{ inputs.enable_sentry && secrets.SENTRY_DSN || '' }}
+          SENTRY_AUTH_TOKEN: ${{ inputs.enable_sentry && secrets.SENTRY_AUTH_TOKEN || '' }}
+          SENTRY_ORG: ${{ inputs.enable_sentry && secrets.SENTRY_ORG || '' }}
+          SENTRY_PROJECT: ${{ inputs.enable_sentry && secrets.SENTRY_PROJECT || '' }}
           # CI flag & GitHub token / CI 标识与 GitHub Token
           CI: true
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -567,10 +571,10 @@ jobs:
           npm_config_disturl: https://electronjs.org/headers
           npm_config_runtime: electron
           npm_config_target_arch: ${{ matrix.arch }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_DSN: ${{ inputs.enable_sentry && secrets.SENTRY_DSN || '' }}
+          SENTRY_AUTH_TOKEN: ${{ inputs.enable_sentry && secrets.SENTRY_AUTH_TOKEN || '' }}
+          SENTRY_ORG: ${{ inputs.enable_sentry && secrets.SENTRY_ORG || '' }}
+          SENTRY_PROJECT: ${{ inputs.enable_sentry && secrets.SENTRY_PROJECT || '' }}
           CI: true
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -600,10 +604,10 @@ jobs:
           npm_config_disturl: https://electronjs.org/headers
           npm_config_runtime: electron
           npm_config_target_arch: ${{ matrix.arch }}
-          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
-          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_DSN: ${{ inputs.enable_sentry && secrets.SENTRY_DSN || '' }}
+          SENTRY_AUTH_TOKEN: ${{ inputs.enable_sentry && secrets.SENTRY_AUTH_TOKEN || '' }}
+          SENTRY_ORG: ${{ inputs.enable_sentry && secrets.SENTRY_ORG || '' }}
+          SENTRY_PROJECT: ${{ inputs.enable_sentry && secrets.SENTRY_PROJECT || '' }}
           CI: true
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -707,7 +711,7 @@ jobs:
             out/*.msi
             out/*.dmg
             out/*.deb
-            out/AionUi-*-mac-*.zip
+            out/Ki-Buddy-*-mac-*.zip
             out/*.yml
           if-no-files-found: warn
           retention-days: 7

@@ -179,21 +179,16 @@ Build and Release workflow 监听 `dev` push 和所有 tag push：
 
 ### 5.2 Ki-Buddy
 
-远端 `product/main` 当前主要包含 fork workflow 防护，还没有 Ki-Buddy 独立发版体系。
+Ki-Buddy 的产品发布层已经在功能分支实现：
 
-本地功能分支正在实现 Ki-Core 消费验证，包含：
+- 根 `package.json` 保持为映射的 AionUi commit 原文件，产品字段不写回上游文件。
+- `ki-buddy-version.txt` 管理 Ki-Buddy SemVer；`ki-buddy-product.json` 管理独立包名、appId、可执行文件名、协议、Web CLI 身份和 Ki-Core pin。
+- 构建时生成 electron-builder overlay，通过 `extraMetadata` 形成安装包内最终 `package.json`。
+- `ki-buddy-versions.json` 保存 Ki-Buddy、AionUi、Ki-Core、AionCore 的确定映射；`CHANGELOG.ki-buddy.md` 保存三类产品变化。
+- 正式构建固定消费 Ki-Core Release，并验证 checksums、archive 和来源；bundle manifest schema 3 同时记录四层身份。
+- `ki-buddy-v*` tag 触发代码质量、六平台桌面构建和 Web CLI 构建；全部成功后进入 `ki-buddy-stable` 审批并创建 Draft Release。
 
-- 正式 Release、Candidate Build 和本地开发三类来源策略。
-- checksums、manifest、provenance 和 archive 安全检查。
-- Ki-Core 来源诊断和测试。
-
-当前缺失：
-
-- 将正式构建固定到已经存在的 `ki-core-v0.1.0`，并写入六个平台 checksum。
-- Ki-Buddy 独立版本文件与 tag 规范。
-- `CHANGELOG.ki-buddy.md`。
-- Ki-Buddy、AionUi、Ki-Core、AionCore 的发布映射。
-- Ki-Buddy 正式发布 workflow。
+这一结构允许后续逐步替换运行时中的 AionUi 品牌内容，同时把经常变化的上游 `package.json` 与 Ki-Buddy 产品语义分开管理。
 
 ## 6. 已验证的 Ki-Core 目标流程
 
@@ -326,11 +321,12 @@ Ki-Core 部分已经完成：
 5. 首个映射确定为 `Ki-Core 0.1.0 ↔ AionCore v0.1.59`。
 6. `ki-core-v0.1.0`、六个平台资产和 checksums 已完成发布验证。
 
-下一阶段按以下顺序实施：
+Ki-Buddy 当前实施状态：
 
-1. 对齐 Ki-Buddy 的 AionUi 正式上游基线。
-2. 调整 Ki-Buddy Core 消费实现，固定真实 `ki-core-v0.1.0` 和六个平台 checksum。
-3. 建立 Ki-Buddy 独立版本、映射、产品 CHANGELOG 和正式发布 workflow。
+1. AionUi 正式上游基线和 Ki-Core 正式 pin 已对齐。
+2. 独立版本、四层映射、产品 CHANGELOG 和动态产品配置已建立。
+3. 正式 tag workflow 已改为六平台构建、Environment 审批和 Draft Release。
+4. 合并前仍需完成本地全量验证；首次发布前还需配置 GitHub Environment、tag 保护和签名。Sentry 当前由 `KI_ENABLE_SENTRY=false` 关闭，不是首次发布前置条件。
 
 ## 10. 不在当前范围内
 

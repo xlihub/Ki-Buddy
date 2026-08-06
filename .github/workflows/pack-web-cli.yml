@@ -156,10 +156,10 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Get version from package.json
+      - name: Get Ki-Buddy version
         id: version
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(tr -d '[:space:]' < ki-buddy-version.txt)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Replace __VERSION__ placeholder in install-web.sh
@@ -226,7 +226,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(tr -d '[:space:]' < ki-buddy-version.txt)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Resolved version: $VERSION"
 

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { crc32 } from 'node:zlib';
-import * as tar from 'tar';
 
 const {
   CANONICAL_PLATFORMS,
@@ -18,9 +18,16 @@ const {
 } = require('../../../packages/shared-scripts/src/kiCoreRelease');
 const { validateEntries } = require('../../../packages/shared-scripts/src/safeExtractArchive');
 const { prepareAioncore } = require('../../../packages/shared-scripts/src/prepare-aioncore');
+const { readKiBuddyRelease } = require('../../../packages/shared-scripts/src/kiBuddyRelease');
 const { resolveAioncoreVersion } = require('../../../scripts/resolveAioncoreVersion');
 
-const VERSION = '0.1.0';
+type TarModule = {
+  c: (options: { cwd: string; file: string; gzip: true }, files: string[]) => Promise<void>;
+};
+
+const requireFromSharedScripts = createRequire(join(process.cwd(), 'packages/shared-scripts/package.json'));
+const tar = requireFromSharedScripts('tar') as TarModule;
+const VERSION = '7.8.9';
 const TAG = `ki-core-v${VERSION}`;
 const RELEASE_SHA = 'a'.repeat(40);
 const UPSTREAM_SHA = 'b'.repeat(40);
@@ -109,7 +116,7 @@ async function createStableFixture() {
       repository: 'xlihub/Ki-Core',
       tag: TAG,
       commit: RELEASE_SHA,
-      aionCore: { repository: 'iOfficeAI/AionCore', tag: 'v0.1.59', peeledCommit: UPSTREAM_SHA },
+      aionCore: { repository: 'iOfficeAI/AionCore', tag: 'v6.5.4', peeledCommit: UPSTREAM_SHA },
       checksums,
     },
     root,
@@ -124,27 +131,26 @@ afterEach(() => {
 });
 
 describe('Ki-Core stable release naming and pin', () => {
-  it('loads the published Ki-Core 0.1.0 product pin', () => {
-    expect(readKiCorePin(process.cwd())).toMatchObject({
-      repository: 'xlihub/Ki-Core',
-      tag: 'ki-core-v0.1.0',
-      commit: '209e6844d39bac0762c61e198c1ba3a007f9dd2e',
-      aionCore: {
-        repository: 'iOfficeAI/AionCore',
-        tag: 'v0.1.59',
-        peeledCommit: '815e61ed9bbe942339347dc1e69ddce176cded76',
-      },
+  it('loads the current Ki-Core pin declared by the Ki-Buddy version mapping', () => {
+    const pin = readKiCorePin(process.cwd());
+    const identity = readKiBuddyRelease(process.cwd());
+    expect(pin).toMatchObject({
+      repository: identity.kiCore.repository,
+      tag: identity.kiCore.tag,
+      commit: identity.kiCore.releaseCommit,
+      aionCore: identity.aionCore,
     });
   });
 
   it.each([
-    ['darwin', 'x64', 'ki-core-v0.1.0-x86_64-apple-darwin.tar.gz'],
-    ['darwin', 'arm64', 'ki-core-v0.1.0-aarch64-apple-darwin.tar.gz'],
-    ['linux', 'x64', 'ki-core-v0.1.0-x86_64-unknown-linux-gnu.tar.gz'],
-    ['linux', 'arm64', 'ki-core-v0.1.0-aarch64-unknown-linux-gnu.tar.gz'],
-    ['win32', 'x64', 'ki-core-v0.1.0-x86_64-pc-windows-msvc.zip'],
-    ['win32', 'arm64', 'ki-core-v0.1.0-aarch64-pc-windows-msvc.zip'],
-  ])('maps %s-%s to the release asset %s', (platform, arch, expectedAsset) => {
+    ['darwin', 'x64', 'x86_64-apple-darwin.tar.gz'],
+    ['darwin', 'arm64', 'aarch64-apple-darwin.tar.gz'],
+    ['linux', 'x64', 'x86_64-unknown-linux-gnu.tar.gz'],
+    ['linux', 'arm64', 'aarch64-unknown-linux-gnu.tar.gz'],
+    ['win32', 'x64', 'x86_64-pc-windows-msvc.zip'],
+    ['win32', 'arm64', 'aarch64-pc-windows-msvc.zip'],
+  ])('maps %s-%s to the release asset suffix %s', (platform, arch, assetSuffix) => {
+    const expectedAsset = `${TAG}-${assetSuffix}`;
     const asset = getArchiveName(TAG, getCanonicalTarget(platform, arch));
     expect(asset).toBe(expectedAsset);
     expect(getReleaseUrl(TAG, asset)).toBe(
@@ -155,7 +161,7 @@ describe('Ki-Core stable release naming and pin', () => {
   it('accepts a complete product pin with explicit upstream mapping', async () => {
     const fixture = await createStableFixture();
     const projectRoot = mkdtempSync(join(tmpdir(), 'ki-core-complete-pin-'));
-    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ kiCore: fixture.pin }));
+    writeFileSync(join(projectRoot, 'ki-buddy-product.json'), JSON.stringify({ kiCore: fixture.pin }));
     try {
       expect(readKiCorePin(projectRoot)).toEqual(fixture.pin);
     } finally {
@@ -167,7 +173,7 @@ describe('Ki-Core stable release naming and pin', () => {
   it('fails when the checked-in stable pin is incomplete', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'ki-core-missing-pin-'));
     writeFileSync(
-      join(projectRoot, 'package.json'),
+      join(projectRoot, 'ki-buddy-product.json'),
       JSON.stringify({
         kiCore: { repository: 'xlihub/Ki-Core', tag: null, commit: null, aionCore: null, checksums: {} },
       })
