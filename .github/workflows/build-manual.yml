@@ -1,8 +1,8 @@
 name: '🔨 Manual Build'
 
 permissions:
-  contents: write
-  actions: write
+  actions: read
+  contents: read
 
 on:
   workflow_dispatch:
@@ -30,11 +30,24 @@ on:
         required: false
         type: boolean
         default: false
-      aioncore_run_id:
-        description: 'Optional AionCore Manual Build workflow run id to bundle instead of the pinned release'
+      ki_core_source_policy:
+        description: 'Ki-Core source: published release pin or verified candidate run'
+        required: true
+        type: choice
+        options:
+          - release-pinned
+          - candidate
+        default: release-pinned
+      ki_core_candidate_run_id:
+        description: 'Candidate only: successful Ki-Core Candidate Build workflow run ID'
         required: false
-        type: string
         default: ''
+        type: string
+      ki_core_candidate_head_sha:
+        description: 'Candidate only: full merged Ki-Core product/main commit SHA used by the candidate run'
+        required: false
+        default: ''
+        type: string
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
@@ -47,6 +60,38 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
 
     steps:
+      - name: Validate Ki-Core source inputs
+        shell: bash
+        env:
+          KI_CORE_SOURCE_POLICY: ${{ inputs.ki_core_source_policy }}
+          KI_CORE_CANDIDATE_RUN_ID: ${{ inputs.ki_core_candidate_run_id }}
+          KI_CORE_CANDIDATE_HEAD_SHA: ${{ inputs.ki_core_candidate_head_sha }}
+        run: |
+          set -euo pipefail
+
+          case "$KI_CORE_SOURCE_POLICY" in
+            release-pinned)
+              if [[ -n "$KI_CORE_CANDIDATE_RUN_ID" || -n "$KI_CORE_CANDIDATE_HEAD_SHA" ]]; then
+                echo 'Candidate run ID and head SHA must be empty when using release-pinned.' >&2
+                exit 1
+              fi
+              ;;
+            candidate)
+              if [[ ! "$KI_CORE_CANDIDATE_RUN_ID" =~ ^[0-9]+$ ]]; then
+                echo 'Candidate source requires a numeric Ki-Core workflow run ID.' >&2
+                exit 1
+              fi
+              if [[ ! "$KI_CORE_CANDIDATE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+                echo 'Candidate source requires a full lowercase Ki-Core commit SHA.' >&2
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unsupported Ki-Core source policy: $KI_CORE_SOURCE_POLICY" >&2
+              exit 1
+              ;;
+          esac
+
       - name: Generate build matrix
         id: set-matrix
         shell: bash
@@ -87,7 +132,9 @@ jobs:
       matrix: ${{ needs.prepare-matrix.outputs.matrix }}
       ref: ${{ inputs.branch }}
       skip_code_quality: ${{ inputs.skip_code_quality }}
-      aioncore_run_id: ${{ inputs.aioncore_run_id }}
+      ki_core_source_policy: ${{ inputs.ki_core_source_policy }}
+      ki_core_candidate_run_id: ${{ inputs.ki_core_candidate_run_id }}
+      ki_core_candidate_head_sha: ${{ inputs.ki_core_candidate_head_sha }}
       append_commit_hash: true
       upload_installers_only: true
     secrets: inherit

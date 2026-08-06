@@ -24,6 +24,9 @@ type BackendInstallDiagnosticEnv = {
 };
 
 export type BackendInstallDiagnostics = {
+  aionCorePeeledCommit?: string;
+  aionCoreRepository?: string;
+  aionCoreTag?: string;
   appVersion: string;
   arch: string;
   binaryExists?: boolean;
@@ -41,8 +44,19 @@ export type BackendInstallDiagnostics = {
   manifestParseError?: string;
   manifestPath?: string;
   manifestSize?: number;
+  manifestSchemaVersion?: number;
+  manifestSourceArtifactName?: string;
+  manifestSourceHeadSha?: string;
+  manifestSourcePolicy?: string;
+  manifestSourceRepository?: string;
+  manifestSourceRunId?: string;
   manifestSourceType?: string;
+  manifestSourceWorkflow?: string;
+  manifestValidationError?: string;
   manifestVersion?: string;
+  kiCoreReleaseCommit?: string;
+  kiCoreTag?: string;
+  kiCoreVersion?: string;
   platform: NodeJS.Platform;
   resourcesDirMtimeMs?: number;
   resourcesPath?: string;
@@ -62,6 +76,34 @@ function getStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const strings = value.filter((item): item is string => typeof item === 'string');
   return strings.length === value.length ? strings : undefined;
+}
+
+function getRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function isNullableString(value: unknown): boolean {
+  return value === null || (typeof value === 'string' && value.length > 0);
+}
+
+function hasValidProvenanceShape(
+  kiCore: Record<string, unknown> | undefined,
+  aionCore: Record<string, unknown> | undefined,
+  source: Record<string, unknown> | undefined
+): boolean {
+  return Boolean(
+    kiCore &&
+    aionCore &&
+    source &&
+    isNullableString(kiCore.version) &&
+    isNullableString(kiCore.tag) &&
+    isNullableString(kiCore.releaseCommit) &&
+    isNullableString(aionCore.repository) &&
+    isNullableString(aionCore.tag) &&
+    isNullableString(aionCore.peeledCommit) &&
+    getString(source.policy) &&
+    getString(source.type)
+  );
 }
 
 function getPathApi(platform: NodeJS.Platform): typeof path.win32 | typeof path.posix {
@@ -123,10 +165,46 @@ function applyManifest(diagnostics: BackendInstallDiagnostics, manifestText: str
     const generatedAt = getString(manifest.generatedAt);
     const sourceType = getString(manifest.sourceType);
     const files = getStringArray(manifest.files);
+    const schemaVersion = typeof manifest.schemaVersion === 'number' ? manifest.schemaVersion : undefined;
+    const kiCore = getRecord(manifest.kiCore);
+    const aionCore = getRecord(manifest.aionCore);
+    const source = getRecord(manifest.source);
     if (version) diagnostics.manifestVersion = version;
     if (generatedAt) diagnostics.manifestGeneratedAt = generatedAt;
     if (sourceType) diagnostics.manifestSourceType = sourceType;
     if (files) diagnostics.manifestFiles = files;
+    if (schemaVersion !== undefined) diagnostics.manifestSchemaVersion = schemaVersion;
+    if (schemaVersion !== undefined && schemaVersion !== 2) {
+      diagnostics.manifestValidationError = `Unsupported bundle manifest schemaVersion: ${schemaVersion}`;
+    }
+    if (schemaVersion === 2 && !hasValidProvenanceShape(kiCore, aionCore, source)) {
+      diagnostics.manifestValidationError = 'Bundle manifest provenance objects are malformed';
+    }
+
+    const kiCoreVersion = getString(kiCore?.version);
+    const kiCoreTag = getString(kiCore?.tag);
+    const kiCoreReleaseCommit = getString(kiCore?.releaseCommit);
+    const aionCoreRepository = getString(aionCore?.repository);
+    const aionCoreTag = getString(aionCore?.tag);
+    const aionCorePeeledCommit = getString(aionCore?.peeledCommit);
+    const sourcePolicy = getString(source?.policy);
+    const sourceRepository = getString(source?.repository);
+    const sourceWorkflow = getString(source?.workflow);
+    const sourceRunId = getString(source?.runId);
+    const sourceHeadSha = getString(source?.headSha);
+    const sourceArtifactName = getString(source?.artifactName);
+    if (kiCoreVersion) diagnostics.kiCoreVersion = kiCoreVersion;
+    if (kiCoreTag) diagnostics.kiCoreTag = kiCoreTag;
+    if (kiCoreReleaseCommit) diagnostics.kiCoreReleaseCommit = kiCoreReleaseCommit;
+    if (aionCoreRepository) diagnostics.aionCoreRepository = aionCoreRepository;
+    if (aionCoreTag) diagnostics.aionCoreTag = aionCoreTag;
+    if (aionCorePeeledCommit) diagnostics.aionCorePeeledCommit = aionCorePeeledCommit;
+    if (sourcePolicy) diagnostics.manifestSourcePolicy = sourcePolicy;
+    if (sourceRepository) diagnostics.manifestSourceRepository = sourceRepository;
+    if (sourceWorkflow) diagnostics.manifestSourceWorkflow = sourceWorkflow;
+    if (sourceRunId) diagnostics.manifestSourceRunId = sourceRunId;
+    if (sourceHeadSha) diagnostics.manifestSourceHeadSha = sourceHeadSha;
+    if (sourceArtifactName) diagnostics.manifestSourceArtifactName = sourceArtifactName;
   } catch (error) {
     diagnostics.manifestParseError = error instanceof Error ? error.message : String(error);
   }

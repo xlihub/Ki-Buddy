@@ -167,6 +167,7 @@
     "streamdown": "^1.5.1",
     "strip-json-comments": "^3.1.1",
     "swr": "^2.3.6",
+    "tar": "^7.5.7",
     "tiny-csrf": "^1.1.6",
     "turndown": "^7.2.2",
     "turndown-plugin-gfm": "^1.0.2",
@@ -260,6 +261,24 @@
   "aioncoreVersion": "v0.1.58",
   "electronRebuild": {
     "electronVersion": "^37.3.1"
+  },
+  "kiCore": {
+    "repository": "xlihub/Ki-Core",
+    "tag": "ki-core-v0.1.0",
+    "commit": "209e6844d39bac0762c61e198c1ba3a007f9dd2e",
+    "aionCore": {
+      "repository": "iOfficeAI/AionCore",
+      "tag": "v0.1.59",
+      "peeledCommit": "815e61ed9bbe942339347dc1e69ddce176cded76"
+    },
+    "checksums": {
+      "macos-x64": "28e75aad3dcf7cc71ee255d894a85f82291a29c29c475fbb800760dc9585e3d0",
+      "macos-arm64": "d2ec1ba6b88190e2d08abbc2dc8c9308ce0daa1698d7b4627640d553f33d9876",
+      "linux-x64": "edfe1c94edd38f31d14b59e59309b8ae6728636b749c461e6e9d643c6c8271bf",
+      "linux-arm64": "a3efd198da1d263fa97964caf5312616022fb391ce78f125d2f4709502b61769",
+      "windows-x64": "a11cce2bbb346bcf07aa6867f65756157bacd74ab4c88c70f2ae08471f3257a1",
+      "windows-arm64": "732e6a3e1d617faef47b7fb26bd6c451a4338b112756d8a947f237919516adf6"
+    }
   },
   "patchedDependencies": {
     "7zip-bin@5.2.0": "patches/7zip-bin@5.2.0.patch"

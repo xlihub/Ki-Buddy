@@ -1,5 +1,21 @@
 # GPT Workflows
 
+## Ki-Core 来源策略
+
+Ki-Buddy 打包只允许三种显式来源策略：
+
+- `release-pinned`：正式桌面包与 Web CLI 使用。读取 `package.json` 的完整 Ki-Core tag、tag commit、AionCore 映射和六平台 SHA-256；下载 Release checksums 后与固定值逐项比对。禁止 `latest`、Actions run ID 和本地 binary。
+- `candidate`：仅 `build-manual.yml` 使用。必须提供 Ki-Core Candidate Build run ID 和完整 `product/main` commit SHA。Ki-Core 是公开仓库，候选读取使用公开 Actions API，不向目标构建分支传递跨仓 token。
+- `development`：仅本地开发使用。允许显式 local bundle、local binary 或旧 AionCore 下载路径，不得写入稳定 Ki-Core provenance。
+
+`build-manual.yml` 默认使用 `release-pinned` 验证已发布版本；选择 `candidate` 时才填写 run ID 与 head SHA，两项必须同时提供。Candidate artifact 只包含当前平台 archive；其可信身份来自指定的 Actions run、workflow、`product/main` commit 和 artifact 名称，不依赖额外 provenance manifest。
+
+当前正式 pin 为 Ki-Core `ki-core-v0.1.0`，对应 AionCore `v0.1.59`。`package.json.kiCore` 固定 Ki-Core tag、tag commit、AionCore tag/commit 和六个平台 SHA-256；更新任何一项都必须作为一次明确的版本消费变更进行验证。
+
+正式桌面包与 Web CLI workflow 同时固定 `BUN_INSTALL_REGISTRY` 和 `npm_config_registry` 到 npm 官方 registry。后者用于 Ki-Core 的 `prepare-managed-resources` 安装 Codex、Claude 等平台包，避免 runner 用户级 `.npmrc` 改变正式构建来源。
+
+Reusable desktop build 的 source map 上传默认关闭，只有 `build-and-release.yml` 显式传入 `upload_source_maps: true`。手工六平台验证因此不依赖 Sentry secrets；正式发布仍在 Linux x64 job 中强制验证 Sentry 配置并上传 source maps。
+
 本项目使用 GPT 驱动的 GitHub Actions 工作流辅助 PR 审查。
 
 ## 架构概览

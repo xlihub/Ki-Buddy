@@ -23,13 +23,53 @@ on:
         description: 'Only upload primary installers (exe/msi/dmg/deb), skip zip/yml/blockmap'
         type: boolean
         default: false
-      aioncore_run_id:
-        description: 'Optional AionCore Manual Build workflow run id to bundle instead of the pinned release'
+      upload_source_maps:
+        description: 'Upload desktop source maps from linux-x64; official release builds only'
+        type: boolean
+        default: false
+      ki_core_source_policy:
+        description: 'Ki-Core source policy: release-pinned for official builds or candidate for manual integration'
+        type: string
+        default: 'release-pinned'
+      ki_core_candidate_run_id:
+        description: 'Ki-Core Candidate Build workflow run ID; candidate policy only'
         type: string
         default: ''
+      ki_core_candidate_head_sha:
+        description: 'Full Ki-Core product/main commit SHA; candidate policy only'
+        type: string
+        default: ''
+    secrets:
+      APP_ID:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_ID_PASSWORD:
+        required: false
+      BUILD_CERTIFICATE_BASE64:
+        required: false
+      GH_TOKEN:
+        required: false
+      IDENTITY:
+        required: false
+      KEYCHAIN_PASSWORD:
+        required: false
+      P12_PASSWORD:
+        required: false
+      SENTRY_AUTH_TOKEN:
+        required: false
+      SENTRY_DSN:
+        required: false
+      SENTRY_ORG:
+        required: false
+      SENTRY_PROJECT:
+        required: false
+      TEAM_ID:
+        required: false
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
+  npm_config_registry: 'https://registry.npmjs.org/'
   AIONUI_HUB_TAG: 'dist-ebc6a2b'
   # Discontinued-build flag: only AionUi's final `-final` tag (e.g.
   # v2.1.40-final) produces a build that guides users to the AionPro website.
@@ -224,7 +264,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${{ matrix.platform }}" == "linux-x64" ]]; then
+          if [[ "${{ inputs.upload_source_maps }}" == "true" && "${{ matrix.platform }}" == "linux-x64" ]]; then
             echo "SENTRY_UPLOAD_SOURCE_MAPS=true" >> "$GITHUB_ENV"
             echo "Sentry source maps will be uploaded by linux-x64"
           else
@@ -233,7 +273,7 @@ jobs:
           fi
 
       - name: Validate Sentry source map upload configuration
-        if: matrix.platform == 'linux-x64'
+        if: inputs.upload_source_maps && matrix.platform == 'linux-x64'
         shell: bash
         run: |
           set -euo pipefail
@@ -371,12 +411,10 @@ jobs:
         shell: bash
         run: node scripts/prepareAioncore.js
         env:
-          # Version is pinned in repo-root package.json (aioncoreVersion).
-          # Set AIONUI_BACKEND_VERSION here only to override for ad-hoc builds.
-          AIONUI_BACKEND_RUN_ID: ${{ inputs.aioncore_run_id }}
+          AIONUI_BACKEND_SOURCE_POLICY: ${{ inputs.ki_core_source_policy }}
+          AIONUI_BACKEND_RUN_ID: ${{ inputs.ki_core_candidate_run_id }}
+          AIONUI_BACKEND_EXPECTED_SHA: ${{ inputs.ki_core_candidate_head_sha }}
           AIONUI_BACKEND_ARCH: ${{ matrix.arch }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build with electron-builder (Windows)
         if: startsWith(matrix.platform, 'windows')
@@ -404,7 +442,9 @@ jobs:
           }
         env:
           WINDOWS_BUILD_COMMAND: ${{ matrix.command }}
-          AIONUI_BACKEND_RUN_ID: ${{ inputs.aioncore_run_id }}
+          AIONUI_BACKEND_SOURCE_POLICY: ${{ inputs.ki_core_source_policy }}
+          AIONUI_BACKEND_RUN_ID: ${{ inputs.ki_core_candidate_run_id }}
+          AIONUI_BACKEND_EXPECTED_SHA: ${{ inputs.ki_core_candidate_head_sha }}
           # Node.js memory limit for vite bundling (prevents OOM during build)
           # Node.js 内存限制，防止 vite 打包时内存不足
           NODE_OPTIONS: '--max-old-space-size=8192'
@@ -507,7 +547,9 @@ jobs:
           exit 1
         env:
           NODE_OPTIONS: '--max-old-space-size=8192'
-          AIONUI_BACKEND_RUN_ID: ${{ inputs.aioncore_run_id }}
+          AIONUI_BACKEND_SOURCE_POLICY: ${{ inputs.ki_core_source_policy }}
+          AIONUI_BACKEND_RUN_ID: ${{ inputs.ki_core_candidate_run_id }}
+          AIONUI_BACKEND_EXPECTED_SHA: ${{ inputs.ki_core_candidate_head_sha }}
           npm_config_arch: ${{ matrix.arch }}
           APP_ID: ${{ secrets.APP_ID }}
           appleId: ${{ secrets.APPLE_ID }}
@@ -545,7 +587,9 @@ jobs:
           command: ${{ matrix.command }}
         env:
           NODE_OPTIONS: '--max-old-space-size=8192'
-          AIONUI_BACKEND_RUN_ID: ${{ inputs.aioncore_run_id }}
+          AIONUI_BACKEND_SOURCE_POLICY: ${{ inputs.ki_core_source_policy }}
+          AIONUI_BACKEND_RUN_ID: ${{ inputs.ki_core_candidate_run_id }}
+          AIONUI_BACKEND_EXPECTED_SHA: ${{ inputs.ki_core_candidate_head_sha }}
           npm_config_arch: ${{ matrix.arch }}
           npm_config_cache: ${{ runner.temp }}/.npm
           ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron

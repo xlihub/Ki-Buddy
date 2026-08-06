@@ -1,10 +1,9 @@
 /**
  * Resolve the aioncore version tag to download for packaging.
  *
- * Order:
- *   1. AIONUI_BACKEND_VERSION env (ad-hoc override, e.g. CI dispatch input)
- *   2. "aioncoreVersion" field in repo-root package.json (the pin)
- *   3. 'latest' (GitHub API releases/latest; non-reproducible fallback)
+ * release-pinned reads the immutable Ki-Core product tag from package.json.
+ * candidate does not resolve a tag. development preserves the legacy
+ * AionCore override and fallback behavior for local work only.
  *
  * Keep this file tiny and dependency-free — it's required from both
  * scripts/prepareAioncore.js and scripts/pack-web-cli.js before
@@ -13,8 +12,13 @@
 
 const fs = require('fs');
 const path = require('path');
+const { getSourcePolicy, readKiCorePin } = require('../packages/shared-scripts/src/kiCoreRelease');
 
-function resolveAioncoreVersion(projectRoot) {
+function resolveAioncoreVersion(projectRoot, explicitPolicy) {
+  const sourcePolicy = getSourcePolicy(explicitPolicy);
+  if (sourcePolicy === 'release-pinned') return readKiCorePin(projectRoot).tag;
+  if (sourcePolicy === 'candidate') return null;
+
   const envOverride = process.env.AIONUI_BACKEND_VERSION;
   if (envOverride && envOverride.trim()) {
     return envOverride.trim();

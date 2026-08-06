@@ -65,6 +65,66 @@ describe('collectBackendInstallDiagnostics', () => {
       runtimeKey: 'win32-x64',
     });
   });
+
+  it('exposes verified Ki-Core and AionCore provenance for support reports', () => {
+    const manifestPath = '/opt/Ki-Buddy/resources/bundled-aioncore/linux-x64/manifest.json';
+    const diagnostics = collectBackendInstallDiagnostics(
+      {
+        runtimeKey: 'linux-x64',
+        binaryName: 'aioncore',
+        resourcesPath: '/opt/Ki-Buddy/resources',
+      },
+      {
+        platform: 'linux',
+        readFile: (filePath) =>
+          filePath === manifestPath
+            ? JSON.stringify({
+                schemaVersion: 2,
+                version: '0.1.0',
+                generatedAt: '2026-08-05T00:00:00.000Z',
+                sourceType: 'actions-artifact',
+                files: ['aioncore', 'managed-resources/'],
+                kiCore: { version: '0.1.0', tag: null, releaseCommit: null },
+                aionCore: {
+                  repository: 'iOfficeAI/AionCore',
+                  tag: 'v0.1.58',
+                  peeledCommit: 'b'.repeat(40),
+                },
+                source: {
+                  policy: 'candidate',
+                  type: 'actions-artifact',
+                  repository: 'xlihub/Ki-Core',
+                  workflow: 'build-manual.yml',
+                  runId: '12345',
+                  headSha: 'a'.repeat(40),
+                  artifactName: 'ki-core-candidate-linux-x64',
+                },
+              })
+            : undefined,
+        stat: (filePath) => (filePath === manifestPath ? { mtimeMs: 1, size: 2 } : undefined),
+      }
+    );
+
+    expect(diagnostics.kiCoreVersion).toBe('0.1.0');
+    expect(diagnostics.aionCoreTag).toBe('v0.1.58');
+    expect(diagnostics.aionCorePeeledCommit).toBe('b'.repeat(40));
+    expect(diagnostics.manifestSourceRunId).toBe('12345');
+    expect(diagnostics.manifestSourceHeadSha).toBe('a'.repeat(40));
+  });
+
+  it('reports malformed provenance without crashing startup diagnostics', () => {
+    const diagnostics = collectBackendInstallDiagnostics(
+      { runtimeKey: 'linux-x64', resourcesPath: '/resources' },
+      {
+        platform: 'linux',
+        readFile: () => JSON.stringify({ schemaVersion: 2, kiCore: 'invalid', aionCore: null, source: [] }),
+        stat: () => ({ mtimeMs: 1, size: 2 }),
+      }
+    );
+
+    expect(diagnostics.manifestValidationError).toBe('Bundle manifest provenance objects are malformed');
+    expect(diagnostics.manifestParseError).toBeUndefined();
+  });
 });
 
 describe('appendAutoUpdateDiagnosticEvent', () => {
