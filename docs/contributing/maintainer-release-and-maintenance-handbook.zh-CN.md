@@ -344,6 +344,7 @@ Ki-Buddy 不要求等待 AionUi 发布一个正好对应最新 AionCore 的版�
 - Ki-Buddy CHANGELOG 同时包含定制、AionUi 上游和 Ki-Core 三类变化。
 - 根 `package.json` 与映射的 AionUi commit 完全一致。
 - `node packages/shared-scripts/src/kiBuddyRelease.js verify` 成功。
+- 仓库变量 `KI_ENABLE_SENTRY` 保持 `false`；当前版本不要求配置 Sentry secrets，也不会上传 source maps。
 
 ### 7.2 创建正式 tag
 
@@ -362,6 +363,8 @@ Ki-Buddy 不要求等待 AionUi 发布一个正好对应最新 AionCore 的版�
 - `ki-buddy-stable` Environment 审批。
 
 Candidate run 只用于版本准备前联调，不得传入正式构建。
+
+Ki-Buddy 接入自己的 Sentry 项目后，先配置 `SENTRY_DSN`、`SENTRY_AUTH_TOKEN`、`SENTRY_ORG` 和 `SENTRY_PROJECT`，再将仓库变量 `KI_ENABLE_SENTRY` 改为 `true`。从下一次正式 tag 构建开始，应用会注入 DSN，Linux x64 job 会校验配置并上传 source maps。
 
 ### 7.4 审批和发布 Draft
 

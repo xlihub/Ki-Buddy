@@ -30,7 +30,9 @@ describe('Ki-Core workflow source policies', () => {
     const stable = workflow('build-and-release.yml');
     const webCli = workflow('pack-web-cli.yml');
     expect(stable).toContain('ki_core_source_policy: release-pinned');
-    expect(stable).toContain('upload_source_maps: true');
+    expect(stable).toContain("enable_sentry: ${{ vars.KI_ENABLE_SENTRY == 'true' }}");
+    expect(stable).toContain("upload_source_maps: ${{ vars.KI_ENABLE_SENTRY == 'true' }}");
+    expect(stable).not.toContain('upload_source_maps: true');
     expect(stable).not.toContain('ki_core_candidate_run_id:');
     expect(webCli).toContain('AIONUI_BACKEND_SOURCE_POLICY: release-pinned');
     expect(webCli).not.toContain('KI_CORE_ACTIONS_TOKEN');
@@ -50,6 +52,8 @@ describe('Ki-Core workflow source policies', () => {
   it('does not expose a cross-repository token to branch-controlled build commands', () => {
     const reusable = workflow('_build-reusable.yml');
     expect(reusable).toContain("default: 'release-pinned'");
+    expect(reusable).toContain('enable_sentry:');
+    expect(reusable).toContain("SENTRY_DSN: ${{ inputs.enable_sentry && secrets.SENTRY_DSN || '' }}");
     expect(reusable).toContain("if: inputs.upload_source_maps && matrix.platform == 'linux-x64'");
     expect(reusable).toContain("npm_config_registry: 'https://registry.npmjs.org/'");
     expect(reusable).not.toContain('aioncore_run_id:');

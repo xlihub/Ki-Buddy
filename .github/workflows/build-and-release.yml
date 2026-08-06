@@ -109,7 +109,8 @@ jobs:
     uses: ./.github/workflows/_build-reusable.yml
     with:
       skip_code_quality: true
-      upload_source_maps: true
+      enable_sentry: ${{ vars.KI_ENABLE_SENTRY == 'true' }}
+      upload_source_maps: ${{ vars.KI_ENABLE_SENTRY == 'true' }}
       ki_core_source_policy: release-pinned
       matrix: >-
         {"include":[

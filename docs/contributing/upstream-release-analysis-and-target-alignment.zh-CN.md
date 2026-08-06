@@ -326,7 +326,7 @@ Ki-Buddy 当前实施状态：
 1. AionUi 正式上游基线和 Ki-Core 正式 pin 已对齐。
 2. 独立版本、四层映射、产品 CHANGELOG 和动态产品配置已建立。
 3. 正式 tag workflow 已改为六平台构建、Environment 审批和 Draft Release。
-4. 合并前仍需完成本地全量验证；首次发布前还需配置 GitHub Environment、tag 保护和签名/Sentry secrets。
+4. 合并前仍需完成本地全量验证；首次发布前还需配置 GitHub Environment、tag 保护和签名。Sentry 当前由 `KI_ENABLE_SENTRY=false` 关闭，不是首次发布前置条件。
 
 ## 10. 不在当前范围内
 
