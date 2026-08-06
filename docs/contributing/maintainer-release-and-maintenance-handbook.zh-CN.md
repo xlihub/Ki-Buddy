@@ -8,40 +8,51 @@
 
 流程依据见[上游发版流程分析与 Ki 双仓目标流程](upstream-release-analysis-and-target-alignment.zh-CN.md)。
 
-## 1. 首次迁移状态
+## 1. 首次迁移结果与当前状态
 
-2026-08-06 时，远端仍未完成第一次 Ki-Core 正式发布。发布流程改造合并前，不得直接按后文的常规发版步骤发布产品。
+Ki-Core 第一次正式发布已于 2026-08-06 完成。后续 Ki-Core 版本直接按第 3 至第 5 节的常规流程操作，不再重复首次发布恢复步骤。
 
 ### Ki-Core 当前状态
 
-- 第一次正式发布的目标是 `Ki-Core 0.1.0 ↔ AionCore v0.1.59`。
-- Release PR #3 已合并。
-- 没有 `ki-core-v0.1.0` tag，也没有公开 Ki-Core Release。
-- [PR #6](https://github.com/xlihub/Ki-Core/pull/6) 是 Release Please 状态错误生成的 `0.2.0` PR，不应合并。
-- 发布流程改造将 Candidate 从正式发布前置条件中移除，并增加 `release-current` 手动入口处理第一次发布。
-- `ki-core-stable` Environment 已配置 `xlihub` 为 required reviewer，允许自审，管理员不能绕过审批。
+- [Ki-Core 0.1.0](https://github.com/xlihub/Ki-Core/releases/tag/ki-core-v0.1.0) 已公开发布，对应 AionCore `v0.1.59`。
+- AionCore peeled commit 为 `815e61ed9bbe942339347dc1e69ddce176cded76`。
+- 最终 Release PR 是 [PR #9](https://github.com/xlihub/Ki-Core/pull/9)，合并提交和 tag 目标均为 `209e6844d39bac0762c61e198c1ba3a007f9dd2e`。
+- [Release Please run](https://github.com/xlihub/Ki-Core/actions/runs/31068696569) 与 [Ki-Core Stable Release run](https://github.com/xlihub/Ki-Core/actions/runs/31068791622) 均成功。
+- Release 包含六个平台 archive 和 `ki-core-checksums.txt`，不是 Draft 或 Prerelease。
+- PR #9 已标记为 `autorelease: tagged`。
+- `ki-core-stable` Environment 由 `xlihub` 审批，单维护者阶段允许审批自己的发布请求。
+
+### 首次发布故障记录
+
+首次发布恢复过程出现过三类状态：
+
+1. [PR #3](https://github.com/xlihub/Ki-Core/pull/3) 的正文被改写为普通中文 PR 描述，Release Please 无法解析版本区块。
+2. [PR #8](https://github.com/xlihub/Ki-Core/pull/8) 保留了可解析正文，但分支 `release/ki-core-0.1.0-recovery` 不符合 Release Please 分支协议。
+3. [PR #9](https://github.com/xlihub/Ki-Core/pull/9) 使用 `release-ki-core-v0.1.0`、可解析正文和 `autorelease: pending`，合并后成功创建 tag 与 Release。
+
+旧 PR #3、#6 和 #8 的 `autorelease: pending` 已移除。不要重新添加这些标签，也不要重新运行它们的发布流程。
 
 ### Ki-Buddy 当前状态
 
 - 远端 `product/main` 尚未建立独立发版体系。
 - 本地功能分支正在实现 Ki-Core 产物消费。
-- `kiCore.tag` 仍为空，没有可用于正式构建的 Ki-Core Release。
+- `ki-core-v0.1.0` 已可用于正式 pin，但 Ki-Buddy 配置仍未写入 tag、commit 和六个平台 checksum。
 - 没有 Ki-Buddy 产品 CHANGELOG 和版本映射。
+- xlihub/Ki-Buddy 当前没有公开 Release。
 
-### 首次发布前允许的操作
+### 当前允许的后续操作
 
-- 查询、同步和比较上游。
-- 修改并验证发布 workflow。
-- 运行手工 Candidate Build 做联调。
-- 创建实现目标流程的普通 PR。
+- 对齐 Ki-Buddy 的 AionUi 正式上游基线。
+- 在 Ki-Buddy 正式配置中固定 `ki-core-v0.1.0` 并验证六个平台 checksum。
+- 保留 Candidate Build 供未来 Ki-Core 未发布版本联调。
+- 建立 Ki-Buddy 独立版本、映射、产品 CHANGELOG 和正式发布 workflow。
 
-### 首次发布前禁止的操作
+### 仍然禁止的操作
 
-- 合并 Ki-Core PR #6。
-- 为当前 `0.1.0` 手工创建正式 tag。
 - 把 Candidate Actions artifact 当作 Ki-Buddy 正式依赖。
-- 在 Ki-Buddy 的正式配置中写入不存在的 Ki-Core tag。
-- 为修复失败发布覆盖已有 tag 或 Release 资产。
+- 移动或重建 `ki-core-v0.1.0`。
+- 覆盖来源不同的公开 Release 资产。
+- 复用旧 PR 的 pending 标签或把普通功能分支伪装成 Release PR。
 
 ## 2. 管理者日常检查
 
@@ -184,6 +195,13 @@ Release PR 应满足：
 
 保留 Release Please 生成的 `chore(product/main): release ...` 标题。使用 GitHub 默认 merge commit 或 squash merge 都可以，但不要把该标题从最终提交信息中删除。
 
+Release PR 还必须保留以下机器协议：
+
+- 常规流程使用 Release Please 创建的 `release-please--branches--product/main--components--ki-core` 分支。
+- 恢复既有版本时使用 `release-ki-core-vX.Y.Z`，不能使用普通 `release/*`、`fix/*` 或 `feat/*` 分支。
+- 正文保留两个 `---` 分隔符和 `## [X.Y.Z]` 版本标题；标题、说明和 footer 可以使用中文。
+- 合并前保留 `autorelease: pending` 标签。
+
 合并后检查 Release Please run，确认它进入 `Create Ki-Core Release` job，没有继续生成下一版本 PR。
 
 ### 4.3 批准正式发布
@@ -197,17 +215,16 @@ Release PR 应满足：
 
 确认后批准。当前 Environment 允许 `xlihub` 审批自己的部署请求，符合单维护者阶段的实际情况。
 
-### 4.4 第一次发布 `0.1.0`
+### 4.4 首次发布 `0.1.0` 的历史记录
 
-流程改造 PR 合并并通过 CI 后，第一次发布不再创建新的 Release PR：
+本节只用于解释历史 Actions，不是后续版本操作步骤。
 
-1. 关闭错误的 PR #6，不合并。
-2. 在 Actions 中打开 `Release Please`。
-3. 选择 `Run workflow`，分支选择 `product/main`，`operation` 选择 `release-current`。
-4. 在 `ki-core-stable` Environment 审批 `Create Ki-Core Release` job。
-5. Release Please 创建 `ki-core-v0.1.0` 和公开 Release，并显式启动 `Ki-Core Stable Release` 构建。
+1. 手工运行 `release-current` 时，Release Please 找到 PR #3，但其正文已失去机器可解析结构，因此没有创建 Release。
+2. PR #8 使用正确标题和正文，但普通恢复分支名不符合 Release Please 协议，仍未创建 Release。
+3. PR #9 使用 `release-ki-core-v0.1.0`、可解析正文和 pending 标签；合并并批准后创建 `ki-core-v0.1.0`。
+4. 稳定版 workflow 从 tag 构建六个平台，生成 checksums 并完成资产上传。
 
-不得用 `git tag` 或 GitHub Release 页面代替该入口。
+后续版本应由普通提交触发 Release Please 自动创建或更新 Release PR。`release-current` 只能重新处理已经具备正确标题、正文、分支名和标签的合并 PR，不能修复错误的 Release PR 元数据。
 
 ### 4.5 检查发布结果
 
@@ -420,11 +437,12 @@ Ki-Buddy 已进行定制开发，冲突需要按用户行为处理：
 2. 检查上一产品 tag 和 Release 是否存在。
 3. 检查 Release Please manifest。
 4. 检查上一 Release PR 合并后是否执行了创建 tag/Release 的 job。
-5. 修复 workflow 状态机并通过普通 PR 合并。
-6. 关闭错误 Release PR。
-7. 首次发布使用 `release-current`；后续再运行 `update-pr`，让 Release Please 基于正确的已发布状态生成版本。
+5. 检查 Release PR 的标题、正文、分支名和 pending 标签是否都符合机器协议。
+6. 修复 workflow 状态机并通过普通 PR 合并。
+7. 关闭错误 Release PR并移除其过期 pending 标签。
+8. 通过普通 `product/main` push 或手工 `update-pr`，让 Release Please 基于正确的已发布状态重新生成版本。
 
-不要直接编辑错误 PR 把版本号改小。Release Please 的已发布状态仍然错误，下一次还会重复发生。
+不要直接编辑错误 PR 把版本号改小，也不要认为 `release-current` 能忽略错误的正文或分支名。Release Please 的已发布状态或 PR 身份仍然错误时，下一次还会重复发生。
 
 ## 12. 场景：需要回退产品
 

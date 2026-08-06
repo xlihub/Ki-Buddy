@@ -1,6 +1,6 @@
 # 上游发版流程分析与 Ki 双仓目标流程
 
-> 最近核对时间：2026-08-05
+> 最近核对时间：2026-08-06
 > 适用仓库：`xlihub/Ki-Buddy`、`xlihub/Ki-Core`
 > 上游仓库：`iOfficeAI/AionUi`、`iOfficeAI/AionCore`
 
@@ -9,9 +9,9 @@
 本文同时记录两类信息：
 
 - **已观察现状**：来自 GitHub workflow、Release、PR、Actions 运行记录和仓库设置。
-- **已确认目标**：Ki-Core 与 Ki-Buddy 后续采用的流程方向，目前仍有部分尚未实现。
+- **已确认目标**：Ki-Core 与 Ki-Buddy 采用的流程方向。Ki-Core 首次发布已经验证，Ki-Buddy 部分仍在实施。
 
-不得把“已确认目标”视为当前已经可用的自动化。实际操作前应同时查看[仓库管理者发版与维护手册](maintainer-release-and-maintenance-handbook.zh-CN.md)中的“当前过渡状态”。
+不得把尚未实施的 Ki-Buddy 目标视为当前已经可用的自动化。实际操作前应同时查看[仓库管理者发版与维护手册](maintainer-release-and-maintenance-handbook.zh-CN.md)中的当前状态。
 
 ## 1. 仓库职责与分支模型
 
@@ -167,13 +167,15 @@ Build and Release workflow 监听 `dev` push 和所有 tag push：
 
 当前事实：
 
-- 第一次正式发布目标为 `Ki-Core 0.1.0 ↔ AionCore v0.1.59`；流程改造合并前，远端元数据仍可能显示旧的 `v0.1.58` 基线。
-- Release PR #3 已合并，但还没有 `ki-core-v0.1.0` tag 或公开 Ki-Core Release。
-- Release Please 随后创建了错误的 [PR #6](https://github.com/xlihub/Ki-Core/pull/6)：`0.2.0`。
-- 正式发布 workflow 尚未完成一次远端真实发版。
-- `main` 还没有跟上 AionCore 当前 `main`。
+- [Ki-Core 0.1.0](https://github.com/xlihub/Ki-Core/releases/tag/ki-core-v0.1.0) 已于 2026-08-06 公开发布，对应 AionCore `v0.1.59`，peeled commit 为 `815e61ed9bbe942339347dc1e69ddce176cded76`。
+- 最终 Release PR 是 [PR #9](https://github.com/xlihub/Ki-Core/pull/9)，发布分支为 `release-ki-core-v0.1.0`，合并提交和 tag 目标均为 `209e6844d39bac0762c61e198c1ba3a007f9dd2e`。
+- [Release Please run](https://github.com/xlihub/Ki-Core/actions/runs/31068696569) 创建 tag 和公开 Release，并显式启动稳定版构建。
+- [Ki-Core Stable Release run](https://github.com/xlihub/Ki-Core/actions/runs/31068791622) 完成六个平台构建、Linux GLIBC 基线检查、checksums 生成和资产上传。
+- Release 最终包含六个平台 archive 和 `ki-core-checksums.txt`，不是 Draft 或 Prerelease。
+- PR #9 已从 `autorelease: pending` 转为 `autorelease: tagged`；PR #3、#6 和 #8 的过期 pending 标签已移除。
+- `main` 的上游镜像仍需要按日常维护流程持续更新，不影响已发布 `product/main` 的 AionCore `v0.1.59` 基线。
 
-PR #6 的出现来自 Release Please 状态机偏离上游：当前流程只创建 Release PR，没有在 Release PR 合并时创建 tag/Release。Release Please 因而继续把之前的 `feat(release)` 提交当作未发布内容。
+首次发布暴露了两个 Release Please 机器协议要求：Release PR 正文必须保留可解析的版本区块，发布分支也必须使用 Release Please 支持的命名。普通恢复分支即使标题和正文正确，仍不会被识别为 Release PR。
 
 ### 5.2 Ki-Buddy
 
@@ -187,13 +189,13 @@ PR #6 的出现来自 Release Please 状态机偏离上游：当前流程只创�
 
 当前缺失：
 
-- 一个真实可固定的 Ki-Core Release tag。
+- 将正式构建固定到已经存在的 `ki-core-v0.1.0`，并写入六个平台 checksum。
 - Ki-Buddy 独立版本文件与 tag 规范。
 - `CHANGELOG.ki-buddy.md`。
 - Ki-Buddy、AionUi、Ki-Core、AionCore 的发布映射。
 - Ki-Buddy 正式发布 workflow。
 
-## 6. 已确认的 Ki-Core 目标流程
+## 6. 已验证的 Ki-Core 目标流程
 
 Ki-Core 短期继续保持与 AionCore 正式版本相同的发布节奏，同时管理自己的版本号。
 
@@ -242,7 +244,7 @@ AionCore 发布正式 tag
 
 ### 6.5 Release Please 对齐
 
-Ki-Core Release Please 应与 AionCore 保持同一状态机：
+Ki-Core Release Please 已与 AionCore 保持同一状态机：
 
 - 普通 `product/main` push：创建或更新 Release PR。
 - Release PR 合并：创建 tag/Release，并显式 dispatch 构建。
@@ -250,6 +252,14 @@ Ki-Core Release Please 应与 AionCore 保持同一状态机：
 - `xlihub` 的发布审批保留在正式发布入口。
 
 Ki-Core 同时支持 GitHub 默认 merge commit 和 squash merge。发布判断检查完整提交信息是否包含 Release Please 的 `chore(product/main): release ...` 标题，因此合并时不得删除该标题。
+
+Release PR 的标题、正文、标签和分支名共同构成机器协议：
+
+- 常规流程使用 Release Please 自动创建的 `release-please--branches--product/main--components--ki-core` 分支。
+- 恢复既有版本时允许使用 `release-ki-core-vX.Y.Z`。
+- 任意 `feat/*`、`fix/*` 或普通 `release/*` 分支不能代替上述发布分支。
+- 正文必须保留两个 `---` 分隔符和 `## [X.Y.Z]` 版本标题。
+- 合并前必须保留 `autorelease: pending`；成功创建 tag 后应由 Release Please 改为 `autorelease: tagged`。
 
 ## 7. 已确认的 Ki-Buddy 目标流程
 
@@ -305,16 +315,22 @@ Ki-Core 正式 Release 发布后，自动化可以创建或更新 Ki-Buddy 版�
 | 多阶段 Draft 查找、回读和原子发布脚本 | 简化 | 当前需求没有要求自建完整发布事务               |
 | Ki-Buddy 三状态来源策略               | 简化 | 正式、手工联调、本地开发可以用更直接的入口表达 |
 
-## 9. 实施顺序
+## 9. 实施状态与后续顺序
 
-1. 关闭错误的 Ki-Core PR #6，不创建 `0.2.0`。
-2. 让 Ki-Core Release Please 与 AionCore 状态机一致。
-3. 移除正式发布对 Candidate run 的依赖。
-4. 简化 Ki-Core 映射和验证器，继续保留双 CHANGELOG。
-5. 同步 AionCore 最新正式 tag，决定首个公开 Ki-Core 版本的映射。
-6. 完成首个 Ki-Core Release。
-7. 调整 Ki-Buddy Core 消费实现，固定真实 Ki-Core tag。
-8. 建立 Ki-Buddy 独立版本、映射、产品 CHANGELOG 和正式发布 workflow。
+Ki-Core 部分已经完成：
+
+1. 错误的 Ki-Core PR #6 已关闭，没有创建 `0.2.0`。
+2. Release Please 已与 AionCore 状态机对齐。
+3. 正式发布已移除 Candidate run 前置依赖。
+4. Ki-Core 映射、验证器和双 CHANGELOG 已采用简化方案。
+5. 首个映射确定为 `Ki-Core 0.1.0 ↔ AionCore v0.1.59`。
+6. `ki-core-v0.1.0`、六个平台资产和 checksums 已完成发布验证。
+
+下一阶段按以下顺序实施：
+
+1. 对齐 Ki-Buddy 的 AionUi 正式上游基线。
+2. 调整 Ki-Buddy Core 消费实现，固定真实 `ki-core-v0.1.0` 和六个平台 checksum。
+3. 建立 Ki-Buddy 独立版本、映射、产品 CHANGELOG 和正式发布 workflow。
 
 ## 10. 不在当前范围内
 
