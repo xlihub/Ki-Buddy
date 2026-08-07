@@ -27,7 +27,7 @@ function copyProductIdentity(projectRoot: string) {
   for (const file of [
     'ki-buddy-product.json',
     'ki-buddy-version.txt',
-    'ki-buddy-versions.json',
+    'ki-buddy-release.json',
     'CHANGELOG.ki-buddy.md',
   ]) {
     copyFileSync(join(process.cwd(), file), join(projectRoot, file));

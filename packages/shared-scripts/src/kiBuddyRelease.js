@@ -174,38 +174,24 @@ function validateMappedKiCore(kiCore) {
   validateMappedAionCore(kiCore.aionCore);
 }
 
-function readVersionMapping(projectRoot, version) {
-  const mapping = readJson(path.join(projectRoot, 'ki-buddy-versions.json'), 'Ki-Buddy version mapping');
-  requireExactKeys(mapping, ['schemaVersion', 'product', 'repository', 'versions'], 'Ki-Buddy version mapping');
-  if (mapping.schemaVersion !== 1) throw new Error('Unsupported Ki-Buddy version mapping schema');
+function readReleaseMapping(projectRoot, version) {
+  const mapping = readJson(path.join(projectRoot, 'ki-buddy-release.json'), 'Ki-Buddy release mapping');
+  requireExactKeys(mapping, ['schemaVersion', 'product', 'repository', 'release'], 'Ki-Buddy release mapping');
+  if (mapping.schemaVersion !== 1) throw new Error('Unsupported Ki-Buddy release mapping schema');
   if (mapping.product !== KI_BUDDY_PRODUCT || mapping.repository !== KI_BUDDY_REPOSITORY) {
-    throw new Error('Ki-Buddy version mapping product identity is invalid');
+    throw new Error('Ki-Buddy release mapping product identity is invalid');
   }
-  if (!Array.isArray(mapping.versions) || mapping.versions.length === 0) {
-    throw new Error('Ki-Buddy version mapping must contain at least one version');
+  const release = mapping.release;
+  requireExactKeys(release, ['version', 'tag', 'aionUi', 'kiCore'], 'Ki-Buddy release entry');
+  if (!SEMVER_PATTERN.test(release.version) || release.tag !== `ki-buddy-v${release.version}`) {
+    throw new Error('Ki-Buddy release mapping version and tag do not match');
   }
-
-  const seenVersions = new Set();
-  const seenTags = new Set();
-  for (const entry of mapping.versions) {
-    requireExactKeys(entry, ['version', 'tag', 'aionUi', 'kiCore'], 'Ki-Buddy version entry');
-    if (!SEMVER_PATTERN.test(entry.version) || entry.tag !== `ki-buddy-v${entry.version}`) {
-      throw new Error('Ki-Buddy mapping version and tag do not match');
-    }
-    if (seenVersions.has(entry.version) || seenTags.has(entry.tag)) {
-      throw new Error('Ki-Buddy version mapping contains a duplicate version or tag');
-    }
-    seenVersions.add(entry.version);
-    seenTags.add(entry.tag);
-    validateAionUi(entry.aionUi);
-    validateMappedKiCore(entry.kiCore);
+  if (release.version !== version) {
+    throw new Error(`Ki-Buddy release mapping must describe current version ${version}`);
   }
-
-  const matches = mapping.versions.filter((entry) => entry.version === version);
-  if (matches.length !== 1) {
-    throw new Error(`Ki-Buddy version mapping must contain exactly one entry for ${version}`);
-  }
-  return matches[0];
+  validateAionUi(release.aionUi);
+  validateMappedKiCore(release.kiCore);
+  return release;
 }
 
 function validateCorePin(projectRoot, versionEntry) {
@@ -293,7 +279,7 @@ function verifyUpstreamPackageJson(projectRoot, aionUi) {
 function readKiBuddyRelease(projectRoot, env = process.env) {
   const version = readProductVersion(projectRoot);
   readProductConfig(projectRoot);
-  const versionEntry = readVersionMapping(projectRoot, version);
+  const versionEntry = readReleaseMapping(projectRoot, version);
   validateCorePin(projectRoot, versionEntry);
   validateChangelog(projectRoot, version);
   const release = readReleaseContext(versionEntry, env);
@@ -399,6 +385,6 @@ module.exports = {
   readKiBuddyRelease,
   readProductConfig,
   readProductVersion,
-  readVersionMapping,
+  readReleaseMapping,
   verifyKiBuddyRelease,
 };

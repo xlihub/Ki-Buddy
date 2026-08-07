@@ -10,15 +10,15 @@ Ki-Buddy 打包只允许三种显式来源策略：
 
 `build-manual.yml` 默认使用 `release-pinned` 验证已发布版本；选择 `candidate` 时才填写 run ID 与 head SHA，两项必须同时提供。Candidate artifact 只包含当前平台 archive；其可信身份来自指定的 Actions run、workflow、`product/main` commit 和 artifact 名称，不依赖额外 provenance manifest。
 
-当前正式 pin 由 `ki-buddy-product.json.kiCore` 管理。更新 tag、commit、AionCore 映射或六个平台 SHA-256 时，必须同步更新 `ki-buddy-versions.json`，并通过版本准备校验。
+当前正式 pin 由 `ki-buddy-product.json.kiCore` 管理。更新 tag、commit、AionCore 映射或六个平台 SHA-256 时，必须同步更新 `ki-buddy-release.json`，并通过版本准备校验。
 
 ## Ki-Buddy 产品配置
 
-根 `package.json` 必须与 `ki-buddy-versions.json` 中映射的 AionUi commit 完全一致，不保存 Ki-Buddy 版本、名称或 Core pin。这样同步上游时不需要反复解决产品字段冲突。
+根 `package.json` 必须与 `ki-buddy-release.json` 中映射的 AionUi commit 完全一致，不保存 Ki-Buddy 版本、名称或 Core pin。这样同步上游时不需要反复解决产品字段冲突。
 
 - `ki-buddy-version.txt`：当前 Ki-Buddy SemVer。
 - `ki-buddy-product.json`：包名、桌面应用身份、协议、Web CLI 身份和 Ki-Core pin。
-- `ki-buddy-versions.json`：Ki-Buddy → AionUi → Ki-Core → AionCore 的发布映射。
+- `ki-buddy-release.json`：当前 Ki-Buddy → AionUi → Ki-Core → AionCore 的发布映射；历史映射保存在不可变产品 tag、CHANGELOG 和 Release provenance 中。
 - `CHANGELOG.ki-buddy.md`：Ki-Buddy 产品 Release Notes 来源。
 - `packages/shared-scripts/src/kiBuddyRelease.js`：生成最终 package metadata 和 electron-builder overlay，并校验上述文件的一致性。
 
@@ -26,7 +26,7 @@ Ki-Buddy 打包只允许三种显式来源策略：
 
 ## Ki-Buddy 正式发布
 
-`build-and-release.yml` 只响应 `ki-buddy-v*` tag。它先校验 tag、版本映射、上游 `package.json` 和 `product/main` 来源，再执行代码质量、六平台桌面构建及 Web CLI 构建。所有构建成功后，发布任务进入 `ki-buddy-stable` Environment；审批通过后只创建 Draft Release，由维护者检查并手工公开。
+`build-and-release.yml` 只响应 `ki-buddy-v*` tag。它先从已经通过结构校验的当前版本映射读取 AionUi 仓库和 tag，直接获取该上游 tag，再校验 tag commit、上游 `package.json` 和 `product/main` 来源；Ki-Buddy origin 不需要镜像 AionUi tag。随后执行代码质量、六平台桌面构建及 Web CLI 构建。所有构建成功后，发布任务进入 `ki-buddy-stable` Environment；审批通过后只创建 Draft Release，由维护者检查并手工公开。
 
 应用内更新默认直接读取 `xlihub/Ki-Buddy` GitHub Releases，并理解 `ki-buddy-v` tag 前缀。`release-distribute.yml` 的外部分发由独立变量 `KI_ENABLE_RELEASE_DISTRIBUTION` 控制；未配置 Ki-Buddy 自己的 S3/OIDC 目标前应保持关闭，防止复用 AionUi 的发布目标。
 
