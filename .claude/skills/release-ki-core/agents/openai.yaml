@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Ki-Core 发布'
+  short_description: '准备并监控 Ki-Core 上游同步、版本 PR、tag 与正式发布'
+  default_prompt: '使用 $release-ki-core 准备 Ki-Core 发布，并在每个写操作前等待管理员确认。'
