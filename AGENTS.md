@@ -152,3 +152,21 @@ When opening a PR, fill in the PR body using [.github/pull_request_template.md](
 | **bump-version** | Version bump workflow: update package.json, checks, branch, PR, tag release | Bumping version, `/bump-version`                                                                       |
 
 > Skills are located in `.claude/skills/` and contain project conventions that apply to **all** agents and contributors.
+
+## Agent skills
+
+### Documentation language
+
+Engineering skills must write or update documentation in Simplified Chinese. Keep commands, paths, API names, label names, and other technical identifiers in their original form.
+
+### Issue tracker
+
+Issues and specs are tracked in the GitHub repository `xlihub/Ki-Buddy`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the five default canonical labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Domain documentation uses the single-context layout. See `docs/agents/domain.md`.
