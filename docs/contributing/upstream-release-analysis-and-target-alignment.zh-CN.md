@@ -9,9 +9,9 @@
 本文同时记录两类信息：
 
 - **已观察现状**：来自 GitHub workflow、Release、PR、Actions 运行记录和仓库设置。
-- **已确认目标**：Ki-Core 与 Ki-Buddy 采用的流程方向。Ki-Core 首次发布已经验证；Ki-Buddy 发布体系已经合入，正在通过 `0.1.1` 进行首次正式发布恢复。
+- **已验证流程**：Ki-Core 与 Ki-Buddy 已完成的产品发布路径。Ki-Core `0.1.0` 和 Ki-Buddy `0.1.1` 均已公开发布，本文同时保留首次发布中出现的失败与恢复记录。
 
-不得把尚未实施的 Ki-Buddy 目标视为当前已经可用的自动化。实际操作前应同时查看[仓库管理者发版与维护手册](maintainer-release-and-maintenance-handbook.zh-CN.md)中的当前状态。
+后续流程改动必须区分“已经由正式发布验证的能力”和“计划中的自动化”。实际操作前应同时查看[仓库管理者发版与维护手册](maintainer-release-and-maintenance-handbook.zh-CN.md)中的当前状态。
 
 ## 1. 仓库职责与分支模型
 
@@ -94,7 +94,7 @@ AionUi 没有使用 Release Please。它采用“版本准备 PR、手工正式 
 
 AionUi 仓库的版本维护说明规定：
 
-1. 查询最新或指定的 AionCore Release。
+1. 查询已发布或明确指定的 AionCore Release。
 2. 检查六个平台 archive 和 checksums 是否存在。
 3. 更新 AionUi 自身版本和 `aioncoreVersion`。
 4. 生成 `CHANGELOG.md`。
@@ -138,7 +138,7 @@ Build and Release workflow 监听 `dev` push 和所有 tag push：
 
 | AionCore  | 对应 AionUi             | 关系                                           |
 | --------- | ----------------------- | ---------------------------------------------- |
-| `v0.1.56` | `v2.1.45`               | AionUi 版本准备时固定最新 Core 正式版本        |
+| `v0.1.56` | `v2.1.45`               | AionUi 版本准备时固定选定的 Core 正式版本      |
 | `v0.1.57` | `v2.1.46`               | 同日完成对应更新                               |
 | `v0.1.58` | `v2.1.47-final`         | AionUi CHANGELOG 同时包含 Desktop 和 Core 变化 |
 | `v0.1.59` | 暂无对应 AionUi Release | 两仓并非同时完成发布                           |
@@ -179,7 +179,7 @@ Build and Release workflow 监听 `dev` push 和所有 tag push：
 
 ### 5.2 Ki-Buddy
 
-Ki-Buddy 的产品发布层已经在功能分支实现：
+Ki-Buddy 的产品发布层已经进入 `product/main` 并完成首次公开发布：
 
 - 根 `package.json` 保持为映射的 AionUi commit 原文件，产品字段不写回上游文件。
 - `ki-buddy-version.txt` 管理 Ki-Buddy SemVer；`ki-buddy-product.json` 管理独立包名、appId、可执行文件名、协议、Web CLI 身份和 Ki-Core pin。
@@ -190,12 +190,23 @@ Ki-Buddy 的产品发布层已经在功能分支实现：
 
 这一结构允许后续逐步替换运行时中的 AionUi 品牌内容，同时把经常变化的上游 `package.json` 与 Ki-Buddy 产品语义分开管理。
 
-## 6. 已验证的 Ki-Core 目标流程
+当前事实：
 
-Ki-Core 短期继续保持与 AionCore 正式版本相同的发布节奏，同时管理自己的版本号。
+- [Ki-Buddy 0.1.1](https://github.com/xlihub/Ki-Buddy/releases/tag/ki-buddy-v0.1.1) 已于 2026-08-07 公开发布，tag 指向 [PR #6](https://github.com/xlihub/Ki-Buddy/pull/6) 的合并提交 `3c977ab19e97e0fb41e72cd65272ba087ddebb7d`。
+- [正式构建 run](https://github.com/xlihub/Ki-Buddy/actions/runs/31142006910) 完成版本校验、代码质量、六个平台桌面构建、五个平台 Web CLI 构建和 Web CLI 安装冒烟测试；全部构建成功后才请求 `ki-buddy-stable` 审批。
+- `xlihub` 批准发布后，workflow 创建包含 25 个资产的 Draft Release；维护者检查后手工公开发布，自动化没有直接公开 Release。
+- 维护者已下载 macOS DMG 并完成安装，首次 Ki-Buddy 桌面发布链路已完成实际安装验证。该结果属于维护者人工验证记录，不代表其他平台已经进行人工安装测试。
+- 首次发布接受未签名构建，`KI_ENABLE_SENTRY=false`，因此没有把 AionUi 的 Sentry secrets 或 source maps 上传作为发布前置条件。
+- 正式 bundle provenance 固定记录 Ki-Buddy `0.1.1`、AionUi `v2.1.49`、Ki-Core `0.1.0` 和 AionCore `v0.1.59`，Core 来源策略为 `release-pinned`。
+
+## 6. 已验证的 Ki-Core 维护流程
+
+Ki-Core 采用独立发布节奏。完整的 AionCore 正式 Release 只形成上游候选版本；管理员根据 Ki-Core 产品计划选择新的发布基准或继续使用当前发布基准。
 
 ```text
-AionCore 发布正式 tag
+AionCore 出现完整正式 Release
+  → 进入上游候选版本列表
+  → 管理员选择新的发布基准
   → 创建 Ki-Core 上游同步 PR
   → product/main 固定到该 AionCore tag
   → Release Please 创建或更新 Ki-Core Release PR
@@ -206,10 +217,10 @@ AionCore 发布正式 tag
 
 ### 6.1 版本规则
 
-- 每个被接受的 AionCore 正式版本对应一个 Ki-Core 正式版本。
+- 管理员可以跳过中间 AionCore 正式版本，也可以继续使用当前发布基准。
+- 只有被选为发布基准的 AionCore 正式版本才进入 Ki-Core 映射。
 - Ki-Core 与 AionCore 的数字不需要相同。
-- 纯上游同步默认作为 Ki-Core patch，例如：
-  `Ki-Core 0.1.1 ↔ AionCore v0.1.60`（仅作版本关系示例）。
+- Ki-Core 目标版本由管理员按产品兼容性和自身变化明确选择；工具只能提供 SemVer 建议。
 - 未来 Ki-Core 自有 `feat`、`fix` 继续参与 Ki-Core SemVer 计算。
 - AionCore 的 Cargo workspace version、API 和协议版本不改写为 Ki-Core 版本。
 
@@ -256,14 +267,14 @@ Release PR 的标题、正文、标签和分支名共同构成机器协议：
 - 正文必须保留两个 `---` 分隔符和 `## [X.Y.Z]` 版本标题。
 - 合并前必须保留 `autorelease: pending`；成功创建 tag 后应由 Release Please 改为 `autorelease: tagged`。
 
-## 7. 已确认的 Ki-Buddy 目标流程
+## 7. 已验证的 Ki-Buddy 发布流程
 
 Ki-Buddy 短期会进行二次开发，因此需要同时管理上游变化、定制变化和 Ki-Core 更新。
 
 ```text
-同步 AionUi 上游
+管理员选择 AionUi 发布基准或保留当前发布基准
   + Ki-Buddy 定制提交进入 product/main
-  + Ki-Core 发布正式版本
+  + 选择完整 Ki-Core Release 或保留当前 pin
   → 创建 Ki-Buddy 版本准备 PR
   → 更新 Ki-Buddy 版本和固定 Ki-Core tag
   → 生成 Ki-Buddy 产品 CHANGELOG
@@ -289,11 +300,37 @@ Ki-Buddy 短期会进行二次开发，因此需要同时管理上游变化、�
   - 本次同步的 AionUi 上游变化。
   - Ki-Core 更新，以及该 Ki-Core 对应的 AionCore 版本。
 
-### 7.3 发布节奏
+### 7.3 独立发布节奏
 
-Ki-Core 正式 Release 发布后，自动化可以创建或更新 Ki-Buddy 版本准备 PR。自动化不得直接发布 Ki-Buddy。
+AionUi 或 Ki-Core 的新 Release 只进入候选列表，不自动创建同步 PR 或 Ki-Buddy 版本准备 PR。管理员准备 Ki-Buddy 版本时分别选择 AionUi 发布基准和 Ki-Core pin；两者都可以保持不变。
 
-这样可以让 Ki-Buddy及时跟进 Ki-Core，也给 `xlihub` 留出合并同期定制开发、同步 AionUi 和编辑 Release Notes 的时间。
+选择新的发布基准后，先创建独立同步 PR；同步合并并验证后，再准备 Ki-Buddy 产品版本。自动化不得直接决定发布基准或公开 Ki-Buddy。
+
+### 7.4 正式构建和人工发布边界
+
+`ki-buddy-v*` tag 触发的正式 workflow 按以下顺序执行：
+
+1. 校验当前 Ki-Buddy 版本、tag 和四层版本映射。
+2. 从映射指定的官方 AionUi 仓库获取确切 tag，校验 commit 和根 `package.json`。
+3. 运行代码质量检查、六个平台桌面构建、五个平台 Web CLI 构建和安装冒烟测试。
+4. 所有构建完成后请求 `ki-buddy-stable` Environment 审批。
+5. 审批后汇总安装包、Web CLI、checksums、updater metadata、安装脚本和 Release Notes，创建 Draft Release。
+6. `xlihub` 检查 Draft 后手工公开发布。
+
+第一次成功运行中，Windows ARM64 桌面构建约 25 分钟，是最慢的平台；整条 workflow 还包含审批等待和资产汇总。单个平台运行时间较长不等于 workflow 卡死，不应仅因耗时删除 required checks。
+
+### 7.5 首次发布恢复经验
+
+`ki-buddy-v0.1.0` 在正式构建前失败，因为 workflow 假设 AionUi `v2.1.49` tag 已存在于 Ki-Buddy origin。该 tag 实际属于 `iOfficeAI/AionUi`，上游镜像分支不保证复制上游 tag。
+
+恢复时采用以下规则：
+
+- 保留失败的 `ki-buddy-v0.1.0`，不移动、不删除，也不让新提交复用该版本。
+- 通过普通 PR 修复 workflow，并把产品版本增加为 `0.1.1`。
+- 结构校验不依赖远端 tag；需要完整来源验证时，再从版本映射声明的官方仓库获取确切 tag。
+- 新建 `ki-buddy-v0.1.1` 并完成正式发布。
+
+这条规则适用于所有确定性发布错误：只要修复需要新提交，就创建新的 patch 版本。只有同一 tag、同一 commit 下的临时 runner 或网络失败才适合重跑。
 
 ## 8. 设计取舍
 
@@ -321,14 +358,16 @@ Ki-Core 部分已经完成：
 5. 首个映射确定为 `Ki-Core 0.1.0 ↔ AionCore v0.1.59`。
 6. `ki-core-v0.1.0`、六个平台资产和 checksums 已完成发布验证。
 
-Ki-Buddy 当前实施状态：
+Ki-Buddy 部分已经完成：
 
 1. AionUi 正式上游基线和 Ki-Core 正式 pin 已对齐。
 2. 独立版本、四层映射、产品 CHANGELOG 和动态产品配置已建立。
 3. 正式 tag workflow 已改为六平台构建、Environment 审批和 Draft Release。
 4. [PR #5](https://github.com/xlihub/Ki-Buddy/pull/5) 已合并，Environment、tag 保护和发布开关已经配置；当前接受未签名构建，Sentry 由 `KI_ENABLE_SENTRY=false` 关闭。
 5. `ki-buddy-v0.1.0` 的首次运行在六平台构建前失败，因为正式 workflow 没有获取映射中的 AionUi `v2.1.49` tag；没有创建 Release，产品 tag 保留且不移动。
-6. `0.1.1` 作为恢复版本，正式 workflow 从已验证映射动态获取 AionUi tag，不要求 Ki-Buddy origin 镜像上游 tag。
+6. [PR #6](https://github.com/xlihub/Ki-Buddy/pull/6) 以 `0.1.1` 修复上游 tag 获取，并保持 AionUi、Ki-Core 和 AionCore 映射不变。
+7. `ki-buddy-v0.1.1` 已完成六平台桌面构建、五平台 Web CLI 构建、Draft Release 审批和人工公开发布。
+8. macOS DMG 已由维护者下载并安装成功；这是首次发布的补充记录，不属于后续发布完成条件。其他平台已完成 CI 构建和资产生成。
 
 ## 10. 不在当前范围内
 
