@@ -61,21 +61,34 @@ Ki-Core 第一次正式发布已于 2026-08-06 完成，Ki-Buddy 第一次正式
 
 不需要持续盯住 Actions。建议在准备同步或发版时进行以下检查。
 
-### 2.1 查看两个上游的最新正式版本
+### 2.1 查看当前发布基准和上游候选版本
 
 ```bash
-gh release view --repo iOfficeAI/AionCore --json tagName,publishedAt,url
-gh release view --repo iOfficeAI/AionUi --json tagName,publishedAt,url
+gh release list --repo iOfficeAI/AionCore --exclude-drafts --exclude-pre-releases \
+  --limit 100 --json tagName,publishedAt,isDraft,isPrerelease
+gh release list --repo iOfficeAI/AionUi --exclude-drafts --exclude-pre-releases \
+  --limit 100 --json tagName,publishedAt,isDraft,isPrerelease
 ```
 
-同时查看 Ki 产品当前版本：
+以 `ki-core-upstream.json` 和 `ki-buddy-release.json` 中的 tag 作为当前发布基准。一个 Release 同时满足以下条件才是上游候选版本：
+
+1. 不是 Draft。
+2. 不是 Prerelease。
+3. tag 能解析到 commit。
+4. 目标 commit 位于当前发布基准之后的可比较历史中。
+5. 对应发布 workflow 已完成。
+6. Release 资产符合目标 tag 所在版本的 workflow 和验证脚本要求。
+
+AionCore 至少要求六个平台 archive 与 `aioncore-checksums.txt`。AionUi 的资产矩阵从目标 tag 的发布 workflow 和验证脚本读取，不把某个历史版本的资产数量写成永久规则。公开但仍在构建、workflow 失败或资产不全的 Release 不属于候选版本。
+
+同时查看 Ki 产品当前公开版本，并与本地映射核对：
 
 ```bash
 gh release view --repo xlihub/Ki-Core --json tagName,publishedAt,url
 gh release view --repo xlihub/Ki-Buddy --json tagName,publishedAt,url
 ```
 
-仓库没有 Release 时，命令失败属于预期状态，应改用：
+仓库没有 Release 时，`gh release view` 失败属于预期状态，应改用：
 
 ```bash
 gh release list --repo xlihub/Ki-Core
@@ -111,9 +124,9 @@ gh run view <run-id> --repo <owner/repo> --log-failed
 
 先判断失败属于代码、上游同步、版本元数据、平台构建还是权限审批，再决定重试。不得把所有失败都当作临时网络问题。
 
-## 3. 场景：AionCore 发布了新版本
+## 3. 场景：AionCore 出现上游候选版本
 
-目标：让 Ki-Core 在不修改 AionCore 源码语义的情况下发布一个对应的 Ki-Core 产品版本。
+目标：先检查候选版本的累计变化和兼容性信号，由管理员决定保留当前发布基准或选择新的 AionCore 正式版本。发现候选版本本身不创建同步 PR。
 
 ### 3.1 确认上游 Release 完整
 
@@ -277,7 +290,7 @@ AionCore 上游允许公开 Release 先于资产上传。Ki-Core 目标流程采
 
 ## 6. 场景：Ki-Core 发布后准备 Ki-Buddy 版本
 
-目标：把一个完整 Ki-Core Release、AionUi 上游变化和 Ki-Buddy 定制变化放入同一个 Ki-Buddy 产品版本。
+目标：按 Ki-Buddy 产品计划组合完整 Ki-Core Release、选定的 AionUi 发布基准和 Ki-Buddy 定制变化。管理员可以只更新其中一项，也可以全部保持不变。
 
 ### 6.1 确认 Ki-Core 可消费
 
@@ -289,7 +302,7 @@ gh release view <ki-core-tag> \
 
 确认六个平台资产和 checksums 完整。还应从 Ki-Core 映射确认它对应的 AionCore tag。
 
-### 6.2 确认 AionUi 上游同步范围
+### 6.2 确认 AionUi 发布基准
 
 Ki-Buddy 的版本准备 PR应明确：
 
@@ -298,7 +311,7 @@ Ki-Buddy 的版本准备 PR应明确：
 - 上游 CHANGELOG 对应范围。
 - 需要人工解决的定制代码冲突。
 
-Ki-Buddy 不要求等待 AionUi 发布一个正好对应最新 AionCore 的版本。上游真实流程本身允许 AionUi 与 AionCore 不同时发布。
+Ki-Buddy 不要求等待 AionUi 发布一个正好对应所选 AionCore 发布基准的版本。上游真实流程本身允许 AionUi 与 AionCore 不同时发布。管理员也可以保留当前 AionUi 发布基准，只发布 Ki-Buddy 自身变化。
 
 ### 6.3 汇总 Ki-Buddy 定制变化
 
@@ -411,7 +424,7 @@ Ki-Buddy 接入自己的 Sentry 项目后，先配置 `SENTRY_DSN`、`SENTRY_AUT
 
 检查通过后再公开 Release。确认未勾选 Prerelease，并按产品需要设置为 Latest；公开操作由 `xlihub` 手工完成，workflow 只创建 Draft。Release 的 `targetCommitish` 显示 `product/main` 不代表 tag 会随分支移动，最终来源以不可变 tag 的 commit 为准。
 
-公开后检查 Release 页面不再显示 Draft，并选择至少一个当前可用平台进行安装冒烟测试。首次 `0.1.1` 已由维护者下载 macOS DMG 并安装成功，不需要重复执行该历史验证。
+公开后检查 Release 页面不再显示 Draft，并复核 tag、commit、资产、checksums、版本映射和 provenance。人工安装测试可以另行记录，但不属于发布完成条件。首次 `0.1.1` 已由维护者下载 macOS DMG 并安装成功，这只是历史验证记录。
 
 ### 7.5 首次发布的实际结果
 
@@ -595,7 +608,7 @@ Ki-Buddy `0.1.0` 是“需要修改 workflow 代码”的确定性失败，因�
 - [ ] CI 成功。
 - [ ] `xlihub` 批准正确的 Release commit。
 - [ ] 六平台资产和 checksums 完整。
-- [ ] Ki-Core Release 验证后再通知 Ki-Buddy 更新 pin。
+- [ ] Ki-Core Release 验证后进入 Ki-Buddy 候选列表，不自动更新 pin。
 
 ### Ki-Buddy
 
@@ -615,7 +628,8 @@ Ki-Buddy `0.1.0` 是“需要修改 workflow 代码”的确定性失败，因�
 - [ ] `xlihub` 批准的是预期 tag 和 commit 的 `ki-buddy-stable` 请求。
 - [ ] Draft Release 资产数量、文件名、checksums、说明和来源映射检查完成。
 - [ ] 由 `xlihub` 公开发布。
-- [ ] 至少一个当前可用平台完成安装冒烟测试，并记录验证者与结果。
+
+人工安装测试可在发布后另行记录验证者与结果，不属于以上检查表的完成条件。
 
 ## 16. 权限与职责边界
 

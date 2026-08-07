@@ -1,11 +1,25 @@
 ---
 name: bump-version
-description: Use when bumping the AionUi version: query AionCore release, verify artifacts, update package.json, generate CHANGELOG, branch, commit, push, create PR, auto-merge, tag release.
+description: 仅用于上游 iOfficeAI/AionUi 仓库的版本升级，包括查询 AionCore Release、更新 package.json、生成 CHANGELOG、创建版本 PR 和 tag。不得在 Ki-Buddy、Ki-Core 或 product/main 中使用。
 ---
 
 # Bump Version
 
 Automate the AionUi release preparation: query AionCore release → verify artifacts → update versions → generate CHANGELOG → branch → PR → tag.
+
+## 仓库范围
+
+此 skill 只服务于上游 `iOfficeAI/AionUi` 仓库。执行其他步骤前先运行：
+
+```bash
+git rev-parse --show-toplevel
+git remote get-url origin
+git branch --show-current
+```
+
+规范化 `origin` URL，并要求仓库身份严格等于 `iOfficeAI/AionUi`。`origin` 指向 `xlihub/Ki-Buddy`、`xlihub/Ki-Core`、其他仓库或无法验证时立即停止。Ki-Buddy clone 即使有指向 `iOfficeAI/AionUi` 的 `upstream` remote，也不属于允许范围。
+
+当前 branch 必须是 `main`。拒绝 `product/main` 和其他 branch。Ki 产品发布不得使用此 skill；只读规划使用 `ki-release-maintenance`，写操作只交给仓库中已经安装且与目标产品匹配的发布 skill。没有对应入口时停止。
 
 **Usage:** `/bump-version [version] [flags]`
 
@@ -19,10 +33,13 @@ Automate the AionUi release preparation: query AionCore release → verify artif
 ### Step 1: Pre-flight Checks
 
 ```bash
+git remote get-url origin
 git branch --show-current
 git status --short
 ```
 
+- **`origin` is not `iOfficeAI/AionUi`** → Stop: "`bump-version` 只用于上游 `iOfficeAI/AionUi` 仓库。Ki 产品仓库请使用对应的 Ki 发布 skill。"
+- **On `product/main`** → Stop: "`bump-version` 不得在产品主分支 `product/main` 执行。"
 - **Not on `main`** → Stop: "Please switch to main before running bump-version."
 - **Dirty working tree** → Stop: "There are uncommitted changes. Please commit or stash them first."
 
