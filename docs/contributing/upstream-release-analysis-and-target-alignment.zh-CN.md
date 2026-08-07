@@ -1,6 +1,6 @@
 # 上游发版流程分析与 Ki 双仓目标流程
 
-> 最近核对时间：2026-08-06
+> 最近核对时间：2026-08-07
 > 适用仓库：`xlihub/Ki-Buddy`、`xlihub/Ki-Core`
 > 上游仓库：`iOfficeAI/AionUi`、`iOfficeAI/AionCore`
 
@@ -9,7 +9,7 @@
 本文同时记录两类信息：
 
 - **已观察现状**：来自 GitHub workflow、Release、PR、Actions 运行记录和仓库设置。
-- **已确认目标**：Ki-Core 与 Ki-Buddy 采用的流程方向。Ki-Core 首次发布已经验证，Ki-Buddy 部分仍在实施。
+- **已确认目标**：Ki-Core 与 Ki-Buddy 采用的流程方向。Ki-Core 首次发布已经验证；Ki-Buddy 发布体系已经合入，正在通过 `0.1.1` 进行首次正式发布恢复。
 
 不得把尚未实施的 Ki-Buddy 目标视为当前已经可用的自动化。实际操作前应同时查看[仓库管理者发版与维护手册](maintainer-release-and-maintenance-handbook.zh-CN.md)中的当前状态。
 
@@ -184,7 +184,7 @@ Ki-Buddy 的产品发布层已经在功能分支实现：
 - 根 `package.json` 保持为映射的 AionUi commit 原文件，产品字段不写回上游文件。
 - `ki-buddy-version.txt` 管理 Ki-Buddy SemVer；`ki-buddy-product.json` 管理独立包名、appId、可执行文件名、协议、Web CLI 身份和 Ki-Core pin。
 - 构建时生成 electron-builder overlay，通过 `extraMetadata` 形成安装包内最终 `package.json`。
-- `ki-buddy-versions.json` 保存 Ki-Buddy、AionUi、Ki-Core、AionCore 的确定映射；`CHANGELOG.ki-buddy.md` 保存三类产品变化。
+- `ki-buddy-release.json` 保存当前 Ki-Buddy、AionUi、Ki-Core、AionCore 的确定映射；历史映射由不可变产品 tag、`CHANGELOG.ki-buddy.md` 和 Release provenance 保留。
 - 正式构建固定消费 Ki-Core Release，并验证 checksums、archive 和来源；bundle manifest schema 3 同时记录四层身份。
 - `ki-buddy-v*` tag 触发代码质量、六平台桌面构建和 Web CLI 构建；全部成功后进入 `ki-buddy-stable` 审批并创建 Draft Release。
 
@@ -326,7 +326,9 @@ Ki-Buddy 当前实施状态：
 1. AionUi 正式上游基线和 Ki-Core 正式 pin 已对齐。
 2. 独立版本、四层映射、产品 CHANGELOG 和动态产品配置已建立。
 3. 正式 tag workflow 已改为六平台构建、Environment 审批和 Draft Release。
-4. 合并前仍需完成本地全量验证；首次发布前还需配置 GitHub Environment、tag 保护和签名。Sentry 当前由 `KI_ENABLE_SENTRY=false` 关闭，不是首次发布前置条件。
+4. [PR #5](https://github.com/xlihub/Ki-Buddy/pull/5) 已合并，Environment、tag 保护和发布开关已经配置；当前接受未签名构建，Sentry 由 `KI_ENABLE_SENTRY=false` 关闭。
+5. `ki-buddy-v0.1.0` 的首次运行在六平台构建前失败，因为正式 workflow 没有获取映射中的 AionUi `v2.1.49` tag；没有创建 Release，产品 tag 保留且不移动。
+6. `0.1.1` 作为恢复版本，正式 workflow 从已验证映射动态获取 AionUi tag，不要求 Ki-Buddy origin 镜像上游 tag。
 
 ## 10. 不在当前范围内
 

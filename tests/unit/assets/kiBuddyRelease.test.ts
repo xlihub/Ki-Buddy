@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -17,6 +17,32 @@ const projectRoot = resolve(__dirname, '../../..');
 describe('Ki-Buddy product release identity', () => {
   it('validates the current product mapping without requiring repository history', () => {
     expect(() => verifyKiBuddyRelease(projectRoot, { skipGit: true })).not.toThrow();
+  });
+
+  it('stores only the current product release mapping', () => {
+    const mapping = JSON.parse(readFileSync(join(projectRoot, 'ki-buddy-release.json'), 'utf8'));
+
+    expect(mapping).not.toHaveProperty('versions');
+    expect(mapping.release.version).toBe(readProductVersion(projectRoot));
+  });
+
+  it('rejects a release mapping that does not describe the current product version', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-release-mapping-'));
+    try {
+      for (const file of [
+        'ki-buddy-product.json',
+        'ki-buddy-version.txt',
+        'ki-buddy-release.json',
+        'CHANGELOG.ki-buddy.md',
+      ]) {
+        copyFileSync(join(projectRoot, file), join(tempDir, file));
+      }
+      writeFileSync(join(tempDir, 'ki-buddy-version.txt'), '9.9.9\n');
+
+      expect(() => readKiBuddyRelease(tempDir)).toThrow('Ki-Buddy release mapping must describe current version 9.9.9');
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('combines upstream package data with independent Ki-Buddy product metadata', () => {

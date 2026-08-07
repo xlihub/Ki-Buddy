@@ -33,6 +33,19 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Fetch mapped AionUi tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          IDENTITY=$(node packages/shared-scripts/src/kiBuddyRelease.js verify --skip-git true \
+            --tag "$GITHUB_REF_NAME" \
+            --commit "$GITHUB_SHA")
+          AIONUI_REPOSITORY=$(jq -r '.aionUi.repository' <<< "$IDENTITY")
+          AIONUI_TAG=$(jq -r '.aionUi.tag' <<< "$IDENTITY")
+          git fetch --force --no-tags \
+            "https://github.com/${AIONUI_REPOSITORY}.git" \
+            "refs/tags/${AIONUI_TAG}:refs/tags/${AIONUI_TAG}"
+
       - name: Validate tag, mapping and upstream package
         id: identity
         shell: bash

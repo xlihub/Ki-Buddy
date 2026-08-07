@@ -38,13 +38,15 @@ describe('Ki-Core workflow source policies', () => {
     expect(webCli).not.toContain('KI_CORE_ACTIONS_TOKEN');
   });
 
-  it('fetches the mapped AionUi tag from its validated upstream repository', () => {
-    const checks = workflow('pr-checks.yml');
-    expect(checks).toContain('verify --skip-git true');
-    expect(checks).toContain("AIONUI_REPOSITORY=$(jq -r '.aionUi.repository'");
-    expect(checks).toContain('https://github.com/${AIONUI_REPOSITORY}.git');
-    expect(checks).toContain('refs/tags/${AIONUI_TAG}:refs/tags/${AIONUI_TAG}');
-    expect(checks).not.toContain('refs/tags/v2.1.49');
+  it('fetches the mapped AionUi tag in PR and stable release validation', () => {
+    for (const name of ['pr-checks.yml', 'build-and-release.yml']) {
+      const checks = workflow(name);
+      expect(checks).toContain('verify --skip-git true');
+      expect(checks).toContain("AIONUI_REPOSITORY=$(jq -r '.aionUi.repository'");
+      expect(checks).toContain('https://github.com/${AIONUI_REPOSITORY}.git');
+      expect(checks).toContain('refs/tags/${AIONUI_TAG}:refs/tags/${AIONUI_TAG}');
+      expect(checks).not.toContain('refs/tags/v2.1.49');
+    }
   });
 
   it('creates only an approved Ki-Buddy Draft Release from a product tag', () => {

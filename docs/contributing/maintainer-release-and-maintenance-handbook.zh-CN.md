@@ -1,7 +1,7 @@
 # Ki-Buddy 与 Ki-Core 仓库管理者发版和维护手册
 
 > 当前管理者：`xlihub`
-> 最近核对时间：2026-08-06
+> 最近核对时间：2026-08-07
 > 适用仓库：`xlihub/Ki-Buddy`、`xlihub/Ki-Core`
 
 本文按实际工作场景说明仓库管理者每天、每次上游更新和每次发版需要处理的事项。读完后，管理者应当能够判断下一步该同步哪个仓库、合并哪个 PR、批准哪个 workflow，以及遇到失败时是否允许重试或必须创建新版本。
@@ -34,18 +34,18 @@ Ki-Core 第一次正式发布已于 2026-08-06 完成。后续 Ki-Core 版本直
 
 ### Ki-Buddy 当前状态
 
-- 远端 `product/main` 尚未建立独立发版体系。
-- 本地功能分支正在实现 Ki-Core 产物消费。
-- `ki-core-v0.1.0` 已可用于正式 pin，但 Ki-Buddy 配置仍未写入 tag、commit 和六个平台 checksum。
-- 没有 Ki-Buddy 产品 CHANGELOG 和版本映射。
+- [PR #5](https://github.com/xlihub/Ki-Buddy/pull/5) 已合并，独立版本、四层映射、产品 CHANGELOG、动态产品配置和正式发布 workflow 已进入 `product/main`。
+- `ki-core-v0.1.0` 已作为正式 pin，对应 AionCore `v0.1.59`；六个平台 checksum 已写入并通过 PR CI 验证。
+- `ki-buddy-v0.1.0` 已创建，但首次正式运行在版本校验阶段失败：workflow 只取得 Ki-Buddy origin 的 tags，无法解析属于 `iOfficeAI/AionUi` 的 `v2.1.49`。
+- `0.1.0` 没有开始六平台正式构建，也没有创建 Release；该产品 tag 不得移动或删除。
+- 当前恢复版本为 `0.1.1`，继续使用同一个 AionUi、Ki-Core 和 AionCore 映射，并修复正式 workflow 的上游 tag 获取。
 - xlihub/Ki-Buddy 当前没有公开 Release。
 
 ### 当前允许的后续操作
 
-- 对齐 Ki-Buddy 的 AionUi 正式上游基线。
-- 在 Ki-Buddy 正式配置中固定 `ki-core-v0.1.0` 并验证六个平台 checksum。
-- 保留 Candidate Build 供未来 Ki-Core 未发布版本联调。
-- 建立 Ki-Buddy 独立版本、映射、产品 CHANGELOG 和正式发布 workflow。
+- 合并 `0.1.1` 恢复 PR 后，从新的 `product/main` 提交创建 `ki-buddy-v0.1.1`。
+- 继续保留 Candidate Build，供未来 Ki-Core 未发布版本联调。
+- 正式 workflow 从版本映射指定的官方 AionUi 仓库获取 tag，不在 Ki-Buddy origin 镜像上游 tag。
 
 ### 仍然禁止的操作
 
@@ -305,12 +305,14 @@ Ki-Buddy 不要求等待 AionUi 发布一个正好对应最新 AionCore 的版�
 
 版本准备 PR 应同时更新：
 
-- Ki-Buddy 自身版本。
+- `ki-buddy-version.txt` 中的 Ki-Buddy 自身版本。
 - 固定的 Ki-Core tag。
-- Ki-Buddy 与 AionUi、Ki-Core、AionCore 的映射。
+- `ki-buddy-release.json` 中当前 Ki-Buddy 与 AionUi、Ki-Core、AionCore 的映射。
 - `CHANGELOG.ki-buddy.md`。
 
 根 `package.json` 不属于 Ki-Buddy 版本准备文件，必须保持与本次映射的 AionUi commit 完全一致。产品包名、appId、协议、桌面可执行文件名和 Ki-Core pin 统一由 `ki-buddy-product.json` 管理，构建时动态生成最终 package metadata。
+
+`ki-buddy-release.json` 只保存当前待发布版本，不累积历史数组。已发布版本的映射保存在对应的不可变 `ki-buddy-v*` tag、产品 CHANGELOG 和 Release provenance 中；需要追溯时从对应 tag 读取该文件。
 
 `CHANGELOG.ki-buddy.md` 的单个版本条目使用以下结构：
 
@@ -363,6 +365,8 @@ Ki-Buddy 不要求等待 AionUi 发布一个正好对应最新 AionCore 的版�
 - `ki-buddy-stable` Environment 审批。
 
 Candidate run 只用于版本准备前联调，不得传入正式构建。
+
+正式校验必须先对当前版本映射执行不依赖 Git 历史的结构校验，再从映射指定的 `iOfficeAI/AionUi` 获取确切 tag，最后校验 tag commit 和根 `package.json`。不能假设 AionUi tag 已存在于 Ki-Buddy origin，也不应为了通过校验而复制上游 tag。
 
 Ki-Buddy 接入自己的 Sentry 项目后，先配置 `SENTRY_DSN`、`SENTRY_AUTH_TOKEN`、`SENTRY_ORG` 和 `SENTRY_PROJECT`，再将仓库变量 `KI_ENABLE_SENTRY` 改为 `true`。从下一次正式 tag 构建开始，应用会注入 DSN，Linux x64 job 会校验配置并上传 source maps。
 
