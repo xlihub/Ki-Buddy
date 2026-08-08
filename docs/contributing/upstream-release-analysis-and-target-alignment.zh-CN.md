@@ -208,8 +208,9 @@ AionCore 出现完整正式 Release
   → 进入上游候选版本列表
   → 管理员选择新的发布基准
   → 创建 Ki-Core 上游同步 PR
-  → product/main 固定到该 AionCore tag
+  → product/main 源码固定到该 AionCore tag，并记录待发布基准
   → Release Please 创建或更新 Ki-Core Release PR
+  → Release PR 提升已发布基准并增加版本映射
   → xlihub 合并并批准发布
   → 创建 ki-core-vX.Y.Z 和公开 GitHub Release
   → 六平台构建并上传 archive 与 checksums
@@ -235,6 +236,8 @@ AionCore 出现完整正式 Release
 
 已经发布的映射是 append-only，不得修改。当前尚未发布的版本允许在正式 tag 创建前修正映射。`prepared`、`candidate-built` 等过程状态不写入长期映射，以免失败后留下错误状态。
 
+上游同步 PR 只在 `ki-core-upstream-pending.json` 记录选定的 AionCore tag 和 peeled commit，保持 `ki-core-upstream.json` 与 `ki-core-versions.json` 不变。Release Please 在独立 Release PR 分支中把待发布基准提升为 `ki-core-upstream.json`、删除待发布文件，并为新 Ki-Core 版本增加映射。
+
 ### 6.3 CHANGELOG 规则
 
 - `CHANGELOG.md`：保持 AionCore 上游内容，随上游源码同步。
@@ -252,7 +255,7 @@ AionCore 出现完整正式 Release
 
 Ki-Core Release Please 已与 AionCore 保持同一状态机：
 
-- 普通 `product/main` push：创建或更新 Release PR。
+- 普通 `product/main` push：创建或更新 Release PR，并在该 PR 分支提升待发布基准与更新版本映射。
 - Release PR 合并：创建 tag/Release，并显式 dispatch 构建。
 - Release merge commit 不得再生成下一版本 PR。
 - `xlihub` 的发布审批保留在正式发布入口。

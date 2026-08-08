@@ -157,10 +157,12 @@ Ki-Core `main` 只承担上游镜像职责。同步时应记录：
 
 ### 3.3 创建上游同步 PR
 
+映射文件的状态转换以[上游发布分析与目标对齐的映射规则](upstream-release-analysis-and-target-alignment.zh-CN.md#62-映射规则)为准，本手册只列操作检查项。
+
 同步 PR 进入 Ki-Core `product/main`，内容应包括：
 
 - 合入指定 AionCore tag。
-- 更新当前上游 tag 和 peeled commit。
+- 按上述映射规则记录选定的上游 tag 和 peeled commit。
 - 保持 Ki-Core 产品发布配置不被上游文件覆盖。
 
 纯上游同步应使用能够产生 patch 版本的 Conventional Commit，例如 `fix(upstream): sync AionCore vX.Y.Z`。该提交会由 Release Please 写入下一版 `CHANGELOG.ki-core.md`，并在 Release PR 分支自动增加版本映射。不要使用不会触发版本变化的 `chore(upstream)` 作为常规同步提交标题。
@@ -172,12 +174,12 @@ Ki-Core `main` 只承担上游镜像职责。同步时应记录：
 合并前确认：
 
 - CI 成功。
-- 映射 tag 与 commit 能在上游远端验证。
+- 待发布基准的 tag 与 commit 能在上游远端验证。
 - `CHANGELOG.md` 保持上游内容。
 - `CHANGELOG.ki-core.md` 只记录 Ki-Core 产品内容和本次上游同步。
 - 没有修改 AionCore workspace version 来代替 Ki-Core 产品版本。
 
-合并后，Release Please 应创建或更新 Ki-Core Release PR。
+合并后，Release Please 应创建或更新 Ki-Core Release PR，并在该 PR 分支完成上述映射状态转换。同步 PR 与 Release PR 仍然分别审查。
 
 ## 4. 场景：准备 Ki-Core 正式版本
 
@@ -191,6 +193,7 @@ Release PR 应满足：
 - 版本符合 Ki-Core 自己的 SemVer。
 - 纯 AionCore 同步通常增加 patch。
 - CHANGELOG 同时能看到 Ki-Core 变化和同步的 AionCore tag。
+- 上述映射状态转换已在 Release PR diff 中完成。
 - 映射表中没有重复 Ki-Core 版本或 tag。
 
 若纯同步从 `0.1.0` 跳到 `0.2.0`，不要合并。先检查：
