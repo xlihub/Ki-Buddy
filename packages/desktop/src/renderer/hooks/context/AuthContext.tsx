@@ -88,6 +88,12 @@ function clearAuthCache(): void {
   }
 }
 
+function clearSWRCache(cache: ReturnType<typeof useSWRConfig>['cache']): void {
+  for (const key of cache.keys()) {
+    cache.delete(key);
+  }
+}
+
 async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> {
   try {
     const response = await fetch(AUTH_USER_ENDPOINT, {
@@ -288,9 +294,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       } catch (error) {
         console.error('Failed to clear Ki-Buddy main-process session:', error);
       } finally {
-        for (const key of swrCache.keys()) {
-          swrCache.delete(key);
-        }
+        clearSWRCache(swrCache);
         setUser(null);
         setStatus('unauthenticated');
         setReady(true);
@@ -312,9 +316,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     } catch (error) {
       console.error('Logout request failed:', error);
     } finally {
-      for (const key of swrCache.keys()) {
-        swrCache.delete(key);
-      }
+      clearSWRCache(swrCache);
       setUser(null);
       setStatus('unauthenticated');
       // Clear cache on logout for security

@@ -4,7 +4,7 @@ import { initReactI18next } from 'react-i18next';
 import { configService } from '@/common/config/configService';
 import { ipcBridge } from '@/common';
 import i18nConfig from '@/common/config/i18n-config.json';
-import { KI_BUDDY_DEFAULT_LANGUAGE, resolveLanguagePreference } from '@/common/ki-buddy';
+import { KI_BUDDY_DEFAULT_LANGUAGE, resolveLanguagePreference } from '@/common/platform/ki-buddy';
 import {
   DEFAULT_LANGUAGE,
   normalizeLanguageCode,

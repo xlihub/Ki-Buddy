@@ -1,4 +1,4 @@
-import productConfig from '../../../../../ki-buddy-product.json';
+import productConfig from '../../../../../../ki-buddy-product.json';
 import {
   DEFAULT_LANGUAGE,
   SUPPORTED_LANGUAGES,

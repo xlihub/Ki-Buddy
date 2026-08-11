@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { KI_BUDDY_DEFAULT_LANGUAGE, resolveLanguagePreference } from '@/common/ki-buddy';
+import { KI_BUDDY_DEFAULT_LANGUAGE, resolveLanguagePreference } from '@/common/platform/ki-buddy';
 
 describe('Ki-Buddy language preference', () => {
   it('uses Chinese for a new Ki-Buddy user on an English system', () => {

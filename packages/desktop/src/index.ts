@@ -75,7 +75,7 @@ import { readCloseToTraySetting } from './process/utils/closeToTraySetting';
 import { createKiBuddyCoreAuthOptions } from './process/ki-buddy/bootstrap';
 import { registerKiBuddyAuthBridge } from './process/ki-buddy/authBridge';
 import { resolveKiBuddyCoreDataPath } from './process/ki-buddy/coreDataPath';
-import { KI_BUDDY_DEFAULT_LANGUAGE, resolveLanguagePreference } from './common/ki-buddy';
+import { KI_BUDDY_DEFAULT_LANGUAGE, resolveLanguagePreference } from './common/platform/ki-buddy';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
 
