@@ -63,4 +63,15 @@ describe('configService Core authentication transport', () => {
       })
     );
   });
+
+  it('retries loading settings after authentication becomes available', async () => {
+    fetchMock
+      .mockRejectedValueOnce(new Error('Core authentication required'))
+      .mockResolvedValueOnce(jsonResponse({ language: 'en-US', 'theme.activeId': 'light', 'theme.userThemes': [] }));
+
+    await expect(configService.initialize()).rejects.toThrow('Core authentication required');
+    await configService.initialize();
+
+    expect(configService.get('language')).toBe('en-US');
+  });
 });

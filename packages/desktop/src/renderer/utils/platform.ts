@@ -19,6 +19,16 @@ export const isElectronDesktop = (): boolean => {
   return typeof window !== 'undefined' && Boolean(window.electronAPI);
 };
 
+/** Returns whether the renderer is running with the Ki-Buddy authentication capability. */
+export const isKiBuddyDesktopRuntime = (): boolean => {
+  return Boolean(getKiBuddyAuthApi());
+};
+
+/** Returns the product authentication API exposed by Ki-Buddy preload, when available. */
+export const getKiBuddyAuthApi = () => {
+  return typeof window === 'undefined' ? undefined : window.electronAPI?.kiBuddyAuth;
+};
+
 /**
  * Check if running on macOS
  * 检测是否运行在 macOS

@@ -49,7 +49,10 @@ function readProductConfig(projectRoot) {
     'Ki-Buddy product configuration'
   );
   if (config.schemaVersion !== 1) throw new Error('Unsupported Ki-Buddy product configuration schema');
-  requireExactKeys(config.defaults, ['language'], 'Ki-Buddy product defaults');
+  requireExactKeys(config.defaults, ['agentsBaseUrl', 'language'], 'Ki-Buddy product defaults');
+  if (config.defaults.agentsBaseUrl !== 'https://ksapi.kingsware.cn') {
+    throw new Error('Ki-Buddy default Agents base URL must use the public production deployment');
+  }
   if (config.defaults.language !== 'zh-CN') {
     throw new Error('Ki-Buddy default language must be zh-CN');
   }

@@ -7,8 +7,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const electronMock = vi.hoisted(() => ({
+  agentsFetch: vi.fn(),
+  fromPartition: vi.fn(),
   handlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
   removeCookie: vi.fn(),
+  setCertificateVerifyProc: vi.fn(),
   setCookie: vi.fn(),
 }));
 
@@ -26,6 +29,7 @@ vi.mock('electron', () => ({
     }),
   },
   session: {
+    fromPartition: electronMock.fromPartition,
     defaultSession: {
       cookies: {
         remove: electronMock.removeCookie,
@@ -36,7 +40,7 @@ vi.mock('electron', () => ({
 }));
 
 vi.mock('@/process/ki-buddy/CredentialStore', () => ({
-  SafeStorageCredentialStore: class {
+  KeytarCredentialStore: class {
     clear = credentialStoreMock.clear;
     load = credentialStoreMock.load;
     save = credentialStoreMock.save;
@@ -45,9 +49,69 @@ vi.mock('@/process/ki-buddy/CredentialStore', () => ({
 
 import { registerKiBuddyAuthBridge } from '@/process/ki-buddy/authBridge';
 
+function registerBridgeWithSuccessfulLogin() {
+  const fetchMock = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          errorCode: 0,
+          responseBody: {
+            uuid: 'agents-user-42',
+            userName: 'agents-user@example.com',
+            token: 'agents-token',
+          },
+        }),
+        { status: 200 }
+      )
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            user_id: 'core-user-42',
+            user_type: 'aionpro',
+            external_user_id: 'projected-user',
+            session_generation: 0,
+          },
+        }),
+        { status: 200 }
+      )
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            user: { id: 'core-user-42', username: 'agents-user@example.com' },
+            session_generation: 0,
+          },
+        }),
+        { status: 200, headers: { 'set-cookie': 'aionui-session=core-token; HttpOnly; Max-Age=3600' } }
+      )
+    )
+    .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }));
+  electronMock.agentsFetch.mockImplementation(fetchMock);
+  vi.stubGlobal('fetch', fetchMock);
+  registerKiBuddyAuthBridge({
+    bootstrapSecret: 'bootstrap-secret',
+    coreCsrfToken: 'core-csrf-token',
+    getCoreBaseUrl: () => 'http://127.0.0.1:39123',
+  });
+  return fetchMock;
+}
+
 describe('Ki-Buddy authentication IPC bridge', () => {
   beforeEach(() => {
     electronMock.handlers.clear();
+    electronMock.agentsFetch.mockReset();
+    electronMock.fromPartition.mockReset();
+    electronMock.setCertificateVerifyProc.mockReset();
+    electronMock.fromPartition.mockReturnValue({
+      fetch: electronMock.agentsFetch,
+      setCertificateVerifyProc: electronMock.setCertificateVerifyProc,
+    });
     electronMock.removeCookie.mockReset();
     electronMock.setCookie.mockReset();
     electronMock.removeCookie.mockResolvedValue(undefined);
@@ -59,58 +123,9 @@ describe('Ki-Buddy authentication IPC bridge', () => {
     delete (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken;
   });
 
-  it('keeps Core tokens in main, installs renderer cookies, and clears them on logout', async () => {
-    const fetchMock = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            errorCode: 0,
-            responseBody: {
-              uuid: 'agents-user-42',
-              userName: 'agents-user@example.com',
-              token: 'agents-token',
-            },
-          }),
-          { status: 200 }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              user_id: 'core-user-42',
-              user_type: 'aionpro',
-              external_user_id: 'projected-user',
-              session_generation: 0,
-            },
-          }),
-          { status: 200 }
-        )
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            success: true,
-            data: {
-              user: { id: 'core-user-42', username: 'agents-user@example.com' },
-              session_generation: 0,
-            },
-          }),
-          { status: 200, headers: { 'set-cookie': 'aionui-session=core-token; HttpOnly; Max-Age=3600' } }
-        )
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    registerKiBuddyAuthBridge({
-      bootstrapSecret: 'bootstrap-secret',
-      coreCsrfToken: 'core-csrf-token',
-      getCoreBaseUrl: () => 'http://127.0.0.1:39123',
-    });
+  it('installs projected Core cookies while keeping tokens in main', async () => {
+    registerBridgeWithSuccessfulLogin();
     const loginHandler = electronMock.handlers.get('ki-buddy-auth:login');
-    const logoutHandler = electronMock.handlers.get('ki-buddy-auth:logout');
 
     await loginHandler?.(null, {
       baseUrl: 'https://agents.example.com',
@@ -127,23 +142,51 @@ describe('Ki-Buddy authentication IPC bridge', () => {
         secure: true,
       })
     );
-    expect(electronMock.setCookie).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: 'aionui-csrf-token',
-        value: 'core-csrf-token',
-        httpOnly: false,
-        sameSite: 'no_restriction',
-        secure: true,
-      })
-    );
     expect((globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken).toBe('core-token');
     expect((globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken).toBe('core-csrf-token');
+  });
+
+  it('routes Agents login through the isolated network session without automatic redirects', async () => {
+    registerBridgeWithSuccessfulLogin();
+    const loginHandler = electronMock.handlers.get('ki-buddy-auth:login');
+
+    await loginHandler?.(null, {
+      baseUrl: 'https://agents.example.com',
+      loginName: 'agents-user@example.com',
+      password: 'password',
+    });
+
+    expect(electronMock.fromPartition).toHaveBeenCalledWith('ki-buddy-agents-network', { cache: false });
+    expect(electronMock.agentsFetch).toHaveBeenCalledWith(
+      'https://agents.example.com/kagent/login',
+      expect.objectContaining({ method: 'POST', redirect: 'manual' })
+    );
+  });
+
+  it('clears projected Core state on logout', async () => {
+    registerBridgeWithSuccessfulLogin();
+    const loginHandler = electronMock.handlers.get('ki-buddy-auth:login');
+    const logoutHandler = electronMock.handlers.get('ki-buddy-auth:logout');
+    await loginHandler?.(null, {
+      baseUrl: 'https://agents.example.com',
+      loginName: 'agents-user@example.com',
+      password: 'password',
+    });
 
     await logoutHandler?.(null);
 
     expect(credentialStoreMock.clear).toHaveBeenCalledOnce();
-    expect(electronMock.removeCookie).toHaveBeenCalledWith('http://127.0.0.1:39123', 'aionui-session');
-    expect(electronMock.removeCookie).toHaveBeenCalledWith('http://127.0.0.1:39123', 'aionui-csrf-token');
     expect((globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken).toBeUndefined();
+  });
+
+  it('rejects malformed login IPC requests before making a network request', async () => {
+    registerBridgeWithSuccessfulLogin();
+    const loginHandler = electronMock.handlers.get('ki-buddy-auth:login');
+
+    await expect(loginHandler?.(null, { baseUrl: 'https://agents.example.com' })).resolves.toEqual({
+      success: false,
+      code: 'contractError',
+    });
+    expect(electronMock.agentsFetch).not.toHaveBeenCalled();
   });
 });

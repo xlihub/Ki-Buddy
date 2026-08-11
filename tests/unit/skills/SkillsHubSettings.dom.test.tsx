@@ -89,6 +89,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('@/renderer/services/i18n', () => ({ syncLanguageFromConfig: vi.fn() }));
+
 import SkillsHubSettings from '@/renderer/pages/settings/SkillsSettings/SkillsHubSettings';
 
 describe('SkillsHubSettings', () => {

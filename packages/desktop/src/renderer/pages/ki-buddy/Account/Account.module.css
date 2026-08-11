@@ -1,0 +1,10 @@
+.avatar {
+  color: var(--text-white);
+  background: linear-gradient(135deg, rgb(var(--primary-5)), rgb(var(--primary-7)));
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.menuPopup {
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--color-text-1) 12%, transparent);
+}

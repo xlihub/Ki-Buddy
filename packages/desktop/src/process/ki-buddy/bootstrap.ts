@@ -6,6 +6,7 @@ export type KiBuddyCoreAuthOptions = {
   identityMode: 'aionpro';
 };
 
+/** Creates ephemeral credentials for Ki-Buddy's private Core bootstrap boundary. */
 export function createKiBuddyCoreAuthOptions(): KiBuddyCoreAuthOptions {
   return {
     bootstrapSecret: randomBytes(32).toString('base64url'),

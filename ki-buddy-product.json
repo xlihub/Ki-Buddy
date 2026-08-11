@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "defaults": {
+    "agentsBaseUrl": "https://ksapi.kingsware.cn",
     "language": "zh-CN"
   },
   "packageMetadata": {

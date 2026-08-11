@@ -2,7 +2,8 @@ import { app, ipcMain, session } from 'electron';
 import { KI_BUDDY_AUTH_CHANNELS } from '@/common/platform/kiBuddyAuth';
 import type { KiBuddyLoginRequest, KiBuddyLoginResult } from '@/common/types/platform/kiBuddyAuth';
 import { AgentsAuthService } from './AgentsAuthService';
-import { SafeStorageCredentialStore } from './CredentialStore';
+import { createAgentsNetworkFetch } from './agentsNetworkClient';
+import { KeytarCredentialStore } from './CredentialStore';
 
 type RegisterKiBuddyAuthOptions = {
   bootstrapSecret: string;
@@ -71,11 +72,13 @@ async function clearCoreSession(coreBaseUrl: string): Promise<void> {
   ]);
 }
 
+/** Registers the dedicated Ki-Buddy authentication IPC handlers in the main process. */
 export function registerKiBuddyAuthBridge(options: RegisterKiBuddyAuthOptions): AgentsAuthService {
   (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken = options.coreCsrfToken;
   const service = new AgentsAuthService({
+    agentsFetch: createAgentsNetworkFetch(),
     bootstrapSecret: options.bootstrapSecret,
-    credentialStore: new SafeStorageCredentialStore(app.getPath('userData')),
+    credentialStore: new KeytarCredentialStore(app.getPath('userData')),
     fetch,
     getCoreBaseUrl: options.getCoreBaseUrl,
     setCoreSessionCookie: (header) => setCoreSessionCookie(options.getCoreBaseUrl(), options.coreCsrfToken, header),

@@ -1,11 +1,23 @@
+export type KiBuddyAgentsProfile = {
+  userId: string;
+  username: string;
+  displayName: string;
+  email?: string;
+  phone?: string;
+  organization?: string;
+  roles: string[];
+  deploymentUrl: string;
+};
+
 export type KiBuddyAuthUser = {
   id: string;
   username: string;
+  agents: KiBuddyAgentsProfile;
 };
 
 export type KiBuddyAuthSession =
   | { status: 'authenticated'; user: KiBuddyAuthUser }
-  | { status: 'unauthenticated'; user: null };
+  | { status: 'unauthenticated'; user: null; cleanupRequired?: true };
 
 export type KiBuddyLoginRequest = {
   baseUrl: string;

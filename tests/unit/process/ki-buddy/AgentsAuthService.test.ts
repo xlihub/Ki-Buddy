@@ -35,9 +35,18 @@ describe('AgentsAuthService', () => {
             responseBody: {
               uuid: 'agents-user-42',
               userName: 'agents-user@example.com',
+              name: 'Agents User',
               email: 'agents-user@example.com',
+              phone: '13800138000',
+              orgName: 'Kingsoft AI',
+              roles: [
+                { id: 'designer', name: '设计人员' },
+                { id: 'reviewer', name: '审核人员' },
+              ],
               token: 'agents-token',
               expiresIn: 7200,
+              dify_access_token: 'must-not-reach-renderer',
+              routes: [{ path: '/admin' }],
             },
           }),
           { status: 200, headers: { 'content-type': 'application/json' } }
@@ -77,6 +86,7 @@ describe('AgentsAuthService', () => {
       );
 
     const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
       credentialStore: {
         load: loadSessionMock,
@@ -98,7 +108,20 @@ describe('AgentsAuthService', () => {
       success: true,
       session: {
         status: 'authenticated',
-        user: { id: 'core-user-42', username: 'agents-user@example.com' },
+        user: {
+          id: 'core-user-42',
+          username: 'agents-user@example.com',
+          agents: {
+            userId: 'agents-user-42',
+            username: 'agents-user@example.com',
+            displayName: 'Agents User',
+            email: 'agents-user@example.com',
+            phone: '13800138000',
+            organization: 'Kingsoft AI',
+            roles: ['设计人员', '审核人员'],
+            deploymentUrl: 'https://agents.example.com',
+          },
+        },
       },
     });
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://agents.example.com/kagent/login');
@@ -140,7 +163,10 @@ describe('AgentsAuthService', () => {
             responseBody: {
               uuid: 'agents-user-42',
               userName: 'agents-user@example.com',
+              name: 'Agents User',
               email: 'agents-user@example.com',
+              orgName: 'Kingsoft AI',
+              roles: [{ id: 'designer', name: '设计人员' }],
             },
           }),
           { status: 200, headers: { 'content-type': 'application/json' } }
@@ -183,6 +209,7 @@ describe('AgentsAuthService', () => {
       );
 
     const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
       credentialStore: {
         load: loadSessionMock,
@@ -198,7 +225,19 @@ describe('AgentsAuthService', () => {
 
     expect(session).toEqual({
       status: 'authenticated',
-      user: { id: 'core-user-42', username: 'agents-user@example.com' },
+      user: {
+        id: 'core-user-42',
+        username: 'agents-user@example.com',
+        agents: {
+          userId: 'agents-user-42',
+          username: 'agents-user@example.com',
+          displayName: 'Agents User',
+          email: 'agents-user@example.com',
+          organization: 'Kingsoft AI',
+          roles: ['设计人员'],
+          deploymentUrl: 'https://agents.example.com',
+        },
+      },
     });
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://agents.example.com/kagent/system/user/validateToken');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
@@ -209,6 +248,46 @@ describe('AgentsAuthService', () => {
     expect(clearSessionMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['rejected token', new Response(null, { status: 401 })],
+    [
+      'mismatched identity',
+      new Response(
+        JSON.stringify({
+          errorCode: 0,
+          responseBody: { uuid: 'different-agents-user', userName: 'other@example.com' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      ),
+    ],
+  ])('requests renderer cleanup after restoring a %s', async (_scenario, response) => {
+    loadSessionMock.mockResolvedValue({
+      baseUrl: 'https://agents.example.com',
+      token: 'invalid-agents-token',
+      userId: 'agents-user-42',
+    });
+    fetchMock.mockResolvedValue(response);
+    const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
+      bootstrapSecret: 'bootstrap-secret',
+      credentialStore: {
+        load: loadSessionMock,
+        save: saveSessionMock,
+        clear: clearSessionMock,
+      },
+      fetch: fetchMock,
+      getCoreBaseUrl: () => 'http://127.0.0.1:39123',
+      setCoreSessionCookie: setCoreCookieMock,
+    });
+
+    await expect(service.getSession()).resolves.toEqual({
+      status: 'unauthenticated',
+      user: null,
+      cleanupRequired: true,
+    });
+    expect(clearSessionMock).toHaveBeenCalledOnce();
+  });
+
   it('does not forward login credentials across an origin redirect', async () => {
     fetchMock.mockResolvedValue(
       new Response(null, {
@@ -217,6 +296,7 @@ describe('AgentsAuthService', () => {
       })
     );
     const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
       credentialStore: {
         load: loadSessionMock,
@@ -264,6 +344,7 @@ describe('AgentsAuthService', () => {
   ])('categorizes $name without contacting Core', async ({ response, expected }) => {
     fetchMock.mockResolvedValue(response);
     const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
       credentialStore: {
         load: loadSessionMock,
@@ -288,6 +369,7 @@ describe('AgentsAuthService', () => {
   it('categorizes a failed Agents connection as a network error', async () => {
     fetchMock.mockRejectedValue(new TypeError('fetch failed'));
     const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
       credentialStore: {
         load: loadSessionMock,
@@ -347,6 +429,7 @@ describe('AgentsAuthService', () => {
       )
       .mockImplementationOnce(coreResponse);
     const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
       credentialStore: {
         load: loadSessionMock,
@@ -415,6 +498,7 @@ describe('AgentsAuthService', () => {
         )
       );
     const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
       credentialStore: {
         load: loadSessionMock,
@@ -449,6 +533,7 @@ describe('AgentsAuthService', () => {
       })
     );
     const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
       credentialStore: {
         load: loadSessionMock,
@@ -472,5 +557,35 @@ describe('AgentsAuthService', () => {
       body: expect.stringContaining('agents-v1-'),
     });
     expect(fetchMock.mock.calls[0]?.[0]).not.toContain('agents.example.com');
+  });
+
+  it('clears the Core runtime before reporting a credential cleanup failure', async () => {
+    loadSessionMock.mockResolvedValue({
+      baseUrl: 'https://agents.example.com',
+      token: 'saved-agents-token',
+      userId: 'agents-user-42',
+    });
+    clearSessionMock.mockRejectedValue(new Error('keychain denied deletion'));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
+      bootstrapSecret: 'bootstrap-secret',
+      credentialStore: {
+        load: loadSessionMock,
+        save: saveSessionMock,
+        clear: clearSessionMock,
+      },
+      fetch: fetchMock,
+      getCoreBaseUrl: () => 'http://127.0.0.1:39123',
+      setCoreSessionCookie: setCoreCookieMock,
+    });
+
+    await expect(service.logout({ clearCoreSessionCookie: clearCoreCookieMock })).rejects.toThrow(
+      'keychain denied deletion'
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(clearCoreCookieMock).toHaveBeenCalledOnce();
+    await expect(service.getSession()).resolves.toEqual({ status: 'unauthenticated', user: null });
   });
 });

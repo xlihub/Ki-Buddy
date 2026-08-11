@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import { normalizeAgentsBaseUrl } from '@/common/platform/ki-buddy';
 import type {
   KiBuddyAuthSession,
   KiBuddyAuthUser,
@@ -20,6 +21,7 @@ export type AgentsCredentialStore = {
 };
 
 type AgentsAuthServiceDependencies = {
+  agentsFetch: typeof fetch;
   bootstrapSecret: string;
   credentialStore: AgentsCredentialStore;
   fetch: typeof fetch;
@@ -29,6 +31,10 @@ type AgentsAuthServiceDependencies = {
 
 type AgentsIdentity = {
   email?: string;
+  name?: string;
+  organization?: string;
+  phone?: string;
+  roles: string[];
   userId: string;
   username: string;
 };
@@ -40,6 +46,8 @@ type CoreSessionProjection = {
   user: KiBuddyAuthUser;
 };
 
+type CoreUser = Pick<KiBuddyAuthUser, 'id' | 'username'>;
+
 type CoreProjectionResult =
   | { success: true; projection: CoreSessionProjection }
   | { success: false; code: 'networkError' | 'serverError' | 'contractError' };
@@ -48,16 +56,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function normalizeBaseUrl(value: string): string {
-  const url = new URL(value.trim());
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('unsupported protocol');
-  }
-  if (url.username || url.password || url.search || url.hash) {
-    throw new Error('base URL must not contain credentials, query, or fragment');
-  }
-  url.pathname = url.pathname.replace(/\/+$/, '');
-  return url.toString().replace(/\/$/, '');
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function parseRoleNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((role) => {
+    if (typeof role === 'string') {
+      const name = optionalString(role);
+      return name ? [name] : [];
+    }
+    if (!isRecord(role)) return [];
+    const name = optionalString(role.name);
+    return name ? [name] : [];
+  });
 }
 
 function externalIdentity(baseUrl: string, userId: string): string {
@@ -94,7 +107,11 @@ function parseAgentsIdentity(body: unknown): AgentsIdentity | null {
     return null;
   }
   return {
-    email: typeof responseBody.email === 'string' ? responseBody.email : undefined,
+    email: optionalString(responseBody.email),
+    name: optionalString(responseBody.name),
+    organization: optionalString(responseBody.orgName),
+    phone: optionalString(responseBody.phone),
+    roles: parseRoleNames(responseBody.roles),
     userId: responseBody.uuid,
     username: responseBody.userName,
   };
@@ -109,7 +126,7 @@ function parseAgentsLogin(body: unknown): AgentsLoginBody | null {
   return { ...identity, token: responseBody.token };
 }
 
-function parseCoreUser(body: unknown): KiBuddyAuthUser | null {
+function parseCoreUser(body: unknown): CoreUser | null {
   if (!isRecord(body) || body.success !== true || !isRecord(body.data) || !isRecord(body.data.user)) {
     return null;
   }
@@ -131,13 +148,16 @@ function isCoreProvisionResponse(body: unknown): boolean {
   );
 }
 
+/** Owns the Ki-Buddy Agents session and its projected Core user session. */
 export class AgentsAuthService {
   private activeIdentity: Pick<StoredAgentsSession, 'baseUrl' | 'userId'> | null = null;
   private session: KiBuddyAuthSession = { status: 'unauthenticated', user: null };
   private restoreAttempted = false;
 
+  /** Creates the service with explicit network, credential, and Core-session dependencies. */
   constructor(private readonly dependencies: AgentsAuthServiceDependencies) {}
 
+  /** Restores a saved Agents token and projects its verified identity into Core. */
   async getSession(): Promise<KiBuddyAuthSession> {
     if (this.session.status === 'authenticated' || this.restoreAttempted) {
       return this.session;
@@ -156,7 +176,7 @@ export class AgentsAuthService {
 
     let response: Response;
     try {
-      response = await this.dependencies.fetch(`${stored.baseUrl}/kagent/system/user/validateToken`, {
+      response = await this.dependencies.agentsFetch(`${stored.baseUrl}/kagent/system/user/validateToken`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${stored.token}` },
         redirect: 'manual',
@@ -167,6 +187,7 @@ export class AgentsAuthService {
 
     if (response.status === 401 || response.status === 403) {
       await this.dependencies.credentialStore.clear();
+      this.session = { status: 'unauthenticated', user: null, cleanupRequired: true };
       return this.session;
     }
     if (!response.ok) {
@@ -176,6 +197,7 @@ export class AgentsAuthService {
     const identity = parseAgentsIdentity(await readJson(response));
     if (!identity || identity.userId !== stored.userId) {
       await this.dependencies.credentialStore.clear();
+      this.session = { status: 'unauthenticated', user: null, cleanupRequired: true };
       return this.session;
     }
 
@@ -192,20 +214,17 @@ export class AgentsAuthService {
     return this.session;
   }
 
+  /** Authenticates with Agents and activates the matching isolated Core user. */
   async login(request: KiBuddyLoginRequest): Promise<KiBuddyLoginResult> {
-    let baseUrl: string;
-    try {
-      baseUrl = normalizeBaseUrl(request.baseUrl);
-    } catch {
-      return { success: false, code: 'contractError' };
-    }
+    const baseUrl = normalizeAgentsBaseUrl(request.baseUrl);
+    if (!baseUrl) return { success: false, code: 'contractError' };
 
     let agentsResponse: Response;
     try {
       const form = new FormData();
       form.append('username', request.loginName.trim());
       form.append('password', await hashLoginPassword(request.password));
-      agentsResponse = await this.dependencies.fetch(`${baseUrl}/kagent/login`, {
+      agentsResponse = await this.dependencies.agentsFetch(`${baseUrl}/kagent/login`, {
         method: 'POST',
         body: form,
         redirect: 'manual',
@@ -258,6 +277,7 @@ export class AgentsAuthService {
     }
   }
 
+  /** Revokes the Core projection and removes all locally stored session credentials. */
   async logout(options: { clearCoreSessionCookie: () => Promise<void> }): Promise<KiBuddyAuthSession> {
     let identity = this.activeIdentity;
     if (!identity) {
@@ -269,7 +289,12 @@ export class AgentsAuthService {
       }
     }
 
-    await this.dependencies.credentialStore.clear();
+    let credentialCleanupError: unknown;
+    try {
+      await this.dependencies.credentialStore.clear();
+    } catch (error) {
+      credentialCleanupError = error;
+    }
     if (identity) {
       const coreBaseUrl = this.dependencies.getCoreBaseUrl();
       try {
@@ -293,6 +318,7 @@ export class AgentsAuthService {
     this.session = { status: 'unauthenticated', user: null };
     this.restoreAttempted = true;
     await options.clearCoreSessionCookie();
+    if (credentialCleanupError) throw credentialCleanupError;
     return this.session;
   }
 
@@ -348,6 +374,24 @@ export class AgentsAuthService {
       return { success: false, code: 'contractError' };
     }
 
-    return { success: true, projection: { setCookieHeader: setCookie, user: coreUser } };
+    return {
+      success: true,
+      projection: {
+        setCookieHeader: setCookie,
+        user: {
+          ...coreUser,
+          agents: {
+            userId: agentsUser.userId,
+            username: agentsUser.username,
+            displayName: agentsUser.name ?? agentsUser.username,
+            email: agentsUser.email,
+            phone: agentsUser.phone,
+            organization: agentsUser.organization,
+            roles: agentsUser.roles,
+            deploymentUrl: baseUrl,
+          },
+        },
+      },
+    };
   }
 }

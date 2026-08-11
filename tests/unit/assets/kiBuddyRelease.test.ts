@@ -26,8 +26,11 @@ describe('Ki-Buddy product release identity', () => {
     expect(mapping.release.version).toBe(readProductVersion(projectRoot));
   });
 
-  it('keeps the Ki-Buddy language default in the product configuration', () => {
-    expect(readProductConfig(projectRoot).defaults).toEqual({ language: 'zh-CN' });
+  it('keeps the Ki-Buddy defaults in the product configuration', () => {
+    expect(readProductConfig(projectRoot).defaults).toEqual({
+      agentsBaseUrl: 'https://ksapi.kingsware.cn',
+      language: 'zh-CN',
+    });
   });
 
   it('rejects a release mapping that does not describe the current product version', () => {

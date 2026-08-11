@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const getSessionMock = vi.fn();
 const loginMock = vi.fn();
 const logoutMock = vi.fn();
+const syncLanguageFromConfigMock = vi.fn().mockResolvedValue(undefined);
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -32,6 +33,18 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+vi.mock('@/renderer/services/i18n', () => ({
+  changeLanguage: vi.fn().mockResolvedValue(undefined),
+  syncLanguageFromConfig: syncLanguageFromConfigMock,
+}));
+
+vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
+  usePreviewContext: () => ({
+    closePreview: vi.fn(),
+    clearPreviewForScope: vi.fn(),
+  }),
+}));
+
 vi.mock('@renderer/pages/guid', () => ({ default: () => <div>guid-page</div> }));
 vi.mock('@renderer/pages/conversation', () => ({ default: () => <div>conversation-page</div> }));
 vi.mock('@/renderer/components/settings/SettingsModal/contents/AboutModalContent', () => ({
@@ -40,6 +53,21 @@ vi.mock('@/renderer/components/settings/SettingsModal/contents/AboutModalContent
 
 import PanelRoute from '@/renderer/components/layout/Router';
 import { AuthProvider, useAuth } from '@/renderer/hooks/context/AuthContext';
+
+const authenticatedUser = {
+  id: 'core-user-42',
+  username: 'agents-user@example.com',
+  agents: {
+    userId: 'agents-user-42',
+    username: 'agents-user@example.com',
+    displayName: 'Agents User',
+    email: 'agents-user@example.com',
+    phone: '13800138000',
+    organization: 'Kingsoft AI',
+    roles: ['设计人员', '审核人员'],
+    deploymentUrl: 'https://agents.example.com',
+  },
+};
 
 type TestElectronApi = NonNullable<Window['electronAPI']> & {
   kiBuddyAuth: {
@@ -64,12 +92,14 @@ const TestLayout: React.FC = () => {
 describe('Ki-Buddy Agents authentication gate', () => {
   beforeEach(() => {
     window.location.hash = '#/conversation/existing-history';
+    localStorage.clear();
     localStorage.setItem('ki-buddy.onboarding.openingGuideSeen_v1', 'true');
     getSessionMock.mockReset();
     getSessionMock.mockResolvedValue({ status: 'unauthenticated', user: null });
     loginMock.mockReset();
     logoutMock.mockReset();
     logoutMock.mockResolvedValue({ status: 'unauthenticated', user: null });
+    syncLanguageFromConfigMock.mockClear();
     (window.electronAPI as TestElectronApi).kiBuddyAuth = {
       getSession: getSessionMock,
       login: loginMock,
@@ -123,12 +153,90 @@ describe('Ki-Buddy Agents authentication gate', () => {
     expect(await screen.findByText('login.agentsDeployment')).toBeInTheDocument();
   });
 
+  it('prefills the public Agents deployment on the login page', async () => {
+    render(
+      <AuthProvider>
+        <PanelRoute layout={<TestLayout />} />
+      </AuthProvider>
+    );
+
+    expect(await screen.findByLabelText('login.agentsDeployment')).toHaveValue('https://ksapi.kingsware.cn');
+  });
+
+  it('prefills the last successful deployment from history', async () => {
+    localStorage.setItem(
+      'ki-buddy.login.successfulDeployments_v1',
+      JSON.stringify({
+        lastSuccessful: 'https://agents-two.example.com',
+        successfulUrls: ['https://agents-two.example.com', 'https://agents-one.example.com'],
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <PanelRoute layout={<TestLayout />} />
+      </AuthProvider>
+    );
+
+    const deploymentInput = await screen.findByLabelText('login.agentsDeployment');
+    expect(deploymentInput).toHaveValue('https://agents-two.example.com');
+  });
+
+  it('records a deployment only after authentication succeeds', async () => {
+    loginMock.mockResolvedValue({ success: false, code: 'invalidCredentials' });
+    const view = render(
+      <AuthProvider>
+        <PanelRoute layout={<TestLayout />} />
+      </AuthProvider>
+    );
+
+    fireEvent.change(await screen.findByLabelText('login.agentsDeployment'), {
+      target: { value: 'https://failed.example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('login.accountOrEmail'), {
+      target: { value: 'agents-user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('login.password'), {
+      target: { value: 'wrong-password' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'login.submit' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(localStorage.getItem('ki-buddy.login.successfulDeployments_v1')).toBeNull();
+
+    view.unmount();
+    loginMock.mockResolvedValue({
+      success: true,
+      session: { status: 'authenticated', user: authenticatedUser },
+    });
+    render(
+      <AuthProvider>
+        <PanelRoute layout={<TestLayout />} />
+      </AuthProvider>
+    );
+    fireEvent.change(await screen.findByLabelText('login.agentsDeployment'), {
+      target: { value: 'https://successful.example.com/' },
+    });
+    fireEvent.change(screen.getByLabelText('login.accountOrEmail'), {
+      target: { value: 'agents-user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText('login.password'), {
+      target: { value: 'correct-password' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'login.submit' }));
+
+    await screen.findByText('guid-page');
+    expect(JSON.parse(localStorage.getItem('ki-buddy.login.successfulDeployments_v1') ?? '{}')).toEqual({
+      lastSuccessful: 'https://successful.example.com',
+      successfulUrls: ['https://successful.example.com'],
+    });
+  });
+
   it('enters the empty business surface with the projected Core user after login', async () => {
     loginMock.mockResolvedValue({
       success: true,
       session: {
         status: 'authenticated',
-        user: { id: 'core-user-42', username: 'agents-user@example.com' },
+        user: authenticatedUser,
       },
     });
 
@@ -152,6 +260,7 @@ describe('Ki-Buddy Agents authentication gate', () => {
     expect(await screen.findByText('guid-page')).toBeInTheDocument();
     expect(screen.getByLabelText('current-user')).toHaveTextContent('core-user-42');
     expect(screen.queryByText('conversation-page')).not.toBeInTheDocument();
+    await waitFor(() => expect(syncLanguageFromConfigMock).toHaveBeenCalledOnce());
   });
 
   it('keeps the business surface locked until the Core user projection completes', async () => {
@@ -186,7 +295,7 @@ describe('Ki-Buddy Agents authentication gate', () => {
       success: true,
       session: {
         status: 'authenticated',
-        user: { id: 'core-user-42', username: 'agents-user@example.com' },
+        user: authenticatedUser,
       },
     });
     expect(await screen.findByText('guid-page')).toBeInTheDocument();
@@ -229,14 +338,14 @@ describe('Ki-Buddy Agents authentication gate', () => {
     await screen.findByText('login.agentsDeployment');
     fireEvent.click(screen.getByRole('button', { name: 'login.submit' }));
 
-    expect(await screen.findAllByText('login.errors.required')).toHaveLength(3);
+    expect(await screen.findAllByText('login.errors.required')).toHaveLength(2);
     expect(loginMock).not.toHaveBeenCalled();
   });
 
   it('clears the business surface after desktop logout', async () => {
     getSessionMock.mockResolvedValue({
       status: 'authenticated',
-      user: { id: 'core-user-42', username: 'agents-user@example.com' },
+      user: authenticatedUser,
     });
     window.location.hash = '#/guid';
     const swrCache = new Map<string, { data?: unknown }>();
@@ -257,12 +366,12 @@ describe('Ki-Buddy Agents authentication gate', () => {
     await waitFor(() => expect(swrCache.get('/api/assistants')?.data).toBeUndefined());
   });
 
-  it('reopens the static introduction from the desktop settings action', async () => {
+  it('routes an authenticated Ki-Buddy user to the account page', async () => {
     getSessionMock.mockResolvedValue({
       status: 'authenticated',
-      user: { id: 'core-user-42', username: 'agents-user@example.com' },
+      user: authenticatedUser,
     });
-    window.location.hash = '#/settings/about';
+    window.location.hash = '#/settings/account';
 
     render(
       <AuthProvider>
@@ -270,9 +379,8 @@ describe('Ki-Buddy Agents authentication gate', () => {
       </AuthProvider>
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'login.onboarding.replay' }));
-
-    expect(await screen.findByText('login.onboarding.toolSupportTitle')).toBeInTheDocument();
-    expect(localStorage.getItem('ki-buddy.onboarding.openingGuideSeen_v1')).toBeNull();
+    expect(await screen.findByText('Agents User')).toBeInTheDocument();
+    expect(screen.getByText('agents-user-42')).toBeInTheDocument();
+    expect(screen.getByText('login.onboarding.replayTitle')).toBeInTheDocument();
   });
 });

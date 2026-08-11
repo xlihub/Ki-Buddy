@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Tooltip } from '@arco-design/web-react';
 import { getSiderTooltipProps } from '@/renderer/utils/ui/siderTooltip';
+import { getKiBuddyAccountSettingsItem } from '@/renderer/pages/ki-buddy';
 
 /** Builtin settings tab IDs in display order (must match router paths). */
 export const BUILTIN_TAB_IDS = [
@@ -115,6 +116,8 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
 
     // Start with ordered builtin IDs, hiding desktop-only tabs in browser mode
     const result: SiderItem[] = BUILTIN_TAB_IDS.filter((id) => isDesktop || id !== 'pet').map((id) => builtinMap[id]);
+    const kiBuddyAccountItem = getKiBuddyAccountSettingsItem(t);
+    if (kiBuddyAccountItem) result.unshift(kiBuddyAccountItem);
 
     // Extension tabs with position anchoring
     const beforeMap = new Map<string, IExtensionSettingsTab[]>();

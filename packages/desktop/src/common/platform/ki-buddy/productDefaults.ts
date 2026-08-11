@@ -27,7 +27,27 @@ function configuredProductLanguage(): SupportedLanguage | undefined {
   return language as SupportedLanguage;
 }
 
+function configuredAgentsBaseUrl(): string | undefined {
+  const baseUrl = (productConfig as { defaults?: { agentsBaseUrl?: unknown } }).defaults?.agentsBaseUrl;
+  return typeof baseUrl === 'string' && baseUrl.trim() !== '' ? baseUrl.trim() : undefined;
+}
+
+export const KI_BUDDY_DEFAULT_AGENTS_BASE_URL = configuredAgentsBaseUrl();
 export const KI_BUDDY_DEFAULT_LANGUAGE = configuredProductLanguage();
+
+/** Validates and canonicalizes an Agents deployment URL for storage and requests. */
+export function normalizeAgentsBaseUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.username || url.password || url.search || url.hash) return null;
+    url.pathname = url.pathname.replace(/\/+$/, '');
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
 
 /** Resolves saved → product → system → global fallback using one rule for every startup phase. */
 export function resolveLanguagePreference(input: LanguagePreferenceInput): SupportedLanguage {

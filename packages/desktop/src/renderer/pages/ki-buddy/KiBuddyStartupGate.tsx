@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { syncLanguageFromConfig } from '@/renderer/services/i18n';
 import {
   hasSeenKiBuddyOpeningGuide,
   KI_BUDDY_OPENING_GUIDE_REPLAY_EVENT,
@@ -16,6 +17,12 @@ const KiBuddyStartupGate: React.FC<React.PropsWithChildren> = ({ children }) => 
     window.addEventListener(KI_BUDDY_OPENING_GUIDE_REPLAY_EVENT, replay);
     return () => window.removeEventListener(KI_BUDDY_OPENING_GUIDE_REPLAY_EVENT, replay);
   }, []);
+
+  useEffect(() => {
+    if (status === 'authenticated') {
+      void syncLanguageFromConfig();
+    }
+  }, [status]);
 
   const finish = useCallback(() => {
     markKiBuddyOpeningGuideSeen();

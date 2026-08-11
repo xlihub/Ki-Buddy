@@ -1,7 +1,10 @@
 import { Alert, Button, Form, Input, Typography } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { KI_BUDDY_DEFAULT_AGENTS_BASE_URL } from '@/common/platform/ki-buddy';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import DeploymentUrlField from './DeploymentUrlField';
+import { readDeploymentHistory, recordSuccessfulDeployment } from './deploymentHistory';
 
 type LoginFormValues = {
   baseUrl: string;
@@ -28,6 +31,7 @@ const KiBuddyLoginPage: React.FC = () => {
   const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
+  const [deploymentHistory] = useState(readDeploymentHistory);
   const requiredRule = { required: true, message: t('login.errors.required') };
 
   useEffect(() => {
@@ -46,7 +50,9 @@ const KiBuddyLoginPage: React.FC = () => {
         });
         if (!result.success) {
           setErrorCode(toLoginErrorCode(result.code));
+          return;
         }
+        recordSuccessfulDeployment(values.baseUrl);
       } finally {
         setLoading(false);
       }
@@ -59,9 +65,21 @@ const KiBuddyLoginPage: React.FC = () => {
       <section className='w-full max-w-420px rounded-16px bg-bg-2 p-32px shadow-lg'>
         <Typography.Title heading={3}>{t('login.kiBuddyBrand')}</Typography.Title>
         <Typography.Paragraph type='secondary'>{t('login.kiBuddySubtitle')}</Typography.Paragraph>
-        <Form<LoginFormValues> layout='vertical' onSubmit={handleSubmit}>
+        <Form<LoginFormValues>
+          layout='vertical'
+          initialValues={{
+            baseUrl: deploymentHistory.lastSuccessful ?? KI_BUDDY_DEFAULT_AGENTS_BASE_URL ?? '',
+          }}
+          onSubmit={handleSubmit}
+        >
           <Form.Item field='baseUrl' label={t('login.agentsDeployment')} rules={[requiredRule]}>
-            <Input placeholder={t('login.baseUrlPlaceholder')} autoComplete='url' />
+            <DeploymentUrlField
+              history={deploymentHistory}
+              inputLabel={t('login.agentsDeployment')}
+              clearLabel={t('login.clearDeployment')}
+              lastSuccessfulLabel={t('login.lastSuccessfulDeployment')}
+              placeholder={t('login.baseUrlPlaceholder')}
+            />
           </Form.Item>
           <Form.Item field='loginName' label={t('login.accountOrEmail')} rules={[requiredRule]}>
             <Input placeholder={t('login.accountOrEmailPlaceholder')} autoComplete='username' />
