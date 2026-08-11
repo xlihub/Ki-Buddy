@@ -1,4 +1,11 @@
 {
+  "kiBuddyPageTitle": "Ki-Buddy - Iniciar sesión en Agents",
+  "kiBuddyBrand": "Ki-Buddy",
+  "kiBuddySubtitle": "Inicia sesión con tu cuenta de Agents existente",
+  "agentsDeployment": "URL de despliegue de Agents",
+  "baseUrlPlaceholder": "https://agents.example.com",
+  "accountOrEmail": "Cuenta o correo",
+  "accountOrEmailPlaceholder": "Ingresa tu cuenta o correo de Agents",
   "pageTitle": "AionUi - Iniciar sesión",
   "brand": "AionUi",
   "subtitle": "Bienvenido de nuevo, inicia sesión en tu cuenta",
@@ -15,12 +22,45 @@
   "languageToggle": "Cambiar idioma",
   "footerPrimary": "Transforma tu IA de línea de comandos",
   "footerSecondary": "Moderno y eficiente",
+  "onboarding": {
+    "skip": "Omitir",
+    "next": "Siguiente",
+    "start": "Empezar a usar Ki-Buddy",
+    "progressLabel": "Progreso de la introducción",
+    "stepLabel": "Ir al paso {{current}} de {{total}}",
+    "toolSupportTitle": "Sigue usando tus herramientas de IA habituales",
+    "toolSupportDescription": "Ki-Buddy reúne tus herramientas de IA de línea de comandos en un espacio de trabajo. Esta introducción no examina el equipo ni contacta con Agents.",
+    "assistantFlowTitle": "Convierte una herramienta en un asistente especializado",
+    "assistantFlowDescription": "Una herramienta central alimenta asistentes con funciones claras para documentos, presentaciones, hojas de cálculo, tableros e investigación.",
+    "capabilityTitle": "Las capacidades permanecen con el asistente",
+    "capabilityDescription": "Cambia la herramienta subyacente sin perder instrucciones, habilidades, herramientas ni conocimiento.",
+    "assistantProfile": "Perfil de capacidades del asistente",
+    "assistants": {
+      "manager": "Gestor del espacio",
+      "word": "Asistente de Word",
+      "slides": "Asistente de presentaciones",
+      "sheets": "Asistente de hojas de cálculo",
+      "board": "Asistente de tableros",
+      "research": "Asistente de investigación"
+    },
+    "capabilities": {
+      "instructions": "Instrucciones",
+      "skills": "Habilidades",
+      "tools": "Herramientas",
+      "knowledge": "Conocimiento"
+    },
+    "replayTitle": "Introducción a Ki-Buddy",
+    "replayDescription": "Vuelve a ver la introducción de tres páginas cuando quieras.",
+    "replay": "Ver introducción"
+  },
   "errors": {
     "empty": "Ingresa usuario y contraseña",
+    "required": "Este campo es obligatorio",
     "invalidCredentials": "Usuario o contraseña inválidos",
     "tooManyAttempts": "Demasiados intentos, vuelve a intentarlo más tarde",
     "networkError": "Error de conexión, intenta de nuevo",
-    "serverError": "Error del servidor, intenta más tarde",
+    "serverError": "Error del servidor de Agents, intenta más tarde",
+    "contractError": "Este despliegue de Agents devolvió una respuesta incompatible",
     "unknown": "Error al iniciar sesión, intenta de nuevo"
   }
 }

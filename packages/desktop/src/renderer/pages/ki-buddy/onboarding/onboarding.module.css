@@ -1,0 +1,278 @@
+.shell {
+  min-height: 100vh;
+  width: 100vw;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  color: var(--color-text-1);
+  background:
+    radial-gradient(circle at 18% 16%, var(--color-fill-2), transparent 34%),
+    radial-gradient(circle at 82% 84%, var(--color-primary-light-1), transparent 30%), var(--color-bg-1);
+}
+
+.guide {
+  width: min(920px, 100%);
+  min-height: min(680px, calc(100vh - 64px));
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 24px;
+  padding: 32px;
+  border: 1px solid var(--color-border-2);
+  border-radius: 24px;
+  background: var(--color-bg-2);
+  box-shadow: 0 24px 70px var(--color-fill-3);
+}
+
+.topline,
+.footer,
+.capabilityHeader,
+.capabilityItem {
+  display: flex;
+  align-items: center;
+}
+
+.topline,
+.footer {
+  justify-content: space-between;
+}
+
+.brand {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.copy {
+  max-width: 680px;
+}
+
+.title {
+  margin: 0 0 8px !important;
+}
+
+.description {
+  margin: 0 !important;
+  color: var(--color-text-2);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.visual {
+  min-height: 330px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--color-border-1);
+  border-radius: 18px;
+  background: var(--color-fill-1);
+}
+
+.toolGrid {
+  width: min(700px, 100%);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 32px;
+}
+
+.toolLogo {
+  min-height: 86px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 8px;
+  border: 1px solid var(--color-border-2);
+  border-radius: 14px;
+  color: var(--color-text-1);
+  background: var(--color-bg-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toolIcon,
+.assistantIcon {
+  display: grid;
+  place-items: center;
+  color: rgb(var(--primary-6));
+}
+
+.flowStage {
+  width: min(760px, 100%);
+  display: grid;
+  grid-template-columns: 140px minmax(48px, 1fr) minmax(320px, 2fr);
+  align-items: center;
+  gap: 18px;
+  padding: 30px;
+}
+
+.flowSource {
+  min-height: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid var(--color-border-2);
+  border-radius: 18px;
+  color: rgb(var(--primary-6));
+  background: var(--color-bg-2);
+  font-weight: 700;
+}
+
+.flowLine {
+  height: 2px;
+  background: linear-gradient(90deg, rgb(var(--primary-6)), var(--color-border-2));
+  transform-origin: left;
+  animation: connect 1.4s ease-in-out infinite alternate;
+}
+
+.assistantGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.assistantAvatar {
+  min-height: 94px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-border-1);
+  border-radius: 14px;
+  background: var(--color-bg-2);
+  color: var(--color-text-2);
+  font-size: 12px;
+}
+
+.capabilityStage {
+  width: min(560px, 100%);
+  padding: 26px;
+  border: 1px solid var(--color-border-2);
+  border-radius: 18px;
+  background: var(--color-bg-2);
+}
+
+.capabilityHeader {
+  gap: 14px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--color-border-1);
+}
+
+.capabilityHeader > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rotatingTool {
+  color: rgb(var(--primary-6));
+  font-size: 13px;
+  animation: reveal 1.8s ease-in-out infinite;
+}
+
+.capabilityList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding-top: 18px;
+}
+
+.capabilityItem {
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--color-fill-1);
+  color: var(--color-text-2);
+}
+
+.dots {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dot,
+.activeDot {
+  position: relative;
+}
+
+.dot::after,
+.activeDot::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-fill-4);
+}
+
+.activeDot::after {
+  width: 20px;
+  background: rgb(var(--primary-6));
+}
+
+@keyframes connect {
+  from {
+    transform: scaleX(0.35);
+    opacity: 0.45;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+@keyframes reveal {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  45%,
+  75% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 700px) {
+  .shell {
+    padding: 12px;
+  }
+
+  .guide {
+    min-height: calc(100vh - 24px);
+    padding: 22px;
+    border-radius: 18px;
+  }
+
+  .toolGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 18px;
+  }
+
+  .flowStage {
+    grid-template-columns: 1fr;
+    padding: 18px;
+  }
+
+  .flowLine {
+    width: 2px;
+    height: 28px;
+    justify-self: center;
+    background: linear-gradient(180deg, rgb(var(--primary-6)), var(--color-border-2));
+  }
+
+  .assistantGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flowLine,
+  .rotatingTool {
+    animation: none;
+  }
+}

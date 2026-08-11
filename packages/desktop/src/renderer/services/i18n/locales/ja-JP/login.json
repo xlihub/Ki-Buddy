@@ -1,4 +1,11 @@
 {
+  "kiBuddyPageTitle": "Ki-Buddy - Agents にログイン",
+  "kiBuddyBrand": "Ki-Buddy",
+  "kiBuddySubtitle": "既存の Agents アカウントでログインしてください",
+  "agentsDeployment": "Agents デプロイ URL",
+  "baseUrlPlaceholder": "https://agents.example.com",
+  "accountOrEmail": "アカウントまたはメール",
+  "accountOrEmailPlaceholder": "Agents のアカウントまたはメールを入力",
   "pageTitle": "AionUi - ログイン",
   "brand": "AionUi",
   "subtitle": "おかえりなさい。アカウントにサインインしてください",
@@ -15,12 +22,40 @@
   "languageToggle": "言語を切り替える",
   "footerPrimary": "コマンドラインAIをモダンに変革",
   "footerSecondary": "効率的でエレガント",
+  "onboarding": {
+    "skip": "スキップ",
+    "next": "次へ",
+    "start": "Ki-Buddy を使い始める",
+    "progressLabel": "紹介の進行状況",
+    "stepLabel": "{{total}} ステップ中 {{current}} へ移動",
+    "toolSupportTitle": "使い慣れた AI ツールをそのまま活用",
+    "toolSupportDescription": "Ki-Buddy はコマンドライン AI ツールを一つのワークスペースにまとめます。この紹介では端末のスキャンや Agents 環境への接続は行いません。",
+    "assistantFlowTitle": "汎用ツールを目的別アシスタントへ",
+    "assistantFlowDescription": "一つのツールを中心に、文書、プレゼンテーション、表計算、ボード、研究の役割を明確にします。",
+    "capabilityTitle": "アシスタントの能力を維持",
+    "capabilityDescription": "基盤ツールを切り替えても、指示、スキル、ツール、知識は保持されます。",
+    "assistantProfile": "アシスタント能力設定",
+    "assistants": {
+      "manager": "ワークスペース管理",
+      "word": "Word アシスタント",
+      "slides": "プレゼンアシスタント",
+      "sheets": "表計算アシスタント",
+      "board": "ボードアシスタント",
+      "research": "研究アシスタント"
+    },
+    "capabilities": { "instructions": "指示", "skills": "スキル", "tools": "ツール", "knowledge": "知識" },
+    "replayTitle": "Ki-Buddy の紹介",
+    "replayDescription": "3 ページの製品紹介をいつでも確認できます。",
+    "replay": "紹介を見る"
+  },
   "errors": {
     "empty": "ユーザー名とパスワードを入力してください",
+    "required": "この項目は必須です",
     "invalidCredentials": "ユーザー名またはパスワードが正しくありません",
     "tooManyAttempts": "試行回数が多すぎます。後でもう一度お試しください",
     "networkError": "接続に失敗しました。後でもう一度お試しください",
-    "serverError": "サーバーで問題が発生しました。しばらく待ってから再試行してください",
+    "serverError": "Agents サーバーで問題が発生しました。しばらくしてから再試行してください",
+    "contractError": "この Agents デプロイから互換性のない応答が返されました",
     "unknown": "ログインに失敗しました。後でもう一度お試しください"
   }
 }

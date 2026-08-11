@@ -13,6 +13,7 @@
 declare global {
   interface Window {
     __backendPort?: number;
+    __coreCsrfToken?: string | null;
   }
 }
 
@@ -154,7 +155,15 @@ export type HttpRequestOptions = {
   headers?: Record<string, string>;
 };
 
-const SENSITIVE_LOG_KEY_PATTERN = /api[_-]?key|authorization|auth[_-]?token|access[_-]?token|refresh[_-]?token|secret/i;
+const SENSITIVE_LOG_KEY_PATTERN =
+  /api[_-]?key|authorization|auth[_-]?token|access[_-]?token|refresh[_-]?token|secret|password|cookie/i;
+
+function resolveCoreCsrfToken(): string {
+  if (typeof window !== 'undefined') {
+    return window.__coreCsrfToken ?? '';
+  }
+  return (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken ?? '';
+}
 
 function redactForLog(value: unknown, depth = 0): unknown {
   if (depth > 8 || value === null || typeof value !== 'object') {
@@ -189,6 +198,23 @@ export async function httpRequest<T>(
     Object.assign(headers, options.headers);
   }
 
+  if (typeof window === 'undefined') {
+    const coreToken = (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken;
+    if (coreToken) {
+      headers.Authorization = `Bearer ${coreToken}`;
+    }
+  }
+
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) {
+    const csrfToken = resolveCoreCsrfToken();
+    if (csrfToken) {
+      headers['x-csrf-token'] = csrfToken;
+      if (typeof window === 'undefined') {
+        headers.Cookie = `aionui-csrf-token=${csrfToken}`;
+      }
+    }
+  }
+
   console.debug(
     `[httpBridge] ${method} ${path}`,
     body !== undefined ? JSON.stringify(redactForLog(body)).slice(0, 500) : '(no body)'
@@ -198,6 +224,7 @@ export async function httpRequest<T>(
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: 'include',
   });
 
   if (!response.ok) {

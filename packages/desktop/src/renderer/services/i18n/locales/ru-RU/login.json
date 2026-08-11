@@ -1,4 +1,11 @@
 {
+  "kiBuddyPageTitle": "Ki-Buddy — Вход в Agents",
+  "kiBuddyBrand": "Ki-Buddy",
+  "kiBuddySubtitle": "Войдите с существующей учётной записью Agents",
+  "agentsDeployment": "URL развёртывания Agents",
+  "baseUrlPlaceholder": "https://agents.example.com",
+  "accountOrEmail": "Учётная запись или почта",
+  "accountOrEmailPlaceholder": "Введите учётную запись или почту Agents",
   "pageTitle": "AionUi — Вход",
   "brand": "AionUi",
   "subtitle": "Добро пожаловать! Войдите в свой аккаунт",
@@ -15,12 +22,40 @@
   "languageToggle": "Сменить язык",
   "footerPrimary": "Преобразуйте свой ИИ командной строки",
   "footerSecondary": "Современно и эффективно",
+  "onboarding": {
+    "skip": "Пропустить",
+    "next": "Далее",
+    "start": "Начать работу с Ki-Buddy",
+    "progressLabel": "Ход знакомства",
+    "stepLabel": "Перейти к шагу {{current}} из {{total}}",
+    "toolSupportTitle": "Используйте привычные инструменты ИИ",
+    "toolSupportDescription": "Ki-Buddy объединяет консольные инструменты ИИ в одном рабочем пространстве. Во время знакомства приложение не сканирует компьютер и не обращается к Agents.",
+    "assistantFlowTitle": "Превратите инструмент в специализированного помощника",
+    "assistantFlowDescription": "Один основной инструмент поддерживает помощников с понятными ролями для документов, презентаций, таблиц, досок и исследований.",
+    "capabilityTitle": "Возможности сохраняются у помощника",
+    "capabilityDescription": "Меняйте базовый инструмент, сохраняя инструкции, навыки, инструменты и знания помощника.",
+    "assistantProfile": "Профиль возможностей помощника",
+    "assistants": {
+      "manager": "Менеджер пространства",
+      "word": "Помощник Word",
+      "slides": "Помощник презентаций",
+      "sheets": "Помощник таблиц",
+      "board": "Помощник досок",
+      "research": "Помощник исследований"
+    },
+    "capabilities": { "instructions": "Инструкции", "skills": "Навыки", "tools": "Инструменты", "knowledge": "Знания" },
+    "replayTitle": "Знакомство с Ki-Buddy",
+    "replayDescription": "Повторно откройте трёхстраничное знакомство в любое время.",
+    "replay": "Открыть знакомство"
+  },
   "errors": {
     "empty": "Введите имя пользователя и пароль",
+    "required": "Обязательное поле",
     "invalidCredentials": "Неверное имя пользователя или пароль",
     "tooManyAttempts": "Слишком много попыток, попробуйте позже",
     "networkError": "Ошибка подключения, попробуйте снова",
-    "serverError": "Ошибка сервера, попробуйте позже",
+    "serverError": "Ошибка сервера Agents, попробуйте позже",
+    "contractError": "Это развёртывание Agents вернуло несовместимый ответ",
     "unknown": "Ошибка входа, попробуйте снова"
   }
 }

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useSWRConfig } from 'swr';
 import { PREVIEW_SCOPE_KEY_PREFIX } from '@/renderer/pages/conversation/Preview/context/previewScope';
 // M6: CSRF removed with legacy webserver — stub functions for compatibility, re-implement in M7
 const withCsrfToken = <T extends Record<string, unknown>>(data: T): T => data;
@@ -14,6 +15,7 @@ export interface AuthUser {
 }
 
 interface LoginParams {
+  baseUrl?: string;
   username: string;
   password: string;
   remember?: boolean;
@@ -23,6 +25,7 @@ type LoginErrorCode =
   | 'invalidCredentials'
   | 'tooManyAttempts'
   | 'serverError'
+  | 'contractError'
   | 'networkError'
   | 'csrfError'
   | 'unknown';
@@ -48,7 +51,9 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const AUTH_USER_ENDPOINT = '/api/auth/user';
 
-const isDesktopRuntime = typeof window !== 'undefined' && Boolean(window.electronAPI);
+function isKiBuddyDesktopRuntime(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.electronAPI?.kiBuddyAuth);
+}
 
 // Clear expired auth cache including cookies and localStorage
 // 清除过期的认证缓存，包括 Cookie 和 localStorage
@@ -113,16 +118,26 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
 }
 
 export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const { cache: swrCache } = useSWRConfig();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>('checking');
   const [ready, setReady] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const refresh = useCallback(async () => {
-    if (isDesktopRuntime) {
-      setStatus('authenticated');
-      setUser(null);
-      setReady(true);
+    if (isKiBuddyDesktopRuntime()) {
+      setStatus('checking');
+      try {
+        const session = await window.electronAPI?.kiBuddyAuth?.getSession();
+        setUser(session?.user ?? null);
+        setStatus(session?.status ?? 'unauthenticated');
+      } catch (error) {
+        console.error('Failed to restore Ki-Buddy session:', error);
+        setUser(null);
+        setStatus('unauthenticated');
+      } finally {
+        setReady(true);
+      }
       return;
     }
 
@@ -149,9 +164,22 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     };
   }, [refresh]);
 
-  const login = useCallback(async ({ username, password, remember }: LoginParams): Promise<LoginResult> => {
+  const login = useCallback(async ({ baseUrl, username, password, remember }: LoginParams): Promise<LoginResult> => {
     try {
-      if (isDesktopRuntime) {
+      if (isKiBuddyDesktopRuntime()) {
+        const result = await window.electronAPI?.kiBuddyAuth?.login({
+          baseUrl: baseUrl ?? '',
+          loginName: username,
+          password,
+        });
+        if (!result) {
+          return { success: false, code: 'unknown' };
+        }
+        if ('code' in result) {
+          return { success: false, code: result.code };
+        }
+        setUser(result.session.user);
+        setStatus('authenticated');
         setReady(true);
         return { success: true };
       }
@@ -223,8 +251,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setReady(true);
 
       // Re-enable WebSocket reconnection after successful login (WebUI mode only)
-      if (typeof window !== 'undefined' && (window as any).__websocketReconnect) {
-        (window as any).__websocketReconnect();
+      if (typeof window !== 'undefined') {
+        const reconnectWindow = window as Window & { __websocketReconnect?: () => void };
+        reconnectWindow.__websocketReconnect?.();
       }
 
       return { success: true };
@@ -253,10 +282,20 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }, []);
 
   const logout = useCallback(async () => {
-    if (isDesktopRuntime) {
-      setUser(null);
-      setStatus('authenticated');
-      setReady(true);
+    if (isKiBuddyDesktopRuntime()) {
+      try {
+        await window.electronAPI?.kiBuddyAuth?.logout();
+      } catch (error) {
+        console.error('Failed to clear Ki-Buddy main-process session:', error);
+      } finally {
+        for (const key of swrCache.keys()) {
+          swrCache.delete(key);
+        }
+        setUser(null);
+        setStatus('unauthenticated');
+        setReady(true);
+        clearAuthCache();
+      }
       return;
     }
 
@@ -273,12 +312,15 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     } catch (error) {
       console.error('Logout request failed:', error);
     } finally {
+      for (const key of swrCache.keys()) {
+        swrCache.delete(key);
+      }
       setUser(null);
       setStatus('unauthenticated');
       // Clear cache on logout for security
       clearAuthCache();
     }
-  }, []);
+  }, [swrCache]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

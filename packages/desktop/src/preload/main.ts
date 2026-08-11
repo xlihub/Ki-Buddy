@@ -11,6 +11,8 @@
 import '@sentry/electron/preload';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { ADAPTER_BRIDGE_EVENT_KEY } from '../common/adapter/constant';
+import { KI_BUDDY_AUTH_CHANNELS } from '../common/platform/kiBuddyAuth';
+import type { KiBuddyAuthApi } from '../common/types/platform/kiBuddyAuth';
 
 /**
  * @description 注入到renderer进程中, 用于与main进程通信
@@ -49,16 +51,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   logFeedbackEvent: (payload: { details?: unknown; level: 'info' | 'warn' | 'error'; message: string }) =>
     ipcRenderer.send('feedback:renderer-log', payload),
   recoverCorruptedDatabase: () => ipcRenderer.invoke('backend:recover-corrupted-database'),
+  kiBuddyAuth: {
+    getSession: () => ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.getSession),
+    login: (request) => ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.login, request),
+    logout: () => ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.logout),
+  } satisfies KiBuddyAuthApi,
 });
 
 // Synchronously fetch the aioncore port and expose it to the renderer
 // via contextBridge (direct window assignment is invisible under contextIsolation).
 const backendPort = ipcRenderer.sendSync('get-backend-port') as number;
 const initialLanguage = ipcRenderer.sendSync('get-initial-language') as string | null;
+const coreCsrfToken = ipcRenderer.sendSync('get-core-csrf-token') as string | null;
 const backendStartupFailed = ipcRenderer.sendSync('get-backend-startup-failed') as boolean;
 const backendStartupFailure = ipcRenderer.sendSync('get-backend-startup-failure') as unknown;
 contextBridge.exposeInMainWorld('__backendPort', backendPort > 0 ? backendPort : 0);
 contextBridge.exposeInMainWorld('__initialLanguage', initialLanguage ?? null);
+contextBridge.exposeInMainWorld('__coreCsrfToken', coreCsrfToken ?? null);
 contextBridge.exposeInMainWorld('__aionuiE2ETest', process.env.AIONUI_E2E_TEST === '1');
 contextBridge.exposeInMainWorld('__backendStartupFailed', backendStartupFailed === true);
 contextBridge.exposeInMainWorld('__backendStartupFailure', backendStartupFailure ?? null);

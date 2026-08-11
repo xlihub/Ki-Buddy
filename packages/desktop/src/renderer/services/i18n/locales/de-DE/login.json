@@ -1,4 +1,11 @@
 {
+  "kiBuddyPageTitle": "Ki-Buddy - Bei Agents anmelden",
+  "kiBuddyBrand": "Ki-Buddy",
+  "kiBuddySubtitle": "Mit einem vorhandenen Agents-Konto anmelden",
+  "agentsDeployment": "Agents-Bereitstellungs-URL",
+  "baseUrlPlaceholder": "https://agents.example.com",
+  "accountOrEmail": "Konto oder E-Mail",
+  "accountOrEmailPlaceholder": "Agents-Konto oder E-Mail eingeben",
   "pageTitle": "AionUi - Anmelden",
   "brand": "AionUi",
   "subtitle": "Willkommen zurück, bitte melde dich in deinem Konto an",
@@ -15,12 +22,45 @@
   "languageToggle": "Sprache ändern",
   "footerPrimary": "Verwandle deine Kommandozeilen-KI",
   "footerSecondary": "Modern & Effizient",
+  "onboarding": {
+    "skip": "Überspringen",
+    "next": "Weiter",
+    "start": "Ki-Buddy starten",
+    "progressLabel": "Fortschritt der Einführung",
+    "stepLabel": "Zu Schritt {{current}} von {{total}} wechseln",
+    "toolSupportTitle": "Nutze deine vertrauten KI-Werkzeuge weiter",
+    "toolSupportDescription": "Ki-Buddy vereint deine Kommandozeilen-KI-Werkzeuge in einem Arbeitsbereich. Diese Einführung scannt weder den Computer noch eine Agents-Bereitstellung.",
+    "assistantFlowTitle": "Vom Werkzeug zum spezialisierten Assistenten",
+    "assistantFlowDescription": "Ein Werkzeug bildet die Basis für klar definierte Dokument-, Präsentations-, Tabellen-, Board- und Recherche-Assistenten.",
+    "capabilityTitle": "Fähigkeiten bleiben beim Assistenten",
+    "capabilityDescription": "Beim Wechsel des zugrunde liegenden Werkzeugs bleiben Anweisungen, Fähigkeiten, Werkzeuge und Wissen erhalten.",
+    "assistantProfile": "Assistentenprofil",
+    "assistants": {
+      "manager": "Arbeitsbereichsverwaltung",
+      "word": "Word-Assistent",
+      "slides": "Präsentationsassistent",
+      "sheets": "Tabellenassistent",
+      "board": "Board-Assistent",
+      "research": "Recherche-Assistent"
+    },
+    "capabilities": {
+      "instructions": "Anweisungen",
+      "skills": "Fähigkeiten",
+      "tools": "Werkzeuge",
+      "knowledge": "Wissen"
+    },
+    "replayTitle": "Ki-Buddy-Einführung",
+    "replayDescription": "Die dreiseitige Produkteinführung jederzeit erneut ansehen.",
+    "replay": "Einführung ansehen"
+  },
   "errors": {
     "empty": "Bitte Benutzername und Passwort eingeben",
+    "required": "Dieses Feld ist erforderlich",
     "invalidCredentials": "Ungültiger Benutzername oder Passwort",
     "tooManyAttempts": "Zu viele Versuche, bitte später erneut versuchen",
     "networkError": "Verbindung fehlgeschlagen, bitte erneut versuchen",
-    "serverError": "Serverfehler, bitte später erneut versuchen",
+    "serverError": "Agents-Serverfehler, bitte später erneut versuchen",
+    "contractError": "Diese Agents-Bereitstellung hat eine inkompatible Antwort zurückgegeben",
     "unknown": "Anmeldung fehlgeschlagen, bitte erneut versuchen"
   }
 }

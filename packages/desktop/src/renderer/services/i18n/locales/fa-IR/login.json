@@ -1,4 +1,11 @@
 {
+  "kiBuddyPageTitle": "Ki-Buddy - ورود به Agents",
+  "kiBuddyBrand": "Ki-Buddy",
+  "kiBuddySubtitle": "با حساب موجود Agents وارد شوید",
+  "agentsDeployment": "نشانی استقرار Agents",
+  "baseUrlPlaceholder": "https://agents.example.com",
+  "accountOrEmail": "حساب یا ایمیل",
+  "accountOrEmailPlaceholder": "حساب یا ایمیل Agents را وارد کنید",
   "pageTitle": "AionUi - ورود",
   "brand": "AionUi",
   "subtitle": "خوش آمدید، لطفاً به حساب خود وارد شوید",
@@ -15,12 +22,40 @@
   "languageToggle": "تغییر زبان",
   "footerPrimary": "هوش مصنوعی خط فرمان خود را متحول کنید",
   "footerSecondary": "مدرن و کارآمد",
+  "onboarding": {
+    "skip": "رد کردن",
+    "next": "بعدی",
+    "start": "شروع استفاده از Ki-Buddy",
+    "progressLabel": "روند معرفی",
+    "stepLabel": "رفتن به مرحله {{current}} از {{total}}",
+    "toolSupportTitle": "از ابزارهای هوش مصنوعی آشنای خود استفاده کنید",
+    "toolSupportDescription": "Ki-Buddy ابزارهای خط فرمان هوش مصنوعی را در یک فضای کاری گرد هم می‌آورد. این معرفی رایانه را اسکن نمی‌کند و به استقرار Agents متصل نمی‌شود.",
+    "assistantFlowTitle": "ابزار را به یک دستیار متمرکز تبدیل کنید",
+    "assistantFlowDescription": "یک ابزار مرکزی از دستیارهایی با نقش‌های مشخص برای سند، ارائه، صفحه‌گسترده، برد و پژوهش پشتیبانی می‌کند.",
+    "capabilityTitle": "توانایی‌ها همراه دستیار باقی می‌مانند",
+    "capabilityDescription": "ابزار زیربنایی را تغییر دهید و دستورها، مهارت‌ها، ابزارها و دانش دستیار را حفظ کنید.",
+    "assistantProfile": "پروفایل توانایی دستیار",
+    "assistants": {
+      "manager": "مدیر فضای کاری",
+      "word": "دستیار Word",
+      "slides": "دستیار ارائه",
+      "sheets": "دستیار صفحه‌گسترده",
+      "board": "دستیار برد",
+      "research": "دستیار پژوهش"
+    },
+    "capabilities": { "instructions": "دستورها", "skills": "مهارت‌ها", "tools": "ابزارها", "knowledge": "دانش" },
+    "replayTitle": "معرفی Ki-Buddy",
+    "replayDescription": "معرفی سه‌صفحه‌ای محصول را هر زمان دوباره ببینید.",
+    "replay": "مشاهده معرفی"
+  },
   "errors": {
     "empty": "لطفاً نام کاربری و رمز عبور را وارد کنید",
+    "required": "این فیلد الزامی است",
     "invalidCredentials": "نام کاربری یا رمز عبور نامعتبر است",
     "tooManyAttempts": "تلاش‌های زیاد، لطفاً بعداً دوباره تلاش کنید",
     "networkError": "اتصال ناموفق بود، لطفاً دوباره تلاش کنید",
-    "serverError": "خطای سرور، لطفاً بعداً دوباره تلاش کنید",
+    "serverError": "خطای سرور Agents، لطفاً بعداً دوباره تلاش کنید",
+    "contractError": "این استقرار Agents پاسخی ناسازگار برگرداند",
     "unknown": "ورود ناموفق بود، لطفاً دوباره تلاش کنید"
   }
 }

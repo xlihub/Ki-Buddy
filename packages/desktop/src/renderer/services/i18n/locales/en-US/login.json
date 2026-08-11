@@ -1,4 +1,11 @@
 {
+  "kiBuddyPageTitle": "Ki-Buddy - Sign in to Agents",
+  "kiBuddyBrand": "Ki-Buddy",
+  "kiBuddySubtitle": "Sign in with your existing Agents account",
+  "agentsDeployment": "Agents deployment URL",
+  "baseUrlPlaceholder": "https://agents.example.com",
+  "accountOrEmail": "Account or email",
+  "accountOrEmailPlaceholder": "Enter your Agents account or email",
   "pageTitle": "AionUi - Sign In",
   "brand": "AionUi",
   "subtitle": "Welcome back, please sign in to your account",
@@ -15,12 +22,45 @@
   "languageToggle": "Change language",
   "footerPrimary": "Transform your command-line AI",
   "footerSecondary": "Modern & Efficient",
+  "onboarding": {
+    "skip": "Skip",
+    "next": "Next",
+    "start": "Start using Ki-Buddy",
+    "progressLabel": "Introduction progress",
+    "stepLabel": "Go to step {{current}} of {{total}}",
+    "toolSupportTitle": "Bring the AI tools you already use",
+    "toolSupportDescription": "Ki-Buddy gives your command-line AI tools one workspace without scanning your computer or contacting a deployment during this introduction.",
+    "assistantFlowTitle": "Turn a capable tool into a focused assistant",
+    "assistantFlowDescription": "Keep one tool at the center, then give each assistant a clear role for documents, presentations, spreadsheets, boards, and research.",
+    "capabilityTitle": "Assistant capabilities stay with the assistant",
+    "capabilityDescription": "Switch the underlying tool while preserving the assistant's instructions, skills, tools, and knowledge.",
+    "assistantProfile": "Assistant capability profile",
+    "assistants": {
+      "manager": "Workspace manager",
+      "word": "Word assistant",
+      "slides": "Presentation assistant",
+      "sheets": "Spreadsheet assistant",
+      "board": "Board assistant",
+      "research": "Research assistant"
+    },
+    "capabilities": {
+      "instructions": "Instructions",
+      "skills": "Skills",
+      "tools": "Tools",
+      "knowledge": "Knowledge"
+    },
+    "replayTitle": "Ki-Buddy introduction",
+    "replayDescription": "Review the three-page product introduction at any time.",
+    "replay": "View introduction"
+  },
   "errors": {
     "empty": "Please enter username and password",
+    "required": "This field is required",
     "invalidCredentials": "Invalid username or password",
     "tooManyAttempts": "Too many attempts, please try again later",
     "networkError": "Connection failed, please try again",
-    "serverError": "Server error, please try again later",
+    "serverError": "Agents server error, please try again later",
+    "contractError": "This Agents deployment returned an incompatible response",
     "unknown": "Sign-in failed, please try again"
   }
 }

@@ -76,10 +76,14 @@ describe('httpBridge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    delete (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken;
+    delete (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken;
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    delete (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken;
+    delete (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken;
   });
 
   describe('getBaseUrl', () => {
@@ -465,6 +469,7 @@ describe('httpBridge', () => {
         method: 'GET',
         headers: {},
         body: undefined,
+        credentials: 'include',
       });
     });
 
@@ -482,6 +487,53 @@ describe('httpBridge', () => {
 
       expect(fetchSpy.mock.calls[0][1]?.body).toBe('{"key":"value"}');
       expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({ 'Content-Type': 'application/json' });
+    });
+
+    it('authenticates main-process Core requests without exposing the token to a renderer', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ data: {} }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      vi.stubGlobal('fetch', fetchSpy);
+      vi.spyOn(console, 'debug').mockImplementation(() => {});
+      (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken = 'core-session-token';
+      (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken = 'core-csrf-token';
+
+      await httpRequest('POST', '/api/create', { key: 'value' });
+
+      expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer core-session-token',
+        'x-csrf-token': 'core-csrf-token',
+        Cookie: 'aionui-csrf-token=core-csrf-token',
+      });
+    });
+
+    it('uses only cookies and the CSRF token for renderer Core requests', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ data: {} }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      vi.stubGlobal('fetch', fetchSpy);
+      vi.stubGlobal('window', { __backendPort: 39123, __coreCsrfToken: 'renderer-csrf-token' });
+      vi.stubGlobal('document', {});
+      vi.spyOn(console, 'debug').mockImplementation(() => {});
+
+      await httpRequest('POST', '/api/create', { key: 'value' });
+
+      expect(fetchSpy.mock.calls[0][1]).toMatchObject({
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': 'renderer-csrf-token',
+        },
+      });
+      expect(fetchSpy.mock.calls[0][1]?.headers).not.toHaveProperty('Authorization');
+      expect(fetchSpy.mock.calls[0][1]?.headers).not.toHaveProperty('Cookie');
     });
   });
 

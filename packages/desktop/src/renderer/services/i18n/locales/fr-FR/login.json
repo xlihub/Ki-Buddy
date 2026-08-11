@@ -1,4 +1,11 @@
 {
+  "kiBuddyPageTitle": "Ki-Buddy - Connexion à Agents",
+  "kiBuddyBrand": "Ki-Buddy",
+  "kiBuddySubtitle": "Connectez-vous avec votre compte Agents existant",
+  "agentsDeployment": "URL du déploiement Agents",
+  "baseUrlPlaceholder": "https://agents.example.com",
+  "accountOrEmail": "Compte ou e-mail",
+  "accountOrEmailPlaceholder": "Saisissez votre compte ou e-mail Agents",
   "pageTitle": "AionUi - Connexion",
   "brand": "AionUi",
   "subtitle": "Bienvenue, veuillez vous connecter à votre compte",
@@ -15,12 +22,45 @@
   "languageToggle": "Changer de langue",
   "footerPrimary": "Transformez votre IA en ligne de commande",
   "footerSecondary": "Moderne et efficace",
+  "onboarding": {
+    "skip": "Passer",
+    "next": "Suivant",
+    "start": "Commencer avec Ki-Buddy",
+    "progressLabel": "Progression de la présentation",
+    "stepLabel": "Aller à l’étape {{current}} sur {{total}}",
+    "toolSupportTitle": "Continuez avec vos outils d’IA habituels",
+    "toolSupportDescription": "Ki-Buddy rassemble vos outils d’IA en ligne de commande dans un espace de travail. Cette présentation n’analyse pas l’ordinateur et ne contacte pas Agents.",
+    "assistantFlowTitle": "Transformez un outil en assistant spécialisé",
+    "assistantFlowDescription": "Un outil central alimente des assistants aux rôles clairs pour les documents, présentations, feuilles de calcul, tableaux et recherches.",
+    "capabilityTitle": "Les capacités restent liées à l’assistant",
+    "capabilityDescription": "Changez l’outil sous-jacent tout en conservant les instructions, compétences, outils et connaissances.",
+    "assistantProfile": "Profil de capacités de l’assistant",
+    "assistants": {
+      "manager": "Gestionnaire d’espace",
+      "word": "Assistant Word",
+      "slides": "Assistant de présentation",
+      "sheets": "Assistant de feuille de calcul",
+      "board": "Assistant de tableau",
+      "research": "Assistant de recherche"
+    },
+    "capabilities": {
+      "instructions": "Instructions",
+      "skills": "Compétences",
+      "tools": "Outils",
+      "knowledge": "Connaissances"
+    },
+    "replayTitle": "Présentation de Ki-Buddy",
+    "replayDescription": "Revoyez à tout moment la présentation du produit en trois pages.",
+    "replay": "Voir la présentation"
+  },
   "errors": {
     "empty": "Veuillez entrer un nom d'utilisateur et un mot de passe",
+    "required": "Ce champ est obligatoire",
     "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide",
     "tooManyAttempts": "Trop de tentatives, veuillez réessayer plus tard",
     "networkError": "Connexion échouée, veuillez réessayer",
-    "serverError": "Erreur serveur, veuillez réessayer plus tard",
+    "serverError": "Erreur du serveur Agents, veuillez réessayer plus tard",
+    "contractError": "Ce déploiement Agents a renvoyé une réponse incompatible",
     "unknown": "Échec de connexion, veuillez réessayer"
   }
 }

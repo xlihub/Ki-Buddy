@@ -14,10 +14,20 @@ const ToolsSettings = React.lazy(() => import('@renderer/pages/settings/ToolsSet
 const AppearanceSettings = React.lazy(() => import('@renderer/pages/settings/AppearanceSettings'));
 const ModeSettings = React.lazy(() => import('@renderer/pages/settings/ModeSettings'));
 const SystemSettings = React.lazy(() => import('@renderer/pages/settings/SystemSettings'));
+const KiBuddyAboutSettings = React.lazy(() =>
+  import('@renderer/pages/ki-buddy').then(({ KiBuddyAboutSettings: Component }) => ({ default: Component }))
+);
 const WebuiSettings = React.lazy(() => import('@renderer/pages/settings/WebuiSettings'));
 const PetSettings = React.lazy(() => import('@renderer/pages/settings/PetSettings'));
 const ExtensionSettingsPage = React.lazy(() => import('@renderer/pages/settings/ExtensionSettingsPage'));
-const LoginPage = React.lazy(() => import('@renderer/pages/login'));
+const LoginPage = React.lazy(() =>
+  typeof window !== 'undefined' && window.electronAPI?.kiBuddyAuth
+    ? import('@renderer/pages/ki-buddy')
+    : import('@renderer/pages/login')
+);
+const KiBuddyStartupGate = React.lazy(() =>
+  import('@renderer/pages/ki-buddy').then(({ KiBuddyStartupGate: Component }) => ({ default: Component }))
+);
 const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase'));
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
@@ -56,12 +66,20 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
 const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
 
-  return (
+  const routes = (
     <HashRouter>
       <Routes>
         <Route
           path='/login'
-          element={status === 'authenticated' ? <Navigate to='/guid' replace /> : withRouteFallback(LoginPage)}
+          element={
+            status === 'checking' ? (
+              <AppLoader />
+            ) : status === 'authenticated' ? (
+              <Navigate to='/guid' replace />
+            ) : (
+              withRouteFallback(LoginPage)
+            )
+          }
         />
         <Route element={<ProtectedLayout layout={layout} />}>
           <Route index element={<Navigate to='/guid' replace />} />
@@ -95,7 +113,12 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
           <Route path='/settings/pet' element={withRouteFallback(PetSettings)} />
           <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
-          <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
+          <Route
+            path='/settings/about'
+            element={withRouteFallback(
+              typeof window !== 'undefined' && window.electronAPI?.kiBuddyAuth ? KiBuddyAboutSettings : SystemSettings
+            )}
+          />
           <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
           <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
           <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
@@ -106,6 +129,16 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
       </Routes>
     </HashRouter>
   );
+
+  if (typeof window !== 'undefined' && window.electronAPI?.kiBuddyAuth) {
+    return (
+      <Suspense fallback={<AppLoader />}>
+        <KiBuddyStartupGate>{routes}</KiBuddyStartupGate>
+      </Suspense>
+    );
+  }
+
+  return routes;
 };
 
 export default PanelRoute;

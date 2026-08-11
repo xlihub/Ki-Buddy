@@ -1,3 +1,5 @@
+import type { KiBuddyAuthApi } from './kiBuddyAuth';
+
 // WebUI 状态接口 / WebUI status interface
 export interface WebUIStatus {
   running: boolean;
@@ -22,6 +24,7 @@ export interface ElectronBridgeAPI {
   // Forward feedback diagnostics logs to the main process console / 转发反馈诊断日志到主进程控制台
   logFeedbackEvent?: (payload: { details?: unknown; level: 'info' | 'warn' | 'error'; message: string }) => void;
   recoverCorruptedDatabase?: () => Promise<void>;
+  kiBuddyAuth?: KiBuddyAuthApi;
 }
 
 export type BackendStartupFailureReason =
@@ -78,6 +81,7 @@ declare global {
   interface Window {
     electronAPI?: ElectronBridgeAPI;
     __initialLanguage?: string | null;
+    __coreCsrfToken?: string | null;
     __aionuiE2ETest?: boolean;
     __backendStartupFailed?: boolean;
     __backendStartupFailure?: BackendStartupFailureInfo | null;
