@@ -45,10 +45,14 @@ function readProductConfig(projectRoot) {
   const config = readJson(path.join(projectRoot, PRODUCT_CONFIG_FILE), 'Ki-Buddy product configuration');
   requireExactKeys(
     config,
-    ['schemaVersion', 'packageMetadata', 'electronBuilder', 'webCli', 'updates', 'kiCore'],
+    ['schemaVersion', 'defaults', 'packageMetadata', 'electronBuilder', 'webCli', 'updates', 'kiCore'],
     'Ki-Buddy product configuration'
   );
   if (config.schemaVersion !== 1) throw new Error('Unsupported Ki-Buddy product configuration schema');
+  requireExactKeys(config.defaults, ['language'], 'Ki-Buddy product defaults');
+  if (config.defaults.language !== 'zh-CN') {
+    throw new Error('Ki-Buddy default language must be zh-CN');
+  }
   requireExactKeys(
     config.packageMetadata,
     ['name', 'description', 'author', 'repository', 'homepage', 'bugs', 'productName'],

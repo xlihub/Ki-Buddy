@@ -75,6 +75,7 @@ import { readCloseToTraySetting } from './process/utils/closeToTraySetting';
 import { createKiBuddyCoreAuthOptions } from './process/ki-buddy/bootstrap';
 import { registerKiBuddyAuthBridge } from './process/ki-buddy/authBridge';
 import { resolveKiBuddyCoreDataPath } from './process/ki-buddy/coreDataPath';
+import { KI_BUDDY_DEFAULT_LANGUAGE, resolveLanguagePreference } from './common/ki-buddy';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
 
@@ -692,7 +693,14 @@ const handleAppReady = async (): Promise<void> => {
 
   try {
     await initializeProcess();
-    rendererInitialLanguage = ProcessConfig.getSync('language') ?? null;
+    const savedLanguage = ProcessConfig.getSync('language');
+    rendererInitialLanguage = kiBuddyCoreAuthOptions
+      ? resolveLanguagePreference({
+          savedLanguage,
+          productLanguage: KI_BUDDY_DEFAULT_LANGUAGE,
+          systemLanguage: app.getLocale(),
+        })
+      : (savedLanguage ?? null);
     mark('initializeProcess');
   } catch (error) {
     console.error('Failed to initialize process:', error);
@@ -999,7 +1007,14 @@ const handleAppReady = async (): Promise<void> => {
     // Read language setting and initialize main process i18n, then refresh tray menu
     try {
       const savedLanguage = await ProcessConfig.get('language');
-      await setInitialLanguage(savedLanguage);
+      const language = kiBuddyCoreAuthOptions
+        ? resolveLanguagePreference({
+            savedLanguage,
+            productLanguage: KI_BUDDY_DEFAULT_LANGUAGE,
+            systemLanguage: app.getLocale(),
+          })
+        : savedLanguage;
+      await setInitialLanguage(language);
       // After language is set, refresh tray menu if it exists
       await refreshTrayMenu();
     } catch (error) {

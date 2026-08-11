@@ -1,5 +1,8 @@
 {
   "schemaVersion": 1,
+  "defaults": {
+    "language": "zh-CN"
+  },
   "packageMetadata": {
     "name": "ki-buddy",
     "description": "Ki-Buddy is an AI agent desktop workspace based on AionUi.",

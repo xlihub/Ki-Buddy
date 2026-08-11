@@ -4,6 +4,7 @@ import { initReactI18next } from 'react-i18next';
 import { configService } from '@/common/config/configService';
 import { ipcBridge } from '@/common';
 import i18nConfig from '@/common/config/i18n-config.json';
+import { KI_BUDDY_DEFAULT_LANGUAGE, resolveLanguagePreference } from '@/common/ki-buddy';
 import {
   DEFAULT_LANGUAGE,
   normalizeLanguageCode,
@@ -82,12 +83,25 @@ function getElectronSystemLanguageHint(): string | null {
   return navigator.language || null;
 }
 
+function getKiBuddyDefaultLanguageHint(): string | null {
+  if (typeof window === 'undefined' || !window.electronAPI?.kiBuddyAuth) return null;
+  return KI_BUDDY_DEFAULT_LANGUAGE ?? null;
+}
+
 function getInitialLanguage(): SupportedLanguage {
   const backendStartupFailed =
     typeof window !== 'undefined' && (window as Window & { __backendStartupFailed?: boolean }).__backendStartupFailed;
   const localStorageLanguage = getLocalStorageLanguageHint();
   const injectedLanguage = getInjectedLanguageHint();
+  const productLanguage = getKiBuddyDefaultLanguageHint();
   const systemLanguage = backendStartupFailed ? getElectronSystemLanguageHint() : null;
+  if (productLanguage) {
+    return resolveLanguagePreference({
+      savedLanguage: injectedLanguage || localStorageLanguage,
+      productLanguage,
+      systemLanguage: navigator.language,
+    });
+  }
   const hint = backendStartupFailed
     ? injectedLanguage || localStorageLanguage || systemLanguage
     : localStorageLanguage || injectedLanguage;
@@ -144,7 +158,10 @@ async function initLanguage(): Promise<void> {
   try {
     await configService.whenReady();
     const savedLanguage = configService.get('language');
-    const language = savedLanguage || normalizeLanguageCode(navigator.language || DEFAULT_LANGUAGE);
+    const productLanguage = getKiBuddyDefaultLanguageHint();
+    const language = productLanguage
+      ? resolveLanguagePreference({ savedLanguage, productLanguage, systemLanguage: navigator.language })
+      : savedLanguage || normalizeLanguageCode(navigator.language || DEFAULT_LANGUAGE);
     await ensureAndSwitch(i18n, language, loadLocaleModules);
     // Sync to localStorage so next page load can use it as a fast hint
     if (typeof localStorage !== 'undefined') {

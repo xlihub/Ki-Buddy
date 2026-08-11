@@ -26,6 +26,10 @@ describe('Ki-Buddy product release identity', () => {
     expect(mapping.release.version).toBe(readProductVersion(projectRoot));
   });
 
+  it('keeps the Ki-Buddy language default in the product configuration', () => {
+    expect(readProductConfig(projectRoot).defaults).toEqual({ language: 'zh-CN' });
+  });
+
   it('rejects a release mapping that does not describe the current product version', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-release-mapping-'));
     try {

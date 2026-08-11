@@ -5,6 +5,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import bcrypt from 'bcryptjs';
 import { AgentsAuthService } from '@/process/ki-buddy/AgentsAuthService';
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -89,8 +90,8 @@ describe('AgentsAuthService', () => {
 
     const result = await service.login({
       baseUrl: 'https://AGENTS.example.com/',
-      loginName: 'agents-user@example.com',
-      password: 'correct-password',
+      loginName: '  agents-user@example.com  ',
+      password: 'secret',
     });
 
     expect(result).toEqual({
@@ -100,12 +101,14 @@ describe('AgentsAuthService', () => {
         user: { id: 'core-user-42', username: 'agents-user@example.com' },
       },
     });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://agents.example.com/api/auth/login');
-    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
-      method: 'POST',
-      redirect: 'manual',
-      body: JSON.stringify({ loginName: 'agents-user@example.com', password: 'correct-password' }),
-    });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://agents.example.com/kagent/login');
+    const loginRequest = fetchMock.mock.calls[0]?.[1];
+    expect(loginRequest).toMatchObject({ method: 'POST', redirect: 'manual' });
+    expect(loginRequest?.headers).toBeUndefined();
+    expect(loginRequest?.body).toBeInstanceOf(FormData);
+    const loginForm = loginRequest?.body as FormData;
+    expect(loginForm.get('username')).toBe('agents-user@example.com');
+    expect(bcrypt.compareSync('5ebe2294ecd0e0f08eab7690d2a6ee69', String(loginForm.get('password')))).toBe(true);
     const provisionUrl = String(fetchMock.mock.calls[1]?.[0]);
     const projectedIdentity = decodeURIComponent(provisionUrl.slice(provisionUrl.lastIndexOf('/') + 1));
     const sessionBody = JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body)) as {
@@ -197,7 +200,7 @@ describe('AgentsAuthService', () => {
       status: 'authenticated',
       user: { id: 'core-user-42', username: 'agents-user@example.com' },
     });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://agents.example.com/api/auth/token/verify');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://agents.example.com/kagent/system/user/validateToken');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
       method: 'POST',
       redirect: 'manual',
@@ -233,13 +236,13 @@ describe('AgentsAuthService', () => {
 
     expect(result).toEqual({ success: false, code: 'contractError' });
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://agents.example.com/api/auth/login');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://agents.example.com/kagent/login');
   });
 
   it.each([
     {
       name: 'Agents authentication rejection',
-      response: new Response(JSON.stringify({ errorCode: 40001, message: 'invalid credentials' }), {
+      response: new Response(JSON.stringify({ errorCode: 1, message: 'invalid credentials' }), {
         status: 400,
         headers: { 'content-type': 'application/json' },
       }),

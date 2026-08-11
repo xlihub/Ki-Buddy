@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import type {
   KiBuddyAuthSession,
   KiBuddyAuthUser,
@@ -64,6 +65,11 @@ function externalIdentity(baseUrl: string, userId: string): string {
     .update(JSON.stringify([baseUrl, userId]), 'utf8')
     .digest('base64url');
   return `agents-v1-${digest}`;
+}
+
+async function hashLoginPassword(rawPassword: string): Promise<string> {
+  const digest = createHash('md5').update(rawPassword, 'utf8').digest('hex');
+  return bcrypt.hash(digest, 11);
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -150,7 +156,7 @@ export class AgentsAuthService {
 
     let response: Response;
     try {
-      response = await this.dependencies.fetch(`${stored.baseUrl}/api/auth/token/verify`, {
+      response = await this.dependencies.fetch(`${stored.baseUrl}/kagent/system/user/validateToken`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${stored.token}` },
         redirect: 'manual',
@@ -196,10 +202,12 @@ export class AgentsAuthService {
 
     let agentsResponse: Response;
     try {
-      agentsResponse = await this.dependencies.fetch(`${baseUrl}/api/auth/login`, {
+      const form = new FormData();
+      form.append('username', request.loginName.trim());
+      form.append('password', await hashLoginPassword(request.password));
+      agentsResponse = await this.dependencies.fetch(`${baseUrl}/kagent/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loginName: request.loginName, password: request.password }),
+        body: form,
         redirect: 'manual',
       });
     } catch {
@@ -207,17 +215,17 @@ export class AgentsAuthService {
     }
 
     const agentsEnvelope = await readJson(agentsResponse);
-    if (
-      agentsResponse.status === 401 ||
-      agentsResponse.status === 403 ||
-      (isRecord(agentsEnvelope) && agentsEnvelope.errorCode === 40001)
-    ) {
+    const authRejected =
+      isRecord(agentsEnvelope) &&
+      typeof agentsEnvelope.errorCode === 'number' &&
+      agentsEnvelope.errorCode !== 0 &&
+      agentsResponse.status < 500;
+    if (agentsResponse.status === 401 || agentsResponse.status === 403 || authRejected) {
       return { success: false, code: 'invalidCredentials' };
     }
     if (!agentsResponse.ok) {
       return { success: false, code: agentsResponse.status >= 500 ? 'serverError' : 'contractError' };
     }
-
     const agentsUser = parseAgentsLogin(agentsEnvelope);
     if (!agentsUser) {
       return { success: false, code: 'contractError' };
