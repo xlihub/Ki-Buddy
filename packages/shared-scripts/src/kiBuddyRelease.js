@@ -45,16 +45,34 @@ function readProductConfig(projectRoot) {
   const config = readJson(path.join(projectRoot, PRODUCT_CONFIG_FILE), 'Ki-Buddy product configuration');
   requireExactKeys(
     config,
-    ['schemaVersion', 'defaults', 'packageMetadata', 'electronBuilder', 'webCli', 'updates', 'kiCore'],
+    [
+      'schemaVersion',
+      'runtimeIdentity',
+      'defaults',
+      'packageMetadata',
+      'electronBuilder',
+      'webCli',
+      'updates',
+      'kiCore',
+    ],
     'Ki-Buddy product configuration'
   );
   if (config.schemaVersion !== 1) throw new Error('Unsupported Ki-Buddy product configuration schema');
-  requireExactKeys(config.defaults, ['agentsBaseUrl', 'language'], 'Ki-Buddy product defaults');
-  if (config.defaults.agentsBaseUrl !== 'https://ksapi.kingsware.cn') {
-    throw new Error('Ki-Buddy default Agents base URL must use the public production deployment');
+  if (typeof config.runtimeIdentity !== 'string' || config.runtimeIdentity.trim() === '') {
+    throw new Error('Ki-Buddy runtime identity must be a non-empty string');
   }
-  if (config.defaults.language !== 'zh-CN') {
-    throw new Error('Ki-Buddy default language must be zh-CN');
+  requireExactKeys(config.defaults, ['agentsBaseUrl', 'language'], 'Ki-Buddy product defaults');
+  if (typeof config.defaults.agentsBaseUrl !== 'string' || config.defaults.agentsBaseUrl.trim() === '') {
+    throw new Error('Ki-Buddy default Agents base URL must be a non-empty string');
+  }
+  try {
+    const agentsUrl = new URL(config.defaults.agentsBaseUrl);
+    if (!['http:', 'https:'].includes(agentsUrl.protocol)) throw new Error('unsupported protocol');
+  } catch {
+    throw new Error('Ki-Buddy default Agents base URL must be an HTTP(S) URL');
+  }
+  if (typeof config.defaults.language !== 'string' || config.defaults.language.trim() === '') {
+    throw new Error('Ki-Buddy default language must be a non-empty string');
   }
   requireExactKeys(
     config.packageMetadata,
@@ -63,6 +81,9 @@ function readProductConfig(projectRoot) {
   );
   if (config.packageMetadata.name !== 'ki-buddy' || config.packageMetadata.productName !== KI_BUDDY_PRODUCT) {
     throw new Error('Ki-Buddy package metadata identity is invalid');
+  }
+  if (config.runtimeIdentity !== config.packageMetadata.name) {
+    throw new Error('Ki-Buddy runtime identity must match package metadata name');
   }
   requireExactKeys(
     config.electronBuilder,
@@ -119,6 +140,7 @@ function createEffectivePackageJson(projectRoot, options = {}) {
   return {
     ...upstreamPackage,
     ...productConfig.packageMetadata,
+    productRuntime: productConfig.runtimeIdentity,
     version,
   };
 }
@@ -130,10 +152,17 @@ function createElectronBuilderConfig(projectRoot, outputPath, options = {}) {
     extends: path.join(projectRoot, 'packages/desktop/electron-builder.yml'),
     ...productConfig.electronBuilder,
     extraMetadata: Object.fromEntries(
-      ['name', 'version', 'description', 'author', 'repository', 'homepage', 'bugs', 'productName'].map((key) => [
-        key,
-        effectivePackage[key],
-      ])
+      [
+        'name',
+        'version',
+        'description',
+        'author',
+        'repository',
+        'homepage',
+        'bugs',
+        'productName',
+        'productRuntime',
+      ].map((key) => [key, effectivePackage[key]])
     ),
   };
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });

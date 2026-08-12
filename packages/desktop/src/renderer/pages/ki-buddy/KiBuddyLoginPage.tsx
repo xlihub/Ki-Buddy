@@ -2,9 +2,10 @@ import { Alert, Button, Form, Input, Typography } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KI_BUDDY_DEFAULT_AGENTS_BASE_URL } from '@/common/platform/ki-buddy';
-import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { useKiBuddyAuth } from './auth';
 import DeploymentUrlField from './DeploymentUrlField';
 import { readDeploymentHistory, recordSuccessfulDeployment } from './deploymentHistory';
+import { KI_BUDDY_LOGIN_ERROR_KEYS, normalizeKiBuddyLoginErrorCode, type KiBuddyLoginErrorCode } from './loginErrors';
 
 type LoginFormValues = {
   baseUrl: string;
@@ -12,25 +13,11 @@ type LoginFormValues = {
   password: string;
 };
 
-type LoginErrorCode = 'invalidCredentials' | 'networkError' | 'serverError' | 'contractError' | 'unknown';
-
-function toLoginErrorCode(code: string | undefined): LoginErrorCode {
-  switch (code) {
-    case 'invalidCredentials':
-    case 'networkError':
-    case 'serverError':
-    case 'contractError':
-      return code;
-    default:
-      return 'unknown';
-  }
-}
-
 const KiBuddyLoginPage: React.FC = () => {
   const { t } = useTranslation();
-  const { login } = useAuth();
+  const { login } = useKiBuddyAuth();
   const [loading, setLoading] = useState(false);
-  const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
+  const [errorCode, setErrorCode] = useState<KiBuddyLoginErrorCode | null>(null);
   const [deploymentHistory] = useState(readDeploymentHistory);
   const requiredRule = { required: true, message: t('login.errors.required') };
 
@@ -49,7 +36,7 @@ const KiBuddyLoginPage: React.FC = () => {
           password: values.password,
         });
         if (!result.success) {
-          setErrorCode(toLoginErrorCode(result.code));
+          setErrorCode(normalizeKiBuddyLoginErrorCode(result.code));
           return;
         }
         recordSuccessfulDeployment(values.baseUrl);
@@ -91,21 +78,7 @@ const KiBuddyLoginPage: React.FC = () => {
             {loading ? t('login.submitting') : t('login.submit')}
           </Button>
           {errorCode ? (
-            <Alert
-              className='mt-16px'
-              type='error'
-              content={
-                errorCode === 'invalidCredentials'
-                  ? t('login.errors.invalidCredentials')
-                  : errorCode === 'networkError'
-                    ? t('login.errors.networkError')
-                    : errorCode === 'serverError'
-                      ? t('login.errors.serverError')
-                      : errorCode === 'contractError'
-                        ? t('login.errors.contractError')
-                        : t('login.errors.unknown')
-              }
-            />
+            <Alert className='mt-16px' type='error' content={t(KI_BUDDY_LOGIN_ERROR_KEYS[errorCode])} />
           ) : null}
         </Form>
       </section>

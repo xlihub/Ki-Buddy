@@ -1,8 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useSWRConfig } from 'swr';
 import { PREVIEW_SCOPE_KEY_PREFIX } from '@/renderer/pages/conversation/Preview/context/previewScope';
-import { createKiBuddyAuthHandlers } from '@/renderer/services/runtime/kiBuddyAuthHandlers';
-import type { KiBuddyAgentsProfile } from '@/common/types/platform/kiBuddyAuth';
 // M6: CSRF removed with legacy webserver — stub functions for compatibility, re-implement in M7
 const withCsrfToken = <T extends Record<string, unknown>>(data: T): T => data;
 const hasValidCsrfToken = (): boolean => true;
@@ -11,14 +9,12 @@ const CSRF_COOKIE_NAME = 'csrf-token';
 
 export type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
 
-export interface AuthUser {
+export type AuthUser = {
   id: string;
   username: string;
-  agents?: KiBuddyAgentsProfile;
-}
+};
 
 export type LoginParams = {
-  baseUrl?: string;
   username: string;
   password: string;
   remember?: boolean;
@@ -28,31 +24,53 @@ type LoginErrorCode =
   | 'invalidCredentials'
   | 'tooManyAttempts'
   | 'serverError'
-  | 'contractError'
   | 'networkError'
   | 'csrfError'
   | 'unknown';
 
-export type LoginResult = {
+export type LoginResult<TCode extends string = LoginErrorCode> = {
   success: boolean;
   message?: string;
-  code?: LoginErrorCode;
+  code?: TCode;
   shouldClearCache?: boolean;
 };
 
-interface AuthContextValue {
+export type AuthHandlers<TCode extends string = string> = {
+  login: (params: LoginParams) => Promise<LoginResult<TCode>>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<void>;
+};
+
+export type AuthHandlerFactoryOptions = {
+  clearAccountState: () => void;
+  setReady: (ready: boolean) => void;
+  setStatus: (status: AuthStatus) => void;
+  setUser: (user: AuthUser | null) => void;
+};
+
+export type AuthHandlerFactory = (options: AuthHandlerFactoryOptions) => AuthHandlers<string> | null;
+
+type AuthContextValue = {
   ready: boolean;
   user: AuthUser | null;
   status: AuthStatus;
-  login: (params: LoginParams) => Promise<LoginResult>;
+  login: (params: LoginParams) => Promise<LoginResult<string>>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   clearAuthCache: () => void;
-}
+};
+
+type AuthProviderProps = React.PropsWithChildren<{
+  handlerFactory?: AuthHandlerFactory;
+}>;
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const AUTH_USER_ENDPOINT = '/api/auth/user';
+
+function isAionUiDesktopRuntime(): boolean {
+  return typeof window !== 'undefined' && Boolean(window.electronAPI);
+}
 
 // Clear expired auth cache including cookies and localStorage
 // 清除过期的认证缓存，包括 Cookie 和 localStorage
@@ -122,14 +140,21 @@ async function fetchCurrentUser(signal?: AbortSignal): Promise<AuthUser | null> 
   return null;
 }
 
-export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children, handlerFactory }) => {
   const { cache: swrCache } = useSWRConfig();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>('checking');
   const [ready, setReady] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const webRefresh = useCallback(async () => {
+  const defaultRefresh = useCallback(async () => {
+    if (isAionUiDesktopRuntime()) {
+      setStatus('authenticated');
+      setUser(null);
+      setReady(true);
+      return;
+    }
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -146,8 +171,13 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setReady(true);
   }, []);
 
-  const webLogin = useCallback(async ({ username, password, remember }: LoginParams): Promise<LoginResult> => {
+  const defaultLogin = useCallback(async ({ username, password, remember }: LoginParams): Promise<LoginResult> => {
     try {
+      if (isAionUiDesktopRuntime()) {
+        setReady(true);
+        return { success: true };
+      }
+
       // Check CSRF token availability before login
       // If token is missing, clear cache and inform user
       const csrfTokenValid = hasValidCsrfToken();
@@ -245,7 +275,14 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     }
   }, []);
 
-  const webLogout = useCallback(async () => {
+  const defaultLogout = useCallback(async () => {
+    if (isAionUiDesktopRuntime()) {
+      setUser(null);
+      setStatus('authenticated');
+      setReady(true);
+      return;
+    }
+
     try {
       await fetch('/logout', {
         method: 'POST',
@@ -269,7 +306,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
   const handlers = useMemo(
     () =>
-      createKiBuddyAuthHandlers({
+      handlerFactory?.({
         clearAccountState: () => {
           clearSWRCache(swrCache);
           clearAuthCache();
@@ -277,8 +314,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         setReady,
         setStatus,
         setUser,
-      }) ?? { login: webLogin, logout: webLogout, refresh: webRefresh },
-    [swrCache, webLogin, webLogout, webRefresh]
+      }) ?? { login: defaultLogin, logout: defaultLogout, refresh: defaultRefresh },
+    [defaultLogin, defaultLogout, defaultRefresh, handlerFactory, swrCache]
   );
   const { login, logout, refresh } = handlers;
 

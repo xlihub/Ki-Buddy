@@ -2,27 +2,31 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { authState, clearPreviewForScopeMock, closePreviewMock, logoutMock, replayMock } = vi.hoisted(() => ({
-  authState: { user: null as typeof authenticatedUser | null },
-  clearPreviewForScopeMock: vi.fn(),
-  closePreviewMock: vi.fn(),
-  logoutMock: vi.fn(),
-  replayMock: vi.fn(),
-}));
+const { authState, productAuthState, clearPreviewForScopeMock, closePreviewMock, logoutMock, replayMock } = vi.hoisted(
+  () => ({
+    authState: { user: null as { id: string; username: string } | null },
+    productAuthState: { profile: null as typeof agentsProfile | null },
+    clearPreviewForScopeMock: vi.fn(),
+    closePreviewMock: vi.fn(),
+    logoutMock: vi.fn(),
+    replayMock: vi.fn(),
+  })
+);
+
+const agentsProfile = {
+  userId: 'agents-user-42',
+  username: 'agents-user@example.com',
+  displayName: 'Agents User',
+  email: 'agents-user@example.com',
+  phone: '13800138000',
+  organization: 'Kingsoft AI',
+  roles: ['设计人员', '审核人员'],
+  deploymentUrl: 'https://agents.example.com',
+};
 
 const authenticatedUser = {
   id: 'core-user-42',
   username: 'agents-user@example.com',
-  agents: {
-    userId: 'agents-user-42',
-    username: 'agents-user@example.com',
-    displayName: 'Agents User',
-    email: 'agents-user@example.com',
-    phone: '13800138000',
-    organization: 'Kingsoft AI',
-    roles: ['设计人员', '审核人员'],
-    deploymentUrl: 'https://agents.example.com',
-  },
 };
 
 vi.mock('react-i18next', () => ({
@@ -31,6 +35,10 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => ({ logout: logoutMock, user: authState.user }),
+}));
+
+vi.mock('@/renderer/pages/ki-buddy/auth', () => ({
+  useKiBuddyAuth: () => ({ profile: productAuthState.profile }),
 }));
 
 vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
@@ -53,6 +61,7 @@ import KiBuddyAccountSettings from '@/renderer/pages/ki-buddy/Account';
 describe('KiBuddyAccountSettings', () => {
   beforeEach(() => {
     authState.user = authenticatedUser;
+    productAuthState.profile = agentsProfile;
     logoutMock.mockReset();
     logoutMock.mockResolvedValue(undefined);
     closePreviewMock.mockReset();
@@ -108,6 +117,7 @@ describe('KiBuddyAccountSettings', () => {
 
   it('does not expose account controls without an Agents profile', () => {
     authState.user = null;
+    productAuthState.profile = null;
     const { container } = render(<KiBuddyAccountSettings />);
 
     expect(container).toBeEmptyDOMElement();

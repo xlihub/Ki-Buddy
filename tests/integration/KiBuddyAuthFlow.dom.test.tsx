@@ -52,7 +52,8 @@ vi.mock('@/renderer/components/settings/SettingsModal/contents/AboutModalContent
 }));
 
 import PanelRoute from '@/renderer/components/layout/Router';
-import { AuthProvider, useAuth } from '@/renderer/hooks/context/AuthContext';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { KiBuddyAuthProvider as AuthProvider } from '@/renderer/pages/ki-buddy/auth';
 
 const authenticatedUser = {
   id: 'core-user-42',

@@ -6,6 +6,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { configService } from '@/common/config/configService';
+import { setHttpRequestTransport } from '@/common/adapter/httpBridge';
+import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/auth/coreTransport';
 
 const jsonResponse = (data?: unknown): Response =>
   new Response(data === undefined ? null : JSON.stringify({ data }), {
@@ -21,14 +23,18 @@ describe('configService Core authentication transport', () => {
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
     window.__backendPort = 39123;
-    window.__coreCsrfToken = 'core-csrf-token';
+    window.electronAPI = {
+      ...window.electronAPI,
+      kiBuddyCoreTransport: { csrfToken: 'core-csrf-token' },
+    };
+    installKiBuddyRendererCoreTransport();
   });
 
   afterEach(() => {
     configService.reset();
     vi.unstubAllGlobals();
     delete window.__backendPort;
-    delete window.__coreCsrfToken;
+    setHttpRequestTransport(null);
   });
 
   it('loads saved settings with the Core session cookie', async () => {
@@ -73,5 +79,43 @@ describe('configService Core authentication transport', () => {
     await configService.initialize();
 
     expect(configService.get('language')).toBe('en-US');
+  });
+
+  it('reloads account-scoped settings while preserving active subscribers', async () => {
+    const languageSubscriber = vi.fn();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ language: 'en-US', 'theme.activeId': 'light', 'theme.userThemes': [] }))
+      .mockResolvedValueOnce(jsonResponse({ language: 'zh-CN', 'theme.activeId': 'light', 'theme.userThemes': [] }));
+    await configService.initialize();
+    const unsubscribe = configService.subscribe('language', languageSubscriber);
+
+    configService.resetForAccountChange();
+    expect(configService.get('language')).toBeUndefined();
+    await configService.initialize();
+    configService.setLocal('language', 'ja-JP');
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(configService.get('language')).toBe('ja-JP');
+    expect(languageSubscriber).toHaveBeenCalledWith('ja-JP');
+    unsubscribe();
+  });
+
+  it('ignores an old account initialization that resolves after an account switch', async () => {
+    let resolveOldAccount: ((response: Response) => void) | undefined;
+    fetchMock
+      .mockReturnValueOnce(
+        new Promise<Response>((resolve) => {
+          resolveOldAccount = resolve;
+        })
+      )
+      .mockResolvedValueOnce(jsonResponse({ language: 'zh-CN', 'theme.activeId': 'light', 'theme.userThemes': [] }));
+
+    const oldInitialization = configService.initialize();
+    configService.resetForAccountChange();
+    await configService.initialize();
+    resolveOldAccount?.(jsonResponse({ language: 'en-US', 'theme.activeId': 'light', 'theme.userThemes': [] }));
+    await oldInitialization;
+
+    expect(configService.get('language')).toBe('zh-CN');
   });
 });

@@ -8,14 +8,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AuthProvider, useAuth } from '@/renderer/hooks/context/AuthContext';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { KiBuddyAuthProvider, useKiBuddyAuth } from '@/renderer/pages/ki-buddy/auth';
 
 const getSessionMock = vi.fn();
 const loginMock = vi.fn();
 const logoutMock = vi.fn();
 
 const AuthStatusProbe: React.FC = () => {
-  const { login, status } = useAuth();
+  const { status } = useAuth();
+  const { login } = useKiBuddyAuth();
   return (
     <div>
       <output aria-label='authentication-status'>{status}</output>
@@ -59,9 +61,9 @@ describe('Ki-Buddy AuthProvider session restoration', () => {
 
     render(
       <SWRConfig value={{ provider: () => swrCache }}>
-        <AuthProvider>
+        <KiBuddyAuthProvider>
           <AuthStatusProbe />
-        </AuthProvider>
+        </KiBuddyAuthProvider>
       </SWRConfig>
     );
 
@@ -78,9 +80,9 @@ describe('Ki-Buddy AuthProvider session restoration', () => {
 
     render(
       <SWRConfig value={{ provider: () => swrCache }}>
-        <AuthProvider>
+        <KiBuddyAuthProvider>
           <AuthStatusProbe />
-        </AuthProvider>
+        </KiBuddyAuthProvider>
       </SWRConfig>
     );
 
@@ -113,9 +115,9 @@ describe('Ki-Buddy AuthProvider session restoration', () => {
     swrCache.set('/api/assistants', { data: [{ id: 'previous-account-assistant' }] });
     render(
       <SWRConfig value={{ provider: () => swrCache }}>
-        <AuthProvider>
+        <KiBuddyAuthProvider>
           <AuthStatusProbe />
-        </AuthProvider>
+        </KiBuddyAuthProvider>
       </SWRConfig>
     );
     expect(await screen.findByLabelText('authentication-status')).toHaveTextContent('unauthenticated');

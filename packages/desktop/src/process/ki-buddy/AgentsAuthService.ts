@@ -23,6 +23,7 @@ export type AgentsCredentialStore = {
 type AgentsAuthServiceDependencies = {
   agentsFetch: typeof fetch;
   bootstrapSecret: string;
+  clearCoreSession: () => Promise<void>;
   credentialStore: AgentsCredentialStore;
   fetch: typeof fetch;
   getCoreBaseUrl: () => string;
@@ -186,7 +187,7 @@ export class AgentsAuthService {
     }
 
     if (response.status === 401 || response.status === 403) {
-      await this.dependencies.credentialStore.clear();
+      await this.deactivateIdentity({ baseUrl: stored.baseUrl, userId: stored.userId });
       this.session = { status: 'unauthenticated', user: null, cleanupRequired: true };
       return this.session;
     }
@@ -196,7 +197,7 @@ export class AgentsAuthService {
 
     const identity = parseAgentsIdentity(await readJson(response));
     if (!identity || identity.userId !== stored.userId) {
-      await this.dependencies.credentialStore.clear();
+      await this.deactivateIdentity({ baseUrl: stored.baseUrl, userId: stored.userId });
       this.session = { status: 'unauthenticated', user: null, cleanupRequired: true };
       return this.session;
     }
@@ -208,6 +209,8 @@ export class AgentsAuthService {
         this.activeIdentity = { baseUrl: stored.baseUrl, userId: stored.userId };
         this.session = { status: 'authenticated', user: coreProjection.projection.user };
       } catch {
+        await this.deactivateIdentity({ baseUrl: stored.baseUrl, userId: stored.userId });
+        this.session = { status: 'unauthenticated', user: null, cleanupRequired: true };
         return this.session;
       }
     }
@@ -250,9 +253,22 @@ export class AgentsAuthService {
       return { success: false, code: 'contractError' };
     }
 
+    const nextIdentity = { baseUrl, userId: agentsUser.userId };
+    const existingIdentity = await this.resolveExistingIdentity();
+    let previousIdentityDeactivated = false;
+    if (existingIdentity && !this.isSameIdentity(existingIdentity, nextIdentity)) {
+      const cleanupError = await this.deactivateIdentity(existingIdentity);
+      previousIdentityDeactivated = true;
+      if (cleanupError) return { success: false, code: 'serverError', shouldClearCache: true };
+    }
+
     const coreProjection = await this.establishCoreSession(baseUrl, agentsUser);
     if ('code' in coreProjection) {
-      return { success: false, code: coreProjection.code };
+      return {
+        success: false,
+        code: coreProjection.code,
+        ...(previousIdentityDeactivated ? { shouldClearCache: true as const } : {}),
+      };
     }
 
     try {
@@ -262,7 +278,11 @@ export class AgentsAuthService {
         userId: agentsUser.userId,
       });
     } catch {
-      return { success: false, code: 'serverError' };
+      return {
+        success: false,
+        code: 'serverError',
+        ...(previousIdentityDeactivated ? { shouldClearCache: true as const } : {}),
+      };
     }
 
     try {
@@ -272,54 +292,68 @@ export class AgentsAuthService {
       this.restoreAttempted = true;
       return { success: true, session: this.session };
     } catch {
-      await this.dependencies.credentialStore.clear();
-      return { success: false, code: 'serverError' };
+      await this.deactivateIdentity(nextIdentity);
+      return { success: false, code: 'serverError', shouldClearCache: true };
     }
   }
 
   /** Revokes the Core projection and removes all locally stored session credentials. */
-  async logout(options: { clearCoreSessionCookie: () => Promise<void> }): Promise<KiBuddyAuthSession> {
-    let identity = this.activeIdentity;
-    if (!identity) {
-      try {
-        const stored = await this.dependencies.credentialStore.load();
-        identity = stored ? { baseUrl: stored.baseUrl, userId: stored.userId } : null;
-      } catch {
-        identity = null;
-      }
-    }
+  async logout(): Promise<KiBuddyAuthSession> {
+    const identity = await this.resolveExistingIdentity();
+    const credentialCleanupError = await this.deactivateIdentity(identity);
+    if (credentialCleanupError) throw credentialCleanupError;
+    return this.session;
+  }
 
+  private isSameIdentity(
+    left: Pick<StoredAgentsSession, 'baseUrl' | 'userId'>,
+    right: Pick<StoredAgentsSession, 'baseUrl' | 'userId'>
+  ): boolean {
+    return left.baseUrl === right.baseUrl && left.userId === right.userId;
+  }
+
+  private async resolveExistingIdentity(): Promise<Pick<StoredAgentsSession, 'baseUrl' | 'userId'> | null> {
+    if (this.activeIdentity) return this.activeIdentity;
+    try {
+      const stored = await this.dependencies.credentialStore.load();
+      return stored ? { baseUrl: stored.baseUrl, userId: stored.userId } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async revokeCoreProjection(identity: Pick<StoredAgentsSession, 'baseUrl' | 'userId'>): Promise<void> {
+    const coreBaseUrl = this.dependencies.getCoreBaseUrl();
+    try {
+      await this.dependencies.fetch(`${coreBaseUrl}/api/auth/internal/external-sessions/revoke`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-aioncore-bootstrap-secret': this.dependencies.bootstrapSecret,
+        },
+        body: JSON.stringify({
+          user_type: 'aionpro',
+          external_user_id: externalIdentity(identity.baseUrl, identity.userId),
+        }),
+      });
+    } catch {
+      // Core is local and its browser/main-process session is cleared below even when revoke is unavailable.
+    }
+  }
+
+  private async deactivateIdentity(identity: Pick<StoredAgentsSession, 'baseUrl' | 'userId'> | null): Promise<unknown> {
     let credentialCleanupError: unknown;
     try {
       await this.dependencies.credentialStore.clear();
     } catch (error) {
       credentialCleanupError = error;
     }
-    if (identity) {
-      const coreBaseUrl = this.dependencies.getCoreBaseUrl();
-      try {
-        await this.dependencies.fetch(`${coreBaseUrl}/api/auth/internal/external-sessions/revoke`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-aioncore-bootstrap-secret': this.dependencies.bootstrapSecret,
-          },
-          body: JSON.stringify({
-            user_type: 'aionpro',
-            external_user_id: externalIdentity(identity.baseUrl, identity.userId),
-          }),
-        });
-      } catch {
-        // Core is local and its session cookie is cleared below even if revoke fails.
-      }
-    }
-
+    if (identity) await this.revokeCoreProjection(identity);
     this.activeIdentity = null;
     this.session = { status: 'unauthenticated', user: null };
     this.restoreAttempted = true;
-    await options.clearCoreSessionCookie();
-    if (credentialCleanupError) throw credentialCleanupError;
-    return this.session;
+    await this.dependencies.clearCoreSession();
+    return credentialCleanupError;
   }
 
   private async establishCoreSession(baseUrl: string, agentsUser: AgentsIdentity): Promise<CoreProjectionResult> {

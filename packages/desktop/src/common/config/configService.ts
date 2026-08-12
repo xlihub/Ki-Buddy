@@ -8,14 +8,17 @@ class ConfigServiceImpl {
   private subscribers = new Map<string, Set<Subscriber>>();
   private initialized = false;
   private initPromise: Promise<void> | null = null;
+  private accountGeneration = 0;
 
   // Idempotent: concurrent callers share the same in-flight promise, and a
   // resolved init returns immediately. Modules that need persisted settings on
   // module load (theme/colorScheme/language) await whenReady() before reading.
   initialize(): Promise<void> {
     if (this.initPromise) return this.initPromise;
-    this.initPromise = (async () => {
+    const generation = this.accountGeneration;
+    const initialization = (async () => {
       const data = await httpRequest<Record<string, unknown>>('GET', '/api/settings/client');
+      if (generation !== this.accountGeneration) return;
       this.cache.clear();
       if (data) {
         for (const [key, value] of Object.entries(data)) {
@@ -38,11 +41,12 @@ class ConfigServiceImpl {
       }
       this.initialized = true;
     })();
-    this.initPromise.catch(() => {
+    this.initPromise = initialization;
+    initialization.catch(() => {
       // Allow a future caller to retry after a transient failure
-      this.initPromise = null;
+      if (this.initPromise === initialization) this.initPromise = null;
     });
-    return this.initPromise;
+    return initialization;
   }
 
   whenReady(): Promise<void> {
@@ -92,7 +96,16 @@ class ConfigServiceImpl {
     return this.initialized;
   }
 
+  /** Clears account-scoped values so the next read reloads them for the newly active Core user. */
+  resetForAccountChange(): void {
+    this.accountGeneration += 1;
+    this.cache.clear();
+    this.initialized = false;
+    this.initPromise = null;
+  }
+
   reset(): void {
+    this.accountGeneration += 1;
     this.cache.clear();
     this.subscribers.clear();
     this.initialized = false;

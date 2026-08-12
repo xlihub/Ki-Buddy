@@ -88,6 +88,7 @@ describe('AgentsAuthService', () => {
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
       credentialStore: {
         load: loadSessionMock,
         save: saveSessionMock,
@@ -211,6 +212,7 @@ describe('AgentsAuthService', () => {
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
       credentialStore: {
         load: loadSessionMock,
         save: saveSessionMock,
@@ -270,6 +272,7 @@ describe('AgentsAuthService', () => {
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
       credentialStore: {
         load: loadSessionMock,
         save: saveSessionMock,
@@ -286,6 +289,158 @@ describe('AgentsAuthService', () => {
       cleanupRequired: true,
     });
     expect(clearSessionMock).toHaveBeenCalledOnce();
+    expect(clearCoreCookieMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('http://127.0.0.1:39123/api/auth/internal/external-sessions/revoke');
+  });
+
+  it.each([
+    {
+      scenario: 'deployment',
+      oldBaseUrl: 'https://old-agents.example.com',
+      oldUserId: 'agents-user',
+      newBaseUrl: 'https://new-agents.example.com',
+      newUserId: 'agents-user',
+    },
+    {
+      scenario: 'account',
+      oldBaseUrl: 'https://agents.example.com',
+      oldUserId: 'old-agents-user',
+      newBaseUrl: 'https://agents.example.com',
+      newUserId: 'new-agents-user',
+    },
+  ])(
+    'revokes the old Core runtime before switching $scenario',
+    async ({ oldBaseUrl, oldUserId, newBaseUrl, newUserId }) => {
+      loadSessionMock.mockResolvedValue({
+        baseUrl: oldBaseUrl,
+        token: 'old-agents-token',
+        userId: oldUserId,
+      });
+      fetchMock
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              errorCode: 0,
+              responseBody: {
+                uuid: newUserId,
+                userName: 'new-user@example.com',
+                token: 'new-agents-token',
+              },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          )
+        )
+        .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              success: true,
+              data: {
+                user_id: 'new-core-user',
+                user_type: 'aionpro',
+                external_user_id: 'new-projected-user',
+                session_generation: 0,
+              },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } }
+          )
+        )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              success: true,
+              data: {
+                user: { id: 'new-core-user', username: 'new-user@example.com' },
+                session_generation: 0,
+              },
+            }),
+            {
+              status: 200,
+              headers: {
+                'content-type': 'application/json',
+                'set-cookie': 'aionui-session=new-core-token; HttpOnly; Path=/; SameSite=Lax',
+              },
+            }
+          )
+        );
+      const service = new AgentsAuthService({
+        agentsFetch: fetchMock,
+        bootstrapSecret: 'bootstrap-secret',
+        clearCoreSession: clearCoreCookieMock,
+        credentialStore: {
+          load: loadSessionMock,
+          save: saveSessionMock,
+          clear: clearSessionMock,
+        },
+        fetch: fetchMock,
+        getCoreBaseUrl: () => 'http://127.0.0.1:39123',
+        setCoreSessionCookie: setCoreCookieMock,
+      });
+
+      await expect(
+        service.login({
+          baseUrl: newBaseUrl,
+          loginName: 'new-user@example.com',
+          password: 'password',
+        })
+      ).resolves.toMatchObject({ success: true });
+
+      expect(fetchMock.mock.calls[1]?.[0]).toBe('http://127.0.0.1:39123/api/auth/internal/external-sessions/revoke');
+      expect(fetchMock.mock.calls[2]?.[0]).toEqual(expect.stringContaining('/api/auth/internal/external-users/'));
+      expect(clearCoreCookieMock).toHaveBeenCalledOnce();
+      expect(clearSessionMock).toHaveBeenCalledOnce();
+      expect(saveSessionMock).toHaveBeenCalledWith({
+        baseUrl: newBaseUrl,
+        token: 'new-agents-token',
+        userId: newUserId,
+      });
+    }
+  );
+
+  it('requests renderer cache cleanup when a switched identity fails Core projection', async () => {
+    loadSessionMock.mockResolvedValue({
+      baseUrl: 'https://old-agents.example.com',
+      token: 'old-agents-token',
+      userId: 'old-agents-user',
+    });
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            errorCode: 0,
+            responseBody: {
+              uuid: 'new-agents-user',
+              userName: 'new-user@example.com',
+              token: 'new-agents-token',
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: false }), { status: 500 }));
+    const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
+      bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
+      credentialStore: {
+        load: loadSessionMock,
+        save: saveSessionMock,
+        clear: clearSessionMock,
+      },
+      fetch: fetchMock,
+      getCoreBaseUrl: () => 'http://127.0.0.1:39123',
+      setCoreSessionCookie: setCoreCookieMock,
+    });
+
+    await expect(
+      service.login({
+        baseUrl: 'https://new-agents.example.com',
+        loginName: 'new-user@example.com',
+        password: 'password',
+      })
+    ).resolves.toEqual({ success: false, code: 'serverError', shouldClearCache: true });
+    expect(clearCoreCookieMock).toHaveBeenCalledOnce();
   });
 
   it('does not forward login credentials across an origin redirect', async () => {
@@ -298,6 +453,7 @@ describe('AgentsAuthService', () => {
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
       credentialStore: {
         load: loadSessionMock,
         save: saveSessionMock,
@@ -346,6 +502,7 @@ describe('AgentsAuthService', () => {
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
       credentialStore: {
         load: loadSessionMock,
         save: saveSessionMock,
@@ -371,6 +528,7 @@ describe('AgentsAuthService', () => {
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
       credentialStore: {
         load: loadSessionMock,
         save: saveSessionMock,
@@ -431,6 +589,7 @@ describe('AgentsAuthService', () => {
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
       credentialStore: {
         load: loadSessionMock,
         save: saveSessionMock,
@@ -500,6 +659,7 @@ describe('AgentsAuthService', () => {
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
       credentialStore: {
         load: loadSessionMock,
         save: saveSessionMock,
@@ -535,6 +695,7 @@ describe('AgentsAuthService', () => {
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
       credentialStore: {
         load: loadSessionMock,
         save: saveSessionMock,
@@ -545,7 +706,7 @@ describe('AgentsAuthService', () => {
       setCoreSessionCookie: setCoreCookieMock,
     });
 
-    const session = await service.logout({ clearCoreSessionCookie: clearCoreCookieMock });
+    const session = await service.logout();
 
     expect(session).toEqual({ status: 'unauthenticated', user: null });
     expect(clearSessionMock).toHaveBeenCalledOnce();
@@ -570,6 +731,7 @@ describe('AgentsAuthService', () => {
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
       credentialStore: {
         load: loadSessionMock,
         save: saveSessionMock,
@@ -580,9 +742,7 @@ describe('AgentsAuthService', () => {
       setCoreSessionCookie: setCoreCookieMock,
     });
 
-    await expect(service.logout({ clearCoreSessionCookie: clearCoreCookieMock })).rejects.toThrow(
-      'keychain denied deletion'
-    );
+    await expect(service.logout()).rejects.toThrow('keychain denied deletion');
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(clearCoreCookieMock).toHaveBeenCalledOnce();

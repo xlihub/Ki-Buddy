@@ -8,15 +8,17 @@ import SettingsPageWrapper from '@/renderer/pages/settings/components/SettingsPa
 import { replayKiBuddyOpeningGuide } from '../onboarding';
 import AccountCard from './AccountCard';
 import LogoutModal from './LogoutModal';
+import { useKiBuddyAuth } from '../auth';
 
 const KiBuddyAccountSettings: React.FC = () => {
   const { t } = useTranslation();
   const { logout, user } = useAuth();
+  const { profile } = useKiBuddyAuth();
   const { clearPreviewForScope, closePreview } = usePreviewContext();
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
-  if (!user?.agents) return null;
+  if (!user || !profile) return null;
 
   const handleLogout = async () => {
     setLogoutLoading(true);
@@ -29,7 +31,7 @@ const KiBuddyAccountSettings: React.FC = () => {
     <SettingsPageWrapper contentClassName='max-w-1024px'>
       <div className='space-y-20px'>
         <h2 className='m-0 text-20px font-600 text-t-primary'>{t('login.account.title')}</h2>
-        <AccountCard profile={user.agents} onRequestLogout={() => setLogoutVisible(true)} />
+        <AccountCard profile={profile} onRequestLogout={() => setLogoutVisible(true)} />
         <Divider className='!my-24px' />
         <section className='flex flex-col justify-between gap-16px px-4px sm:flex-row sm:items-center'>
           <div className='min-w-0'>

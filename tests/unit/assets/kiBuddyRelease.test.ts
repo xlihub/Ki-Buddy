@@ -33,6 +33,31 @@ describe('Ki-Buddy product release identity', () => {
     });
   });
 
+  it('rejects malformed runtime identity and product defaults', () => {
+    const source = JSON.parse(readFileSync(join(projectRoot, 'ki-buddy-product.json'), 'utf8'));
+    for (const mutate of [
+      (config: typeof source) => {
+        config.runtimeIdentity = '';
+      },
+      (config: typeof source) => {
+        config.defaults.agentsBaseUrl = 'ftp://agents.example.com';
+      },
+      (config: typeof source) => {
+        config.defaults.language = '';
+      },
+    ]) {
+      const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-product-config-'));
+      try {
+        const config = structuredClone(source);
+        mutate(config);
+        writeFileSync(join(tempDir, 'ki-buddy-product.json'), JSON.stringify(config));
+        expect(() => readProductConfig(tempDir)).toThrow();
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    }
+  });
+
   it('rejects a release mapping that does not describe the current product version', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-release-mapping-'));
     try {
@@ -60,6 +85,7 @@ describe('Ki-Buddy product release identity', () => {
 
     expect(effectivePackage).toMatchObject({
       ...productConfig.packageMetadata,
+      productRuntime: 'ki-buddy',
       version: productVersion,
       main: upstreamPackage.main,
       dependencies: upstreamPackage.dependencies,
@@ -80,6 +106,7 @@ describe('Ki-Buddy product release identity', () => {
         ...productConfig.electronBuilder,
         extraMetadata: {
           ...productConfig.packageMetadata,
+          productRuntime: 'ki-buddy',
           version: productVersion,
         },
       });

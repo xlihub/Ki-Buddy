@@ -13,7 +13,6 @@
 declare global {
   interface Window {
     __backendPort?: number;
-    __coreCsrfToken?: string | null;
   }
 }
 
@@ -155,15 +154,19 @@ export type HttpRequestOptions = {
   headers?: Record<string, string>;
 };
 
+export type HttpRequestTransport = {
+  getHeaders: (request: { method: string; path: string }) => Record<string, string>;
+};
+
+let requestTransport: HttpRequestTransport | null = null;
+
+/** Installs a runtime-specific transport policy without teaching the common bridge its protocol. */
+export function setHttpRequestTransport(transport: HttpRequestTransport | null): void {
+  requestTransport = transport;
+}
+
 const SENSITIVE_LOG_KEY_PATTERN =
   /api[_-]?key|authorization|auth[_-]?token|access[_-]?token|refresh[_-]?token|secret|password|cookie/i;
-
-function resolveCoreCsrfToken(): string {
-  if (typeof window !== 'undefined') {
-    return window.__coreCsrfToken ?? '';
-  }
-  return (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken ?? '';
-}
 
 function redactForLog(value: unknown, depth = 0): unknown {
   if (depth > 8 || value === null || typeof value !== 'object') {
@@ -198,22 +201,7 @@ export async function httpRequest<T>(
     Object.assign(headers, options.headers);
   }
 
-  if (typeof window === 'undefined') {
-    const coreToken = (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken;
-    if (coreToken) {
-      headers.Authorization = `Bearer ${coreToken}`;
-    }
-  }
-
-  if (!['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) {
-    const csrfToken = resolveCoreCsrfToken();
-    if (csrfToken) {
-      headers['x-csrf-token'] = csrfToken;
-      if (typeof window === 'undefined') {
-        headers.Cookie = `aionui-csrf-token=${csrfToken}`;
-      }
-    }
-  }
+  Object.assign(headers, requestTransport?.getHeaders({ method, path }));
 
   console.debug(
     `[httpBridge] ${method} ${path}`,

@@ -25,6 +25,7 @@ import {
   wsMappedEmitter,
   stubEmitter,
   httpRequest,
+  setHttpRequestTransport,
 } from '@/common/adapter/httpBridge';
 
 type FakeSocketEventMap = {
@@ -78,12 +79,14 @@ describe('httpBridge', () => {
     vi.unstubAllGlobals();
     delete (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken;
     delete (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken;
+    setHttpRequestTransport(null);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     delete (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken;
     delete (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken;
+    setHttpRequestTransport(null);
   });
 
   describe('getBaseUrl', () => {
@@ -489,7 +492,7 @@ describe('httpBridge', () => {
       expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({ 'Content-Type': 'application/json' });
     });
 
-    it('authenticates main-process Core requests without exposing the token to a renderer', async () => {
+    it('does not interpret Ki-Buddy credentials in the common request adapter', async () => {
       const fetchSpy = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ data: {} }), {
           status: 200,
@@ -503,15 +506,10 @@ describe('httpBridge', () => {
 
       await httpRequest('POST', '/api/create', { key: 'value' });
 
-      expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer core-session-token',
-        'x-csrf-token': 'core-csrf-token',
-        Cookie: 'aionui-csrf-token=core-csrf-token',
-      });
+      expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({ 'Content-Type': 'application/json' });
     });
 
-    it('uses only cookies and the CSRF token for renderer Core requests', async () => {
+    it('does not interpret Ki-Buddy renderer CSRF state in the common request adapter', async () => {
       const fetchSpy = vi.fn().mockResolvedValue(
         new Response(JSON.stringify({ data: {} }), {
           status: 200,
@@ -527,10 +525,7 @@ describe('httpBridge', () => {
 
       expect(fetchSpy.mock.calls[0][1]).toMatchObject({
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-csrf-token': 'renderer-csrf-token',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
       expect(fetchSpy.mock.calls[0][1]?.headers).not.toHaveProperty('Authorization');
       expect(fetchSpy.mock.calls[0][1]?.headers).not.toHaveProperty('Cookie');

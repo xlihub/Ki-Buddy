@@ -4,10 +4,11 @@ import type { KiBuddyLoginRequest, KiBuddyLoginResult } from '@/common/types/pla
 import { AgentsAuthService } from './AgentsAuthService';
 import { createAgentsNetworkFetch } from './agentsNetworkClient';
 import { KeytarCredentialStore } from './CredentialStore';
+import type { KiBuddyMainCoreTransport } from './coreTransport';
 
 type RegisterKiBuddyAuthOptions = {
   bootstrapSecret: string;
-  coreCsrfToken: string;
+  coreTransport: KiBuddyMainCoreTransport;
   getCoreBaseUrl: () => string;
 };
 
@@ -22,7 +23,11 @@ function isLoginRequest(value: unknown): value is KiBuddyLoginRequest {
   );
 }
 
-async function setCoreSessionCookie(coreBaseUrl: string, csrfToken: string, header: string): Promise<void> {
+async function setCoreSessionCookie(
+  coreBaseUrl: string,
+  coreTransport: KiBuddyMainCoreTransport,
+  header: string
+): Promise<void> {
   const [nameValue, ...attributes] = header.split(';').map((part) => part.trim());
   const separator = nameValue.indexOf('=');
   if (separator <= 0) throw new Error('Core returned an invalid session cookie');
@@ -47,7 +52,7 @@ async function setCoreSessionCookie(coreBaseUrl: string, csrfToken: string, head
     session.defaultSession.cookies.set({
       url: coreBaseUrl,
       name: CORE_CSRF_COOKIE,
-      value: csrfToken,
+      value: coreTransport.csrfToken,
       path: '/',
       httpOnly: false,
       sameSite: 'no_restriction',
@@ -58,14 +63,14 @@ async function setCoreSessionCookie(coreBaseUrl: string, csrfToken: string, head
     await Promise.all(cookieWrites);
   } catch (error) {
     await Promise.allSettled(cookieWrites);
-    await clearCoreSession(coreBaseUrl);
+    await clearCoreSession(coreBaseUrl, coreTransport);
     throw error;
   }
-  (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken = value;
+  coreTransport.setAccessToken(value);
 }
 
-async function clearCoreSession(coreBaseUrl: string): Promise<void> {
-  delete (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken;
+async function clearCoreSession(coreBaseUrl: string, coreTransport: KiBuddyMainCoreTransport): Promise<void> {
+  coreTransport.clearAccessToken();
   await Promise.allSettled([
     session.defaultSession.cookies.remove(coreBaseUrl, CORE_SESSION_COOKIE),
     session.defaultSession.cookies.remove(coreBaseUrl, CORE_CSRF_COOKIE),
@@ -74,14 +79,14 @@ async function clearCoreSession(coreBaseUrl: string): Promise<void> {
 
 /** Registers the dedicated Ki-Buddy authentication IPC handlers in the main process. */
 export function registerKiBuddyAuthBridge(options: RegisterKiBuddyAuthOptions): AgentsAuthService {
-  (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken = options.coreCsrfToken;
   const service = new AgentsAuthService({
     agentsFetch: createAgentsNetworkFetch(),
     bootstrapSecret: options.bootstrapSecret,
+    clearCoreSession: () => clearCoreSession(options.getCoreBaseUrl(), options.coreTransport),
     credentialStore: new KeytarCredentialStore(app.getPath('userData')),
     fetch,
     getCoreBaseUrl: options.getCoreBaseUrl,
-    setCoreSessionCookie: (header) => setCoreSessionCookie(options.getCoreBaseUrl(), options.coreCsrfToken, header),
+    setCoreSessionCookie: (header) => setCoreSessionCookie(options.getCoreBaseUrl(), options.coreTransport, header),
   });
 
   ipcMain.handle(KI_BUDDY_AUTH_CHANNELS.getSession, () => service.getSession());
@@ -91,8 +96,6 @@ export function registerKiBuddyAuthBridge(options: RegisterKiBuddyAuthOptions): 
     }
     return service.login(request);
   });
-  ipcMain.handle(KI_BUDDY_AUTH_CHANNELS.logout, () =>
-    service.logout({ clearCoreSessionCookie: () => clearCoreSession(options.getCoreBaseUrl()) })
-  );
+  ipcMain.handle(KI_BUDDY_AUTH_CHANNELS.logout, () => service.logout());
   return service;
 }

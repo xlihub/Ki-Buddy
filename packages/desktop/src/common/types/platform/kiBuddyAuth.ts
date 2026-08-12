@@ -27,7 +27,11 @@ export type KiBuddyLoginRequest = {
 
 export type KiBuddyLoginResult =
   | { success: true; session: Extract<KiBuddyAuthSession, { status: 'authenticated' }> }
-  | { success: false; code: 'invalidCredentials' | 'networkError' | 'serverError' | 'contractError' };
+  | {
+      success: false;
+      code: 'invalidCredentials' | 'networkError' | 'serverError' | 'contractError';
+      shouldClearCache?: true;
+    };
 
 export type KiBuddyAuthApi = {
   getSession: () => Promise<KiBuddyAuthSession>;

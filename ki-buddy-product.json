@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "runtimeIdentity": "ki-buddy",
   "defaults": {
     "agentsBaseUrl": "https://ksapi.kingsware.cn",
     "language": "zh-CN"

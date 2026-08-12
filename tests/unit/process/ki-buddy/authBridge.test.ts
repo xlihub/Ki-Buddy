@@ -48,8 +48,10 @@ vi.mock('@/process/ki-buddy/CredentialStore', () => ({
 }));
 
 import { registerKiBuddyAuthBridge } from '@/process/ki-buddy/authBridge';
+import { KiBuddyMainCoreTransport } from '@/process/ki-buddy/coreTransport';
 
 function registerBridgeWithSuccessfulLogin() {
+  const coreTransport = new KiBuddyMainCoreTransport('core-csrf-token');
   const fetchMock = vi
     .fn<typeof fetch>()
     .mockResolvedValueOnce(
@@ -96,10 +98,10 @@ function registerBridgeWithSuccessfulLogin() {
   vi.stubGlobal('fetch', fetchMock);
   registerKiBuddyAuthBridge({
     bootstrapSecret: 'bootstrap-secret',
-    coreCsrfToken: 'core-csrf-token',
+    coreTransport,
     getCoreBaseUrl: () => 'http://127.0.0.1:39123',
   });
-  return fetchMock;
+  return { coreTransport, fetchMock };
 }
 
 describe('Ki-Buddy authentication IPC bridge', () => {
@@ -119,12 +121,10 @@ describe('Ki-Buddy authentication IPC bridge', () => {
     credentialStoreMock.clear.mockReset();
     credentialStoreMock.load.mockReset();
     credentialStoreMock.save.mockReset();
-    delete (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken;
-    delete (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken;
   });
 
   it('installs projected Core cookies while keeping tokens in main', async () => {
-    registerBridgeWithSuccessfulLogin();
+    const { coreTransport } = registerBridgeWithSuccessfulLogin();
     const loginHandler = electronMock.handlers.get('ki-buddy-auth:login');
 
     await loginHandler?.(null, {
@@ -142,8 +142,10 @@ describe('Ki-Buddy authentication IPC bridge', () => {
         secure: true,
       })
     );
-    expect((globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken).toBe('core-token');
-    expect((globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken).toBe('core-csrf-token');
+    expect(coreTransport.getHeaders({ method: 'POST' })).toMatchObject({
+      Authorization: 'Bearer core-token',
+      'x-csrf-token': 'core-csrf-token',
+    });
   });
 
   it('routes Agents login through the isolated network session without automatic redirects', async () => {
@@ -164,7 +166,7 @@ describe('Ki-Buddy authentication IPC bridge', () => {
   });
 
   it('clears projected Core state on logout', async () => {
-    registerBridgeWithSuccessfulLogin();
+    const { coreTransport } = registerBridgeWithSuccessfulLogin();
     const loginHandler = electronMock.handlers.get('ki-buddy-auth:login');
     const logoutHandler = electronMock.handlers.get('ki-buddy-auth:logout');
     await loginHandler?.(null, {
@@ -176,7 +178,7 @@ describe('Ki-Buddy authentication IPC bridge', () => {
     await logoutHandler?.(null);
 
     expect(credentialStoreMock.clear).toHaveBeenCalledOnce();
-    expect((globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken).toBeUndefined();
+    expect(coreTransport.getHeaders({ method: 'GET' })).not.toHaveProperty('Authorization');
   });
 
   it('rejects malformed login IPC requests before making a network request', async () => {

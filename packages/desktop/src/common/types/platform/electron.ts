@@ -25,6 +25,9 @@ export interface ElectronBridgeAPI {
   logFeedbackEvent?: (payload: { details?: unknown; level: 'info' | 'warn' | 'error'; message: string }) => void;
   recoverCorruptedDatabase?: () => Promise<void>;
   kiBuddyAuth?: KiBuddyAuthApi;
+  kiBuddyCoreTransport?: {
+    csrfToken: string;
+  };
 }
 
 export type BackendStartupFailureReason =
@@ -81,7 +84,6 @@ declare global {
   interface Window {
     electronAPI?: ElectronBridgeAPI;
     __initialLanguage?: string | null;
-    __coreCsrfToken?: string | null;
     __aionuiE2ETest?: boolean;
     __backendStartupFailed?: boolean;
     __backendStartupFailure?: BackendStartupFailureInfo | null;

@@ -6,7 +6,11 @@ const invoke = vi.fn();
 const send = vi.fn();
 const on = vi.fn();
 const off = vi.fn();
+let productRuntime: string | null = null;
+let productCsrfToken: string | null = null;
 const sendSync = vi.fn((channel: string) => {
+  if (channel === 'get-product-runtime-identity') return productRuntime;
+  if (channel === 'ki-buddy:core-transport:get-csrf-token') return productCsrfToken;
   if (channel === 'get-backend-port') return 25808;
   if (channel === 'get-initial-language') return null;
   if (channel === 'get-backend-startup-failed') return false;
@@ -36,6 +40,8 @@ describe('recover corrupted database preload bridge', () => {
     vi.resetModules();
     vi.clearAllMocks();
     invoke.mockResolvedValue(undefined);
+    productRuntime = null;
+    productCsrfToken = null;
   });
 
   it('exposes a recovery method that invokes the main-process IPC channel', async () => {
@@ -50,6 +56,8 @@ describe('recover corrupted database preload bridge', () => {
   });
 
   it('exposes Ki-Buddy authentication only through the dedicated IPC channels', async () => {
+    productRuntime = 'ki-buddy';
+    productCsrfToken = 'core-csrf-token';
     await import('@/preload/main');
 
     const electronApiCall = exposeInMainWorld.mock.calls.find(([key]) => key === 'electronAPI');
@@ -60,6 +68,7 @@ describe('recover corrupted database preload bridge', () => {
             login: (request: { baseUrl: string; loginName: string; password: string }) => Promise<unknown>;
             logout: () => Promise<unknown>;
           };
+          kiBuddyCoreTransport?: { csrfToken: string };
         }
       | undefined;
     const request = {
@@ -75,5 +84,17 @@ describe('recover corrupted database preload bridge', () => {
     expect(invoke).toHaveBeenCalledWith('ki-buddy-auth:get-session');
     expect(invoke).toHaveBeenCalledWith('ki-buddy-auth:login', request);
     expect(invoke).toHaveBeenCalledWith('ki-buddy-auth:logout');
+    expect(electronApi?.kiBuddyCoreTransport).toEqual({ csrfToken: 'core-csrf-token' });
+  });
+
+  it('does not expose Ki-Buddy authentication in the ordinary AionUi desktop runtime', async () => {
+    await import('@/preload/main');
+
+    const electronApiCall = exposeInMainWorld.mock.calls.find(([key]) => key === 'electronAPI');
+    const electronApi = electronApiCall?.[1] as { kiBuddyAuth?: unknown; kiBuddyCoreTransport?: unknown } | undefined;
+
+    expect(electronApi?.kiBuddyAuth).toBeUndefined();
+    expect(electronApi?.kiBuddyCoreTransport).toBeUndefined();
+    expect(sendSync).not.toHaveBeenCalledWith('ki-buddy:core-transport:get-csrf-token');
   });
 });
