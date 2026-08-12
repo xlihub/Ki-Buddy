@@ -22,7 +22,7 @@ Ki-Buddy 的主进程凭据、Agents 登录、Core 用户投影和 IPC 注册集
 
 ## Consequences
 
-- 首个公开版本从首次启动开始强制 Agents 登录；未登录不能进入业务界面或创建工作历史。Ki-Buddy 使用版本固定的专属 Core 数据目录，不认领预发布 `system_default_user` 数据，也不建设公开产品迁移流程。
+- 首次使用先显示 Ki-Buddy 产品 onboarding，随后强制 Agents 登录。干净安装在 onboarding 完成前不存在可恢复的账号会话；onboarding 本身不触发登录、Core User 投影或工作历史创建。未登录不能进入业务界面或创建 conversation、Team、task 或 workspace 历史。Ki-Buddy 使用版本固定的专属 Core 数据目录，不认领预发布 `system_default_user` 数据，也不建设公开产品迁移流程。
 - conversation、Team、自动 workspace、renderer cache 和运行时状态必须按 deployment 与用户隔离。退出或切换账号只隐藏并停止旧账户状态，不删除其工作历史。
 - 修改 `base_url`、退出、认证失效或切换账号时，必须停止旧账户 Adapter 与本地等待，清除 token、catalog cache 和临时敏感状态；这不表示远端执行已取消。
 - 首发允许固定有效期 token 到期后重新登录。主动退出清除本地凭证、renderer 业务缓存和 Core 投影会话，但不复制或调用 Agents 私有 logout/OAuth 接口。Bridge 自动续期是高优先级后续需求，完成后不设置绝对会话上限；Agents 服务端 logout/revocation 是更远期需求。
