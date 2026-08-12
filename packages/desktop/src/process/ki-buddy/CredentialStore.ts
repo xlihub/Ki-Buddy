@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import type { AgentsCredentialStore, StoredAgentsSession } from './AgentsAuthService';
 
@@ -62,6 +63,13 @@ function keytarService(namespace: string | undefined): string {
   return normalized ? `${DEFAULT_KEYTAR_SERVICE} (${normalized})` : DEFAULT_KEYTAR_SERVICE;
 }
 
+function resolveStorageNamespace(userDataPath: string, configuredNamespace: string | undefined): string {
+  const normalized = configuredNamespace?.trim();
+  if (normalized) return normalized;
+  const profileDigest = createHash('sha256').update(path.resolve(userDataPath), 'utf8').digest('hex').slice(0, 16);
+  return `profile-${profileDigest}`;
+}
+
 function parseMetadata(value: unknown): CredentialMetadata | null {
   if (!isRecord(value)) return null;
   if (
@@ -90,7 +98,9 @@ export class KeytarCredentialStore implements AgentsCredentialStore {
   constructor(userDataPath: string, options: KeytarCredentialStoreOptions = {}) {
     this.metadataPath = path.join(userDataPath, 'ki-buddy', 'agents-session.json');
     this.loadKeytar = options.loadKeytar ?? loadSystemKeytar;
-    this.service = keytarService(options.storageNamespace ?? process.env.AIONUI_AUTH_STORAGE_NAMESPACE);
+    this.service = keytarService(
+      resolveStorageNamespace(userDataPath, options.storageNamespace ?? process.env.AIONUI_AUTH_STORAGE_NAMESPACE)
+    );
   }
 
   /** Loads identity metadata first and resolves its token from the operating-system credential manager. */

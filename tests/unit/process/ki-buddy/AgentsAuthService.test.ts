@@ -330,7 +330,11 @@ describe('AgentsAuthService', () => {
             { status: 200, headers: { 'content-type': 'application/json' } }
           )
         )
-        .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ success: true, data: { user_id: 'old-core-user', session_generation: 1 } }), {
+            status: 200,
+          })
+        )
         .mockResolvedValueOnce(
           new Response(
             JSON.stringify({
@@ -417,7 +421,11 @@ describe('AgentsAuthService', () => {
           { status: 200, headers: { 'content-type': 'application/json' } }
         )
       )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true, data: { user_id: 'old-core-user', session_generation: 1 } }), {
+          status: 200,
+        })
+      )
       .mockResolvedValueOnce(new Response(JSON.stringify({ success: false }), { status: 500 }));
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
@@ -440,6 +448,55 @@ describe('AgentsAuthService', () => {
         password: 'password',
       })
     ).resolves.toEqual({ success: false, code: 'serverError', shouldClearCache: true });
+    expect(clearCoreCookieMock).toHaveBeenCalledOnce();
+  });
+
+  it('fails closed before provisioning the new identity when revoking the old Core projection fails', async () => {
+    loadSessionMock.mockResolvedValue({
+      baseUrl: 'https://old-agents.example.com',
+      token: 'old-agents-token',
+      userId: 'old-agents-user',
+    });
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            errorCode: 0,
+            responseBody: {
+              uuid: 'new-agents-user',
+              userName: 'new-user@example.com',
+              token: 'new-agents-token',
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: false }), { status: 500 }));
+    const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
+      bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
+      credentialStore: {
+        load: loadSessionMock,
+        save: saveSessionMock,
+        clear: clearSessionMock,
+      },
+      fetch: fetchMock,
+      getCoreBaseUrl: () => 'http://127.0.0.1:39123',
+      setCoreSessionCookie: setCoreCookieMock,
+    });
+
+    await expect(
+      service.login({
+        baseUrl: 'https://new-agents.example.com',
+        loginName: 'new-user@example.com',
+        password: 'password',
+      })
+    ).resolves.toEqual({ success: false, code: 'serverError', shouldClearCache: true });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(saveSessionMock).not.toHaveBeenCalled();
+    expect(clearSessionMock).toHaveBeenCalledOnce();
     expect(clearCoreCookieMock).toHaveBeenCalledOnce();
   });
 
@@ -655,6 +712,15 @@ describe('AgentsAuthService', () => {
             headers: { 'set-cookie': 'aionui-session=core-token; HttpOnly; Path=/; SameSite=Lax' },
           }
         )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: { user_id: 'core-user-42', session_generation: 1 },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
       );
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
@@ -676,8 +742,10 @@ describe('AgentsAuthService', () => {
       password: 'password',
     });
 
-    expect(result).toEqual({ success: false, code: 'serverError' });
+    expect(result).toEqual({ success: false, code: 'serverError', shouldClearCache: true });
     expect(setCoreCookieMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls[3]?.[0]).toBe('http://127.0.0.1:39123/api/auth/internal/external-sessions/revoke');
+    expect(clearCoreCookieMock).toHaveBeenCalledOnce();
   });
 
   it('revokes the Core projection and clears local credentials without calling Agents logout', async () => {
@@ -727,7 +795,11 @@ describe('AgentsAuthService', () => {
       userId: 'agents-user-42',
     });
     clearSessionMock.mockRejectedValue(new Error('keychain denied deletion'));
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ success: true }), { status: 200 }));
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { user_id: 'core-user-42', session_generation: 1 } }), {
+        status: 200,
+      })
+    );
     const service = new AgentsAuthService({
       agentsFetch: fetchMock,
       bootstrapSecret: 'bootstrap-secret',

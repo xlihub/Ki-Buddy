@@ -3,7 +3,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-d
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { TEAM_MODE_ENABLED } from '@/common/config/constants';
-import { isKiBuddyDesktopRuntime } from '@/renderer/utils/platform';
+import { getKiBuddyRendererRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
@@ -15,18 +15,25 @@ const ToolsSettings = React.lazy(() => import('@renderer/pages/settings/ToolsSet
 const AppearanceSettings = React.lazy(() => import('@renderer/pages/settings/AppearanceSettings'));
 const ModeSettings = React.lazy(() => import('@renderer/pages/settings/ModeSettings'));
 const SystemSettings = React.lazy(() => import('@renderer/pages/settings/SystemSettings'));
-const KiBuddyAccountSettings = React.lazy(() =>
-  import('@renderer/pages/ki-buddy').then(({ KiBuddyAccountSettings: Component }) => ({ default: Component }))
-);
+const KiBuddyAccountSettings = React.lazy(() => {
+  const runtime = getKiBuddyRendererRuntime();
+  if (!runtime) throw new Error('Ki-Buddy account settings requested without its runtime');
+  return runtime.loadAccountSettings();
+});
 const WebuiSettings = React.lazy(() => import('@renderer/pages/settings/WebuiSettings'));
 const PetSettings = React.lazy(() => import('@renderer/pages/settings/PetSettings'));
 const ExtensionSettingsPage = React.lazy(() => import('@renderer/pages/settings/ExtensionSettingsPage'));
-const LoginPage = React.lazy(() =>
-  isKiBuddyDesktopRuntime() ? import('@renderer/pages/ki-buddy') : import('@renderer/pages/login')
-);
-const KiBuddyStartupGate = React.lazy(() =>
-  import('@renderer/pages/ki-buddy').then(({ KiBuddyStartupGate: Component }) => ({ default: Component }))
-);
+const AionUiLoginPage = React.lazy(() => import('@renderer/pages/login'));
+const KiBuddyLoginPage = React.lazy(() => {
+  const runtime = getKiBuddyRendererRuntime();
+  if (!runtime) throw new Error('Ki-Buddy login requested without its runtime');
+  return runtime.loadLoginPage();
+});
+const KiBuddyStartupGate = React.lazy(() => {
+  const runtime = getKiBuddyRendererRuntime();
+  if (!runtime) throw new Error('Ki-Buddy startup gate requested without its runtime');
+  return runtime.loadStartupGate();
+});
 const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase'));
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
@@ -64,6 +71,8 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
 
 const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
+  const kiBuddyRuntime = getKiBuddyRendererRuntime();
+  const LoginPage = kiBuddyRuntime ? KiBuddyLoginPage : AionUiLoginPage;
 
   const routes = (
     <HashRouter>
@@ -116,11 +125,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route
             path='/settings/account'
             element={
-              isKiBuddyDesktopRuntime() ? (
-                withRouteFallback(KiBuddyAccountSettings)
-              ) : (
-                <Navigate to='/settings/agent' replace />
-              )
+              kiBuddyRuntime ? withRouteFallback(KiBuddyAccountSettings) : <Navigate to='/settings/agent' replace />
             }
           />
           <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
@@ -134,7 +139,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
     </HashRouter>
   );
 
-  if (isKiBuddyDesktopRuntime()) {
+  if (kiBuddyRuntime) {
     return (
       <Suspense fallback={<AppLoader />}>
         <KiBuddyStartupGate>{routes}</KiBuddyStartupGate>

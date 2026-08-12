@@ -149,6 +149,11 @@ function isCoreProvisionResponse(body: unknown): boolean {
   );
 }
 
+function isCoreRevokeResponse(body: unknown): boolean {
+  if (!isRecord(body) || body.success !== true || !isRecord(body.data)) return false;
+  return typeof body.data.user_id === 'string' && typeof body.data.session_generation === 'number';
+}
+
 /** Owns the Ki-Buddy Agents session and its projected Core user session. */
 export class AgentsAuthService {
   private activeIdentity: Pick<StoredAgentsSession, 'baseUrl' | 'userId'> | null = null;
@@ -278,11 +283,8 @@ export class AgentsAuthService {
         userId: agentsUser.userId,
       });
     } catch {
-      return {
-        success: false,
-        code: 'serverError',
-        ...(previousIdentityDeactivated ? { shouldClearCache: true as const } : {}),
-      };
+      await this.deactivateIdentity(nextIdentity);
+      return { success: false, code: 'serverError', shouldClearCache: true };
     }
 
     try {
@@ -324,36 +326,45 @@ export class AgentsAuthService {
 
   private async revokeCoreProjection(identity: Pick<StoredAgentsSession, 'baseUrl' | 'userId'>): Promise<void> {
     const coreBaseUrl = this.dependencies.getCoreBaseUrl();
-    try {
-      await this.dependencies.fetch(`${coreBaseUrl}/api/auth/internal/external-sessions/revoke`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-aioncore-bootstrap-secret': this.dependencies.bootstrapSecret,
-        },
-        body: JSON.stringify({
-          user_type: 'aionpro',
-          external_user_id: externalIdentity(identity.baseUrl, identity.userId),
-        }),
-      });
-    } catch {
-      // Core is local and its browser/main-process session is cleared below even when revoke is unavailable.
+    const response = await this.dependencies.fetch(`${coreBaseUrl}/api/auth/internal/external-sessions/revoke`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-aioncore-bootstrap-secret': this.dependencies.bootstrapSecret,
+      },
+      body: JSON.stringify({
+        user_type: 'aionpro',
+        external_user_id: externalIdentity(identity.baseUrl, identity.userId),
+      }),
+    });
+    if (!response.ok || !isCoreRevokeResponse(await readJson(response))) {
+      throw new Error(`Core projection revocation failed with status ${response.status}`);
     }
   }
 
   private async deactivateIdentity(identity: Pick<StoredAgentsSession, 'baseUrl' | 'userId'> | null): Promise<unknown> {
-    let credentialCleanupError: unknown;
+    let cleanupError: unknown;
     try {
       await this.dependencies.credentialStore.clear();
     } catch (error) {
-      credentialCleanupError = error;
+      cleanupError = error;
     }
-    if (identity) await this.revokeCoreProjection(identity);
+    if (identity) {
+      try {
+        await this.revokeCoreProjection(identity);
+      } catch (error) {
+        cleanupError ??= error;
+      }
+    }
     this.activeIdentity = null;
     this.session = { status: 'unauthenticated', user: null };
     this.restoreAttempted = true;
-    await this.dependencies.clearCoreSession();
-    return credentialCleanupError;
+    try {
+      await this.dependencies.clearCoreSession();
+    } catch (error) {
+      cleanupError ??= error;
+    }
+    return cleanupError;
   }
 
   private async establishCoreSession(baseUrl: string, agentsUser: AgentsIdentity): Promise<CoreProjectionResult> {

@@ -81,22 +81,22 @@ describe('configService Core authentication transport', () => {
     expect(configService.get('language')).toBe('en-US');
   });
 
-  it('reloads account-scoped settings while preserving active subscribers', async () => {
+  it('reloads account-scoped settings without replacing the client language', async () => {
     const languageSubscriber = vi.fn();
     fetchMock
       .mockResolvedValueOnce(jsonResponse({ language: 'en-US', 'theme.activeId': 'light', 'theme.userThemes': [] }))
       .mockResolvedValueOnce(jsonResponse({ language: 'zh-CN', 'theme.activeId': 'light', 'theme.userThemes': [] }));
     await configService.initialize();
+    configService.setLocal('language', 'en-US');
     const unsubscribe = configService.subscribe('language', languageSubscriber);
 
     configService.resetForAccountChange();
-    expect(configService.get('language')).toBeUndefined();
+    expect(configService.get('language')).toBe('en-US');
     await configService.initialize();
-    configService.setLocal('language', 'ja-JP');
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(configService.get('language')).toBe('ja-JP');
-    expect(languageSubscriber).toHaveBeenCalledWith('ja-JP');
+    expect(configService.get('language')).toBe('en-US');
+    expect(languageSubscriber).not.toHaveBeenCalled();
     unsubscribe();
   });
 

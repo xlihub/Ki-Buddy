@@ -1,5 +1,5 @@
 import type { AuthHandlerFactory, AuthHandlers, LoginResult } from '@/renderer/hooks/context/AuthContext';
-import { getKiBuddyAuthApi } from '@/renderer/utils/platform';
+import { getKiBuddyRendererRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
 import type { KiBuddyAgentsProfile } from '@/common/types/platform/kiBuddyAuth';
 import { configService } from '@/common/config/configService';
 import { normalizeKiBuddyLoginErrorCode, type KiBuddyLoginErrorCode } from '../loginErrors';
@@ -47,7 +47,7 @@ export function createKiBuddyAuthAdapter(options: {
       }
     },
     handlerFactory: (state) => {
-      const api = getKiBuddyAuthApi();
+      const api = getKiBuddyRendererRuntime()?.authApi;
       if (!api) return null;
       const clearAccountState = () => {
         state.clearAccountState();

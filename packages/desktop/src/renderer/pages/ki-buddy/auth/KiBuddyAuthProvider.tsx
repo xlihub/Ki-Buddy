@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AuthProvider, useAuth } from '@/renderer/hooks/context/AuthContext';
 import type { KiBuddyAgentsProfile } from '@/common/types/platform/kiBuddyAuth';
 import {
@@ -7,6 +7,7 @@ import {
   type KiBuddyLoginParams,
   type KiBuddyRendererLoginResult,
 } from './kiBuddyAuthAdapter';
+import { registerKiBuddyUnauthorizedHandler } from './coreTransport';
 
 type KiBuddyAuthContextValue = {
   login: (params: KiBuddyLoginParams) => Promise<KiBuddyRendererLoginResult>;
@@ -18,12 +19,14 @@ const KiBuddyAuthContext = createContext<KiBuddyAuthContextValue | undefined>(un
 const KiBuddyAuthContextBridge: React.FC<
   React.PropsWithChildren<{ adapter: KiBuddyAuthAdapter; profile: KiBuddyAgentsProfile | null }>
 > = ({ adapter, children, profile }) => {
-  const { login: authenticate } = useAuth();
+  const { login: authenticate, logout } = useAuth();
   const login = useCallback(
     (params: KiBuddyLoginParams) => adapter.login(params, authenticate),
     [adapter, authenticate]
   );
   const value = useMemo(() => ({ login, profile }), [login, profile]);
+
+  useEffect(() => registerKiBuddyUnauthorizedHandler(logout), [logout]);
 
   return <KiBuddyAuthContext.Provider value={value}>{children}</KiBuddyAuthContext.Provider>;
 };

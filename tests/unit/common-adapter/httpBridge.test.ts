@@ -472,7 +472,6 @@ describe('httpBridge', () => {
         method: 'GET',
         headers: {},
         body: undefined,
-        credentials: 'include',
       });
     });
 
@@ -524,11 +523,24 @@ describe('httpBridge', () => {
       await httpRequest('POST', '/api/create', { key: 'value' });
 
       expect(fetchSpy.mock.calls[0][1]).toMatchObject({
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
       });
+      expect(fetchSpy.mock.calls[0][1]).not.toHaveProperty('credentials');
       expect(fetchSpy.mock.calls[0][1]?.headers).not.toHaveProperty('Authorization');
       expect(fetchSpy.mock.calls[0][1]?.headers).not.toHaveProperty('Cookie');
+    });
+
+    it('lets an installed transport handle unauthorized responses before returning the HTTP error', async () => {
+      const onUnauthorized = vi.fn().mockResolvedValue(undefined);
+      const fetchSpy = vi.fn().mockResolvedValue(new Response('Unauthorized', { status: 401 }));
+      vi.stubGlobal('fetch', fetchSpy);
+      vi.spyOn(console, 'debug').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      setHttpRequestTransport({ getHeaders: () => ({}), onUnauthorized });
+
+      await expect(httpRequest('GET', '/api/protected')).rejects.toMatchObject({ status: 401 });
+
+      expect(onUnauthorized).toHaveBeenCalledWith({ method: 'GET', path: '/api/protected' });
     });
   });
 

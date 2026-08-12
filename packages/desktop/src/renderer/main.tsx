@@ -51,8 +51,8 @@ import type { TFunction } from 'i18next';
 
 // Context providers
 import { AuthProvider } from './hooks/context/AuthContext';
-import { installKiBuddyRendererCoreTransport, KiBuddyAuthProvider } from './pages/ki-buddy';
-import { isKiBuddyDesktopRuntime } from './utils/platform';
+import { installKiBuddyRendererCoreTransport, KiBuddyAuthProvider } from './pages/ki-buddy/auth';
+import { getKiBuddyRendererRuntime } from './services/runtime/kiBuddyRuntime';
 import { FeedbackProvider } from './hooks/context/FeedbackContext';
 import { ThemeProvider } from './hooks/context/ThemeContext';
 import { PreviewProvider } from './pages/conversation/Preview/context/PreviewContext';
@@ -79,7 +79,8 @@ import './styles/markdown.css';
 // so their startup paths (which await configService.whenReady()) observe the
 // authoritative settings from the backend instead of the empty cache.
 import { configService } from '@/common/config/configService';
-installKiBuddyRendererCoreTransport();
+const kiBuddyRuntime = getKiBuddyRendererRuntime();
+if (kiBuddyRuntime) installKiBuddyRendererCoreTransport();
 configService.initialize().catch((err) => {
   console.error('Failed to initialize config:', err);
 });
@@ -271,7 +272,7 @@ const RuntimeFailureDialogs: React.FC = () => {
 // in per-hook with `revalidateOnFocus: true`.
 const SWR_DEFAULTS = { revalidateOnFocus: false } as const;
 
-const RuntimeAuthProvider = isKiBuddyDesktopRuntime() ? KiBuddyAuthProvider : AuthProvider;
+const RuntimeAuthProvider = kiBuddyRuntime ? KiBuddyAuthProvider : AuthProvider;
 
 const AppProviders: React.FC<PropsWithChildren> = ({ children }) =>
   React.createElement(

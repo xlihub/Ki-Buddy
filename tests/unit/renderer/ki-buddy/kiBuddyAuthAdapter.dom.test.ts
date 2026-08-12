@@ -78,7 +78,7 @@ describe('Ki-Buddy renderer authentication handlers', () => {
     await createHandlers().handlers.refresh();
 
     expect(clearAccountStateMock).toHaveBeenCalledOnce();
-    expect(configService.get('language')).toBeUndefined();
+    expect(configService.get('language')).toBe('en-US');
     expect(setStatusMock).toHaveBeenLastCalledWith('unauthenticated');
   });
 
@@ -99,10 +99,46 @@ describe('Ki-Buddy renderer authentication handlers', () => {
     ).resolves.toEqual({ success: false, code: 'serverError', shouldClearCache: true });
 
     expect(clearAccountStateMock).toHaveBeenCalledOnce();
-    expect(configService.get('language')).toBeUndefined();
+    expect(configService.get('language')).toBe('en-US');
     expect(setProfileMock).toHaveBeenCalledWith(null);
     expect(setUserMock).toHaveBeenCalledWith(null);
     expect(setStatusMock).toHaveBeenCalledWith('unauthenticated');
+  });
+
+  it('keeps the client language hint after a successful account activation', async () => {
+    localStorage.setItem('i18nextLng', 'en-US');
+    loginMock.mockResolvedValue({
+      success: true,
+      session: {
+        status: 'authenticated',
+        user: {
+          id: 'new-core-user',
+          username: 'new-user@example.com',
+          agents: {
+            userId: 'new-agents-user',
+            username: 'new-user@example.com',
+            displayName: 'New User',
+            roles: [],
+            deploymentUrl: 'https://new-agents.example.com',
+          },
+        },
+      },
+    });
+    const { adapter, handlers } = createHandlers();
+
+    await expect(
+      adapter.login(
+        {
+          baseUrl: 'https://new-agents.example.com',
+          username: 'new-user@example.com',
+          password: 'password',
+        },
+        handlers.login
+      )
+    ).resolves.toEqual({ success: true });
+
+    expect(localStorage.getItem('i18nextLng')).toBe('en-US');
+    expect(clearAccountStateMock).toHaveBeenCalledOnce();
   });
 
   it('does not create product handlers when the Ki-Buddy capability is absent', () => {

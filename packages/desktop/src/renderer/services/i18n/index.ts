@@ -4,8 +4,8 @@ import { initReactI18next } from 'react-i18next';
 import { configService } from '@/common/config/configService';
 import { ipcBridge } from '@/common';
 import i18nConfig from '@/common/config/i18n-config.json';
-import { KI_BUDDY_DEFAULT_LANGUAGE, resolveLanguagePreference } from '@/common/platform/ki-buddy';
-import { isKiBuddyDesktopRuntime } from '@/renderer/utils/platform';
+import { resolveLanguagePreference } from '@/common/platform/ki-buddy';
+import { getKiBuddyRendererRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
 import {
   DEFAULT_LANGUAGE,
   normalizeLanguageCode,
@@ -29,6 +29,7 @@ import deDE from './locales/de-DE/index';
 import esES from './locales/es-ES/index';
 import frFR from './locales/fr-FR/index';
 import faIR from './locales/fa-IR/index';
+import { getLanguageHint, setLanguageHint } from './languageHint';
 export type { I18nKey, I18nModule } from './i18n-keys';
 
 // Re-exports
@@ -69,8 +70,7 @@ function getLocaleModules(locale: string): Record<string, unknown> {
 }
 
 function getLocalStorageLanguageHint(): string | null {
-  if (typeof localStorage === 'undefined') return null;
-  return localStorage.getItem('i18nextLng');
+  return getLanguageHint();
 }
 
 function getInjectedLanguageHint(): string | null {
@@ -85,8 +85,7 @@ function getElectronSystemLanguageHint(): string | null {
 }
 
 function getKiBuddyDefaultLanguageHint(): string | null {
-  if (!isKiBuddyDesktopRuntime()) return null;
-  return KI_BUDDY_DEFAULT_LANGUAGE ?? null;
+  return getKiBuddyRendererRuntime()?.defaultLanguage ?? null;
 }
 
 function getInitialLanguage(): SupportedLanguage {
@@ -158,21 +157,21 @@ i18n
 /** Reloads the saved language after the Core settings session becomes available. */
 export async function syncLanguageFromConfig(): Promise<void> {
   try {
-    await configService.whenReady();
-    const savedLanguage = configService.get('language');
     const productLanguage = getKiBuddyDefaultLanguageHint();
-    const language = productLanguage
+    const clientLanguage = productLanguage
       ? resolveLanguagePreference({
-          savedLanguage: savedLanguage || getLocalStorageLanguageHint(),
+          savedLanguage: getLocalStorageLanguageHint() || getInjectedLanguageHint(),
           productLanguage,
           systemLanguage: navigator.language,
         })
-      : savedLanguage || normalizeLanguageCode(navigator.language || DEFAULT_LANGUAGE);
+      : null;
+    if (clientLanguage) configService.setLocal('language', clientLanguage);
+    await configService.whenReady();
+    const savedLanguage = configService.get('language');
+    const language = clientLanguage ?? (savedLanguage || normalizeLanguageCode(navigator.language || DEFAULT_LANGUAGE));
     await ensureAndSwitch(i18n, language, loadLocaleModules);
     // Sync to localStorage so next page load can use it as a fast hint
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('i18nextLng', normalizeLanguageCode(language));
-    }
+    setLanguageHint(normalizeLanguageCode(language));
   } catch (error) {
     console.error('Failed to initialize language:', error);
   }
@@ -202,9 +201,7 @@ ipcBridge.systemSettings.languageChanged.on(async ({ language }) => {
   // Skip if already on this language (we're the one who triggered the change)
   if (i18n.language === normalized) return;
   await ensureAndSwitch(i18n, normalized, loadLocaleModules);
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('i18nextLng', normalized);
-  }
+  setLanguageHint(normalized);
 });
 
 /**
@@ -214,9 +211,7 @@ export async function changeLanguage(lang: string): Promise<void> {
   await ensureAndSwitch(i18n, lang, loadLocaleModules);
   const normalized = normalizeLanguageCode(lang);
   // Keep localStorage in sync so WebUI can use it as a fast hint on next load
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('i18nextLng', normalized);
-  }
+  setLanguageHint(normalized);
   // Notify main process to sync i18n (for tray menu, etc.)
   ipcBridge.systemSettings.changeLanguage.invoke({ language: normalized }).catch(() => {});
   await configService.set('language', normalized);

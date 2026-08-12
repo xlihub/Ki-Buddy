@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useSWRConfig } from 'swr';
 import { PREVIEW_SCOPE_KEY_PREFIX } from '@/renderer/pages/conversation/Preview/context/previewScope';
+import { resetAccountScopedRendererState } from '@/renderer/services/runtime/accountStateLifecycle';
 // M6: CSRF removed with legacy webserver — stub functions for compatibility, re-implement in M7
 const withCsrfToken = <T extends Record<string, unknown>>(data: T): T => data;
 const hasValidCsrfToken = (): boolean => true;
@@ -310,6 +311,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, handlerFac
         clearAccountState: () => {
           clearSWRCache(swrCache);
           clearAuthCache();
+          resetAccountScopedRendererState();
         },
         setReady,
         setStatus,

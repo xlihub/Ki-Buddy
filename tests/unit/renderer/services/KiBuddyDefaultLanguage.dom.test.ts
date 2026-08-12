@@ -12,6 +12,7 @@ const configFixture = vi.hoisted(() => ({
   resolveReady: () => {},
   savedLanguage: undefined as string | undefined,
   setLanguage: vi.fn().mockResolvedValue(undefined),
+  setLocalLanguage: vi.fn(),
 }));
 
 const ipcFixture = vi.hoisted(() => ({
@@ -22,6 +23,10 @@ vi.mock('@/common/config/configService', () => ({
   configService: {
     get: () => configFixture.savedLanguage,
     set: configFixture.setLanguage,
+    setLocal: (_key: string, language: string) => {
+      configFixture.savedLanguage = language;
+      configFixture.setLocalLanguage(language);
+    },
     whenReady: vi.fn(() => configFixture.ready),
   },
 }));
@@ -41,6 +46,7 @@ describe('Ki-Buddy startup language', () => {
     configFixture.savedLanguage = undefined;
     configFixture.setLanguage.mockReset();
     configFixture.setLanguage.mockResolvedValue(undefined);
+    configFixture.setLocalLanguage.mockReset();
     ipcFixture.changeLanguage.mockClear();
     configFixture.ready = new Promise<void>((resolve) => {
       configFixture.resolveReady = resolve;
@@ -82,6 +88,7 @@ describe('Ki-Buddy startup language', () => {
   it('keeps a manual local selection ahead of a stale process hint and the product default', async () => {
     localStorage.setItem('i18nextLng', 'en-US');
     window.__initialLanguage = 'zh-CN';
+    configFixture.savedLanguage = 'zh-CN';
 
     const { default: i18n } = await import('@/renderer/services/i18n');
 
@@ -102,7 +109,7 @@ describe('Ki-Buddy startup language', () => {
     expect(ipcFixture.changeLanguage).toHaveBeenCalledWith({ language: 'en-US' });
   });
 
-  it('retries the authoritative Core language after Ki-Buddy authentication', async () => {
+  it('keeps the client language when Ki-Buddy authentication makes Core settings available', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     let rejectReady: ((error: Error) => void) | undefined;
     configFixture.ready = new Promise<void>((_resolve, reject) => {
@@ -112,12 +119,28 @@ describe('Ki-Buddy startup language', () => {
     rejectReady?.(new Error('Core authentication required'));
     await waitFor(() => expect(consoleError).toHaveBeenCalled());
 
-    configFixture.savedLanguage = 'en-US';
+    localStorage.setItem('i18nextLng', 'en-US');
+    configFixture.savedLanguage = 'zh-CN';
     configFixture.ready = Promise.resolve();
     await languageModule.syncLanguageFromConfig();
 
     expect(languageModule.default.language).toBe('en-US');
     expect(localStorage.getItem('i18nextLng')).toBe('en-US');
+  });
+
+  it('uses the product default when the client has no saved language', async () => {
+    configFixture.ready = Promise.resolve();
+    localStorage.setItem('i18nextLng', 'en-US');
+    const languageModule = await import('@/renderer/services/i18n');
+    await waitFor(() => expect(languageModule.default.language).toBe('en-US'));
+
+    const { clearLanguageHint } = await import('@/renderer/services/i18n/languageHint');
+    clearLanguageHint();
+    configFixture.savedLanguage = undefined;
+    await languageModule.syncLanguageFromConfig();
+
+    expect(languageModule.default.language).toBe('zh-CN');
+    expect(localStorage.getItem('i18nextLng')).toBe('zh-CN');
   });
 
   it('preserves upstream AionUi startup behavior when the Ki-Buddy capability is absent', async () => {

@@ -7,10 +7,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { SWRConfig } from 'swr';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, useAuth } from '@/renderer/hooks/context/AuthContext';
 import { KiBuddyAuthProvider, useKiBuddyAuth } from '@/renderer/pages/ki-buddy/auth';
 import { configService } from '@/common/config/configService';
+import { httpRequest, setHttpRequestTransport } from '@/common/adapter/httpBridge';
+import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/auth/coreTransport';
 
 const getSessionMock = vi.fn();
 const loginMock = vi.fn();
@@ -22,6 +24,7 @@ const ProductProbe: React.FC = () => {
   return (
     <div>
       <output aria-label='core-user'>{JSON.stringify(auth.user)}</output>
+      <output aria-label='auth-status'>{auth.status}</output>
       <output aria-label='agents-profile'>{JSON.stringify(productAuth.profile)}</output>
       <button
         onClick={() =>
@@ -34,6 +37,7 @@ const ProductProbe: React.FC = () => {
       >
         product-login
       </button>
+      <button onClick={() => void httpRequest('GET', '/api/settings/client').catch(() => {})}>core-request</button>
     </div>
   );
 };
@@ -57,6 +61,12 @@ describe('Ki-Buddy product authentication context', () => {
       },
     };
     configService.reset();
+    setHttpRequestTransport(null);
+  });
+
+  afterEach(() => {
+    setHttpRequestTransport(null);
+    vi.unstubAllGlobals();
   });
 
   it('keeps the Agents profile out of the common AuthContext user', async () => {
@@ -126,7 +136,46 @@ describe('Ki-Buddy product authentication context', () => {
       loginName: 'agents-user@example.com',
       password: 'password',
     });
-    expect(configService.get('language')).toBeUndefined();
+    expect(configService.get('language')).toBe('en-US');
+  });
+
+  it('returns to the login gate and clears the session after a runtime Core 401', async () => {
+    getSessionMock.mockResolvedValue({
+      status: 'authenticated',
+      user: {
+        id: 'core-user-42',
+        username: 'agents-user@example.com',
+        agents: {
+          userId: 'agents-user-42',
+          username: 'agents-user@example.com',
+          roles: [],
+          deploymentUrl: 'https://agents.example.com',
+        },
+      },
+    });
+    logoutMock.mockResolvedValue({ status: 'unauthenticated', user: null });
+    window.electronAPI = {
+      ...window.electronAPI,
+      kiBuddyAuth: window.electronAPI?.kiBuddyAuth,
+      kiBuddyCoreTransport: { csrfToken: 'core-csrf-token' },
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response('Unauthorized', { status: 401 }));
+    vi.stubGlobal('fetch', fetchMock);
+    installKiBuddyRendererCoreTransport();
+
+    render(
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <KiBuddyAuthProvider>
+          <ProductProbe />
+        </KiBuddyAuthProvider>
+      </SWRConfig>
+    );
+    await waitFor(() => expect(screen.getByLabelText('auth-status')).toHaveTextContent('authenticated'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'core-request' }));
+
+    await waitFor(() => expect(screen.getByLabelText('auth-status')).toHaveTextContent('unauthenticated'));
+    expect(logoutMock).toHaveBeenCalledOnce();
   });
 
   it('preserves ordinary AionUi desktop authentication when the product capability is absent', async () => {

@@ -36,6 +36,7 @@ describe('Ki-Buddy renderer Core transport', () => {
       'Content-Type': 'application/json',
       'x-csrf-token': 'renderer-csrf-token',
     });
+    expect(fetchMock.mock.calls[0]?.[1]?.credentials).toBe('include');
   });
 
   it('leaves ordinary AionUi requests unchanged when the capability is absent', async () => {
@@ -45,5 +46,6 @@ describe('Ki-Buddy renderer Core transport', () => {
     await httpRequest('POST', '/api/settings/client', { language: 'en-US' });
 
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(fetchMock.mock.calls[0]?.[1]).not.toHaveProperty('credentials');
   });
 });

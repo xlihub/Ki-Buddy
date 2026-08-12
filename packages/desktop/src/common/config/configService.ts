@@ -3,12 +3,15 @@ import { httpRequest } from '@/common/adapter/httpBridge';
 
 type Subscriber = (value: unknown) => void;
 
+const CLIENT_SCOPED_KEYS = new Set<ConfigKey>(['language']);
+
 class ConfigServiceImpl {
   private cache = new Map<string, unknown>();
   private subscribers = new Map<string, Set<Subscriber>>();
   private initialized = false;
   private initPromise: Promise<void> | null = null;
   private accountGeneration = 0;
+  private clientScopedCache = new Map<ConfigKey, unknown>();
 
   // Idempotent: concurrent callers share the same in-flight promise, and a
   // resolved init returns immediately. Modules that need persisted settings on
@@ -23,6 +26,11 @@ class ConfigServiceImpl {
       if (data) {
         for (const [key, value] of Object.entries(data)) {
           this.cache.set(key, value);
+        }
+      }
+      for (const key of CLIENT_SCOPED_KEYS) {
+        if (this.clientScopedCache.has(key)) {
+          this.cache.set(key, this.clientScopedCache.get(key));
         }
       }
       // One-time theme migration: only when new keys are absent (idempotent).
@@ -59,17 +67,20 @@ class ConfigServiceImpl {
 
   async set<K extends ConfigKey>(key: K, value: ConfigKeyMap[K]): Promise<void> {
     this.cache.set(key, value);
+    if (CLIENT_SCOPED_KEYS.has(key)) this.clientScopedCache.set(key, value);
     this.notify(key, value);
     await httpRequest<void>('PUT', '/api/settings/client', { [key]: value });
   }
 
   setLocal<K extends ConfigKey>(key: K, value: ConfigKeyMap[K]): void {
     this.cache.set(key, value);
+    if (CLIENT_SCOPED_KEYS.has(key)) this.clientScopedCache.set(key, value);
     this.notify(key, value);
   }
 
   async remove(key: ConfigKey): Promise<void> {
     this.cache.delete(key);
+    if (CLIENT_SCOPED_KEYS.has(key)) this.clientScopedCache.delete(key);
     this.notify(key, undefined);
     await httpRequest<void>('PUT', '/api/settings/client', { [key]: null });
   }
@@ -77,6 +88,7 @@ class ConfigServiceImpl {
   async setBatch(entries: Partial<{ [K in ConfigKey]: ConfigKeyMap[K] }>): Promise<void> {
     for (const [key, value] of Object.entries(entries)) {
       this.cache.set(key, value);
+      if (CLIENT_SCOPED_KEYS.has(key as ConfigKey)) this.clientScopedCache.set(key as ConfigKey, value);
       this.notify(key as ConfigKey, value);
     }
     await httpRequest<void>('PUT', '/api/settings/client', entries);
@@ -100,6 +112,7 @@ class ConfigServiceImpl {
   resetForAccountChange(): void {
     this.accountGeneration += 1;
     this.cache.clear();
+    for (const [key, value] of this.clientScopedCache) this.cache.set(key, value);
     this.initialized = false;
     this.initPromise = null;
   }
@@ -107,6 +120,7 @@ class ConfigServiceImpl {
   reset(): void {
     this.accountGeneration += 1;
     this.cache.clear();
+    this.clientScopedCache.clear();
     this.subscribers.clear();
     this.initialized = false;
     this.initPromise = null;

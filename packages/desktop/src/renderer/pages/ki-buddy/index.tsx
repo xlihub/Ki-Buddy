@@ -1,6 +1,8 @@
-export { default } from './KiBuddyLoginPage';
-export { default as KiBuddyAccountSettings } from './Account';
-export { default as KiBuddyStartupGate } from './KiBuddyStartupGate';
-export { getKiBuddyAccountSettingsItem } from './settingsNavigation';
-export { KiBuddyAuthProvider, useKiBuddyAuth } from './auth';
-export { installKiBuddyRendererCoreTransport } from './auth';
+/** Loads the Ki-Buddy login page without evaluating it in other product runtimes. */
+export const loadKiBuddyLoginPage = () => import('./KiBuddyLoginPage');
+
+/** Loads the Ki-Buddy account page without evaluating it in other product runtimes. */
+export const loadKiBuddyAccountSettings = () => import('./Account');
+
+/** Loads the Ki-Buddy startup gate without evaluating it in other product runtimes. */
+export const loadKiBuddyStartupGate = () => import('./KiBuddyStartupGate');

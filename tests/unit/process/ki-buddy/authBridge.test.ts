@@ -93,7 +93,11 @@ function registerBridgeWithSuccessfulLogin() {
         { status: 200, headers: { 'set-cookie': 'aionui-session=core-token; HttpOnly; Max-Age=3600' } }
       )
     )
-    .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }));
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true, data: { user_id: 'core-user-42', session_generation: 1 } }), {
+        status: 200,
+      })
+    );
   electronMock.agentsFetch.mockImplementation(fetchMock);
   vi.stubGlobal('fetch', fetchMock);
   registerKiBuddyAuthBridge({
