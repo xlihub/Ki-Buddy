@@ -84,6 +84,10 @@ See the `testing` skill (`.claude/skills/testing/SKILL.md`) for complete workflo
 - **No scope expansion**: implementation plans and reviews must not create extra tasks, phases, or acceptance criteria for cleanup unless the user asks for that scope.
 - **Ignored working docs**: `docs/superpowers/` is intentionally gitignored for local Superpowers specs and plans. Do not force-add or otherwise commit files from this directory.
 
+### Ki-Buddy Product Development
+
+**Ki-Buddy upstream isolation** — For development or review involving Ki-Buddy product files, AionUi integration seams, or AionUi baseline synchronization, read and follow [the Ki-Buddy product development guide](docs/contributing/ki-buddy-product-development.md). Code reviews must include it as a Standards source and apply its review contract to the complete fixed-point diff.
+
 ### During Development
 
 Auto-fix as you edit:
