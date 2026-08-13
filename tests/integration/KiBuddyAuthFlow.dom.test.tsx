@@ -45,6 +45,14 @@ vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
   }),
 }));
 
+vi.mock('@/renderer/hooks/system/useExtensionSettingsTabs', () => ({
+  useExtensionSettingsTabs: () => [],
+}));
+
+vi.mock('@/renderer/hooks/system/useExtI18n', () => ({
+  useExtI18n: () => ({ resolveExtTabName: (tab: { label: string }) => tab.label }),
+}));
+
 vi.mock('@renderer/pages/guid', () => ({ default: () => <div>guid-page</div> }));
 vi.mock('@renderer/pages/conversation', () => ({ default: () => <div>conversation-page</div> }));
 vi.mock('@/renderer/components/settings/SettingsModal/contents/AboutModalContent', () => ({

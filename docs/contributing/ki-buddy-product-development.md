@@ -92,6 +92,14 @@ Ki-Buddy 产品模块可以依赖 AionUi 公开模块；AionUi 通用领域模�
 - 安全例外限制到明确目标与单次请求，不通过全局开关改变 AionUi 或其他网络流量。
 - 产品迁移与生命周期规则由对应产品模块和 ADR 拥有，不向 AionUi 通用 migration 注入产品假设。
 
+### 3.5 产品依赖与打包
+
+- Ki-Buddy 专用 runtime 依赖集中声明在产品配置的依赖白名单中；构建工具要求依赖位于根 `package.json` 时，可以在根依赖清单中增加同名、同版本依赖。
+- 来源映射对根 `package.json` 做语义比较：除产品配置明确声明的依赖外，其余字段和依赖必须与映射的 AionUi 基线一致；产品依赖不得覆盖上游已有依赖的版本。
+- 原生模块必须同时配置构建 externalization、Electron 打包包含规则和 `asarUnpack`；任一环节缺失都视为产物不完整。
+- 产品依赖变更必须执行 AionUi 来源映射校验，并通过全部受支持平台的 packaged build；单个平台打包成功不能替代其他平台验证。
+- 产品依赖白名单和 runtime 加载方式不属于第 2.3 节的纯打包例外；只有不改变应用 runtime 依赖关系的打包配置 hunk 适用该例外。
+
 ## 4. 接缝标准
 
 新增或修改接缝时，必须同时满足：
@@ -143,6 +151,8 @@ Ki-Buddy 产品模块可以依赖 AionUi 公开模块；AionUi 通用领域模�
 
 按 `testing`、`i18n` 和 `AGENTS.md` 执行适用检查；自动化测试不依赖真实账号、固定内网地址或互联网连通性。runtime 接缝验证 capability 存在和缺失两个分支；配置接缝验证 Ki-Buddy 产品配置和 AionUi 公共配置语义。
 
+产品集成测试挂载 AionUi 公共页面、Router 或 layout 时，只保留验收链路需要的真实能力。扩展系统、更新服务、遥测及其他与验收目标无关的 HTTP、WebSocket 或后台订阅必须隔离；测试结束后不得遗留请求、连接、订阅或异步日志。
+
 完成标准：适用的仓库检查和接缝双分支证据通过。
 
 ## 6. Standards 审查契约
@@ -174,10 +184,12 @@ Ki-Buddy 产品模块可以依赖 AionUi 公开模块；AionUi 通用领域模�
 - runtime capability 缺失时 AionUi 原路径不可达、产生产品副作用，或没有保护测试；
 - 配置接缝无法分别证明 Ki-Buddy 产品配置与 AionUi 公共配置语义；
 - Ki-Buddy 配置、identity、数据 namespace 或默认值改写 AionUi 公共语义；
+- Ki-Buddy runtime 专用依赖未进入产品配置白名单、与根依赖声明不一致、覆盖上游已有依赖版本，或原生模块缺少构建 externalization、打包包含与 `asarUnpack` 中的任一配置；
 - 外部平台协议泄露到 UI、上游 service 或通用 bridge，或安全例外影响非目标流量；
 - 产品适配被归为上游同步，或上游同步内容无法追溯到选定 AionUi commit；
 - 深层修改上游拥有文件，却没有满足第 8 节的 ADR；
 - 自动化测试依赖真实账号、固定内网地址或互联网连通性。
+- 产品集成测试启动与验收目标无关的 HTTP、WebSocket 或后台订阅，且未在测试边界内隔离和清理。
 
 ### 6.3 设计判断
 

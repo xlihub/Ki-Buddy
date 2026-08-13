@@ -5,6 +5,9 @@
     "agentsBaseUrl": "https://ksapi.kingsware.cn",
     "language": "zh-CN"
   },
+  "runtimeDependencies": {
+    "keytar": "^7.9.0"
+  },
   "packageMetadata": {
     "name": "ki-buddy",
     "description": "Ki-Buddy is an AI agent desktop workspace based on AionUi.",

@@ -10,6 +10,7 @@ const {
   readProductConfig,
   readProductVersion,
   verifyKiBuddyRelease,
+  verifyProductPackageJson,
 } = require('../../../packages/shared-scripts/src/kiBuddyRelease');
 
 const projectRoot = resolve(__dirname, '../../..');
@@ -17,6 +18,26 @@ const projectRoot = resolve(__dirname, '../../..');
 describe('Ki-Buddy product release identity', () => {
   it('validates the current product mapping without requiring repository history', () => {
     expect(() => verifyKiBuddyRelease(projectRoot, { skipGit: true })).not.toThrow();
+  });
+
+  it('allows only declared product dependencies in the upstream package comparison', () => {
+    const upstreamPackage = { name: 'AionUi', dependencies: { react: '^19.0.0' } };
+    const currentPackage = {
+      name: 'AionUi',
+      dependencies: { react: '^19.0.0', keytar: '^7.9.0' },
+    };
+
+    expect(() => verifyProductPackageJson(currentPackage, upstreamPackage, { keytar: '^7.9.0' })).not.toThrow();
+    expect(() =>
+      verifyProductPackageJson({ ...currentPackage, name: 'Ki-Buddy' }, upstreamPackage, { keytar: '^7.9.0' })
+    ).toThrow('only by declared product dependencies');
+    expect(() =>
+      verifyProductPackageJson(
+        { ...currentPackage, dependencies: { ...currentPackage.dependencies, keytar: '^8.0.0' } },
+        upstreamPackage,
+        { keytar: '^7.9.0' }
+      )
+    ).toThrow('must match the product configuration');
   });
 
   it('stores only the current product release mapping', () => {
