@@ -72,6 +72,7 @@ import {
   setIsQuitting,
 } from './process/utils/tray';
 import { readCloseToTraySetting } from './process/utils/closeToTraySetting';
+import { createKiBuddyRuntime, shouldEnsureDefaultCoreUser } from './process/ki-buddy';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
 
@@ -181,6 +182,14 @@ const isWebUIMode = hasSwitch('webui');
 const isRemoteMode = hasSwitch('remote');
 const isResetPasswordMode = hasCommand('--resetpass');
 const isVersionMode = hasCommand('--version') || hasCommand('-v');
+const kiBuddyRuntime = createKiBuddyRuntime({
+  appPath: app.getAppPath(),
+  resetPassword: isResetPasswordMode,
+  webUi: isWebUIMode,
+});
+const kiBuddyCoreAuthOptions = kiBuddyRuntime?.coreAuthOptions ?? null;
+const ensureDefaultCoreUser = shouldEnsureDefaultCoreUser(Boolean(kiBuddyRuntime));
+const resolveBackendDataPath = (dataPath: string): string => kiBuddyRuntime?.resolveDataPath(dataPath) ?? dataPath;
 
 // Flag to distinguish intentional quit from unexpected exit in WebUI mode
 let isExplicitQuit = false;
@@ -201,6 +210,7 @@ const backendManager = new BackendLifecycleManager(
   },
   resolveBinaryPath
 );
+kiBuddyRuntime?.registerAuthBridge(() => `http://127.0.0.1:${backendManager.port}`);
 let disposeCronResumeListener: (() => void) | null = null;
 
 // Flag tracking whether the backend subprocess started successfully. Read by
@@ -216,9 +226,19 @@ ipcMain.on('get-backend-port', (event) => {
   event.returnValue = backendManager.port;
 });
 
+ipcMain.on('get-product-runtime-identity', (event) => {
+  event.returnValue = kiBuddyRuntime?.productIdentity ?? null;
+});
+
 ipcMain.on('get-initial-language', (event) => {
   event.returnValue = rendererInitialLanguage;
 });
+
+if (kiBuddyRuntime) {
+  ipcMain.on(kiBuddyRuntime.coreTransportChannel, (event) => {
+    event.returnValue = kiBuddyRuntime.coreAuthOptions.coreCsrfToken;
+  });
+}
 
 ipcMain.on('get-backend-startup-failed', (event) => {
   event.returnValue = backendStartupFailed;
@@ -240,7 +260,7 @@ ipcMain.handle('backend:recover-corrupted-database', async () => {
         const { getSystemDir } = await import('./process/utils/initStorage');
         const sysDir = getSystemDir();
         return await backendManager.start(
-          getDataPath(),
+          resolveBackendDataPath(getDataPath()),
           sysDir.logDir,
           {
             cacheDir: sysDir.cacheDir,
@@ -249,6 +269,7 @@ ipcMain.handle('backend:recover-corrupted-database', async () => {
           },
           {
             allowPendingOnHealthTimeout: false,
+            ...kiBuddyCoreAuthOptions,
             onHealthTimeout: async (error) => {
               markBackendStartupFailed(error);
               await captureBackendStartupFailure(error);
@@ -371,8 +392,12 @@ function markBackendReady(backendPort: number, source: string): void {
   (globalThis as typeof globalThis & { __backendStartupFailed?: boolean }).__backendStartupFailed = false;
   // Backend is ready: tell the renderer to drop any "starting" view and show the App.
   broadcastBackendStartupState(null);
-  void ensureAdminUserOnce(backendPort);
-  scheduleBackendMigrations();
+  if (ensureDefaultCoreUser) {
+    void ensureAdminUserOnce(backendPort);
+  }
+  if (!kiBuddyCoreAuthOptions) {
+    scheduleBackendMigrations();
+  }
 }
 
 function resolveDebugBackendStartupFailure(): BackendStartupFailureInfo | null {
@@ -670,7 +695,8 @@ const handleAppReady = async (): Promise<void> => {
 
   try {
     await initializeProcess();
-    rendererInitialLanguage = ProcessConfig.getSync('language') ?? null;
+    const savedLanguage = ProcessConfig.getSync('language');
+    rendererInitialLanguage = kiBuddyRuntime?.resolveLanguage(savedLanguage, app.getLocale()) ?? savedLanguage ?? null;
     mark('initializeProcess');
   } catch (error) {
     console.error('Failed to initialize process:', error);
@@ -766,7 +792,7 @@ const handleAppReady = async (): Promise<void> => {
         const { getSystemDir } = await import('./process/utils/initStorage');
         const sysDir = getSystemDir();
         return backendManager.start(
-          getDataPath(),
+          resolveBackendDataPath(getDataPath()),
           sysDir.logDir,
           {
             cacheDir: sysDir.cacheDir,
@@ -775,6 +801,7 @@ const handleAppReady = async (): Promise<void> => {
           },
           {
             allowPendingOnHealthTimeout: !(isWebUIMode || isResetPasswordMode),
+            ...kiBuddyCoreAuthOptions,
             onHealthTimeout: async (error) => {
               markBackendStartupFailed(error);
               // Hard rule: while the process is still alive, a health timeout is a
@@ -822,7 +849,7 @@ const handleAppReady = async (): Promise<void> => {
     // up (__backendPort set) and before any mode branch below that might log the
     // user in. Swallows its own errors; the next boot retries.
     const bootBackendPort = (globalThis as typeof globalThis & { __backendPort?: number }).__backendPort;
-    if (backendStartedOk && bootBackendPort) {
+    if (ensureDefaultCoreUser && backendStartedOk && bootBackendPort) {
       await ensureAdminUserOnce(bootBackendPort);
     }
   }
@@ -976,7 +1003,8 @@ const handleAppReady = async (): Promise<void> => {
     // Read language setting and initialize main process i18n, then refresh tray menu
     try {
       const savedLanguage = await ProcessConfig.get('language');
-      await setInitialLanguage(savedLanguage);
+      const language = kiBuddyRuntime?.resolveLanguage(savedLanguage, app.getLocale()) ?? savedLanguage;
+      await setInitialLanguage(language);
       // After language is set, refresh tray menu if it exists
       await refreshTrayMenu();
     } catch (error) {

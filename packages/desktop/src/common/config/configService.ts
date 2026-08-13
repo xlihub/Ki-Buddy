@@ -1,66 +1,36 @@
 import type { ConfigKey, ConfigKeyMap } from './configKeys';
+import { httpRequest } from '@/common/adapter/httpBridge';
 
 type Subscriber = (value: unknown) => void;
 
-declare global {
-  interface Window {
-    __backendPort?: number;
-  }
-}
-
-function getBaseUrl(): string {
-  // WebUI browser mode: no preload, fetch same-origin so web-host's
-  // static-server reverse-proxies /api/* to the backend.
-  if (typeof window !== 'undefined' && typeof document !== 'undefined' && !(window as Window).__backendPort) {
-    return '';
-  }
-  const port = typeof window !== 'undefined' ? (window as Window).__backendPort || 13400 : 13400;
-  return `http://127.0.0.1:${port}`;
-}
-
-async function fetchJson<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const url = `${getBaseUrl()}${path}`;
-  const headers: Record<string, string> = {};
-  if (body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-  }
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`ConfigService ${method} ${path} failed (${response.status}): ${errorBody}`);
-  }
-  const contentType = response.headers.get('Content-Type');
-  if (!contentType?.includes('application/json')) {
-    return undefined as T;
-  }
-  const json = await response.json();
-  if (json && typeof json === 'object' && 'data' in json) {
-    return json.data as T;
-  }
-  return json as T;
-}
+const CLIENT_SCOPED_KEYS = new Set<ConfigKey>(['language']);
 
 class ConfigServiceImpl {
   private cache = new Map<string, unknown>();
   private subscribers = new Map<string, Set<Subscriber>>();
   private initialized = false;
   private initPromise: Promise<void> | null = null;
+  private accountGeneration = 0;
+  private clientScopedCache = new Map<ConfigKey, unknown>();
 
   // Idempotent: concurrent callers share the same in-flight promise, and a
   // resolved init returns immediately. Modules that need persisted settings on
   // module load (theme/colorScheme/language) await whenReady() before reading.
   initialize(): Promise<void> {
     if (this.initPromise) return this.initPromise;
-    this.initPromise = (async () => {
-      const data = await fetchJson<Record<string, unknown>>('GET', '/api/settings/client');
+    const generation = this.accountGeneration;
+    const initialization = (async () => {
+      const data = await httpRequest<Record<string, unknown>>('GET', '/api/settings/client');
+      if (generation !== this.accountGeneration) return;
       this.cache.clear();
       if (data) {
         for (const [key, value] of Object.entries(data)) {
           this.cache.set(key, value);
+        }
+      }
+      for (const key of CLIENT_SCOPED_KEYS) {
+        if (this.clientScopedCache.has(key)) {
+          this.cache.set(key, this.clientScopedCache.get(key));
         }
       }
       // One-time theme migration: only when new keys are absent (idempotent).
@@ -75,15 +45,16 @@ class ConfigServiceImpl {
         this.cache.set('theme.activeId', migrated['theme.activeId']);
         this.cache.set('theme.userThemes', migrated['theme.userThemes']);
         // Persist asynchronously; ignore failure (will re-run next launch).
-        void fetchJson<void>('PUT', '/api/settings/client', migrated).catch(() => {});
+        void httpRequest<void>('PUT', '/api/settings/client', migrated).catch(() => {});
       }
       this.initialized = true;
     })();
-    this.initPromise.catch(() => {
+    this.initPromise = initialization;
+    initialization.catch(() => {
       // Allow a future caller to retry after a transient failure
-      this.initPromise = null;
+      if (this.initPromise === initialization) this.initPromise = null;
     });
-    return this.initPromise;
+    return initialization;
   }
 
   whenReady(): Promise<void> {
@@ -96,27 +67,31 @@ class ConfigServiceImpl {
 
   async set<K extends ConfigKey>(key: K, value: ConfigKeyMap[K]): Promise<void> {
     this.cache.set(key, value);
+    if (CLIENT_SCOPED_KEYS.has(key)) this.clientScopedCache.set(key, value);
     this.notify(key, value);
-    await fetchJson<void>('PUT', '/api/settings/client', { [key]: value });
+    await httpRequest<void>('PUT', '/api/settings/client', { [key]: value });
   }
 
   setLocal<K extends ConfigKey>(key: K, value: ConfigKeyMap[K]): void {
     this.cache.set(key, value);
+    if (CLIENT_SCOPED_KEYS.has(key)) this.clientScopedCache.set(key, value);
     this.notify(key, value);
   }
 
   async remove(key: ConfigKey): Promise<void> {
     this.cache.delete(key);
+    if (CLIENT_SCOPED_KEYS.has(key)) this.clientScopedCache.delete(key);
     this.notify(key, undefined);
-    await fetchJson<void>('PUT', '/api/settings/client', { [key]: null });
+    await httpRequest<void>('PUT', '/api/settings/client', { [key]: null });
   }
 
   async setBatch(entries: Partial<{ [K in ConfigKey]: ConfigKeyMap[K] }>): Promise<void> {
     for (const [key, value] of Object.entries(entries)) {
       this.cache.set(key, value);
+      if (CLIENT_SCOPED_KEYS.has(key as ConfigKey)) this.clientScopedCache.set(key as ConfigKey, value);
       this.notify(key as ConfigKey, value);
     }
-    await fetchJson<void>('PUT', '/api/settings/client', entries);
+    await httpRequest<void>('PUT', '/api/settings/client', entries);
   }
 
   subscribe(key: ConfigKey, callback: Subscriber): () => void {
@@ -133,8 +108,19 @@ class ConfigServiceImpl {
     return this.initialized;
   }
 
-  reset(): void {
+  /** Clears account-scoped values so the next read reloads them for the newly active Core user. */
+  resetForAccountChange(): void {
+    this.accountGeneration += 1;
     this.cache.clear();
+    for (const [key, value] of this.clientScopedCache) this.cache.set(key, value);
+    this.initialized = false;
+    this.initPromise = null;
+  }
+
+  reset(): void {
+    this.accountGeneration += 1;
+    this.cache.clear();
+    this.clientScopedCache.clear();
     this.subscribers.clear();
     this.initialized = false;
     this.initPromise = null;

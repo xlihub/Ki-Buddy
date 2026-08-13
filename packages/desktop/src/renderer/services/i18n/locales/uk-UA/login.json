@@ -15,6 +15,83 @@
   "languageToggle": "Змінити мову",
   "footerPrimary": "Трансформуйте свій ШІ у командному рядку",
   "footerSecondary": "Сучасно та ефективно",
+  "kiBuddy": {
+    "pageTitle": "Ki-Buddy — Вхід до Agents",
+    "brand": "Ki-Buddy",
+    "subtitle": "Увійдіть за допомогою наявного облікового запису Agents",
+    "agentsDeployment": "URL розгортання Agents",
+    "baseUrlPlaceholder": "https://agents.example.com",
+    "clearDeployment": "Очистити URL розгортання",
+    "lastSuccessfulDeployment": "Останній вхід",
+    "accountOrEmail": "Обліковий запис або пошта",
+    "accountOrEmailPlaceholder": "Введіть обліковий запис або пошту Agents",
+    "form": {
+      "required": "Це поле обов'язкове"
+    },
+    "account": {
+      "title": "Обліковий запис",
+      "userId": "ID користувача",
+      "email": "Ел. пошта",
+      "phone": "Телефон",
+      "organization": "Організація",
+      "roles": "Ролі",
+      "roleSeparator": ", ",
+      "deployment": "Розгортання Agents",
+      "openMenu": "Відкрити меню облікового запису",
+      "copyUserId": "Копіювати ID користувача",
+      "logout": "Вийти",
+      "logoutTitle": "Вийти",
+      "logoutDescription": "Після виходу з цього пристрою буде видалено збережені облікові дані Agents і кеш робочого простору цього облікового запису."
+    },
+    "onboarding": {
+      "skip": "Пропустити",
+      "next": "Далі",
+      "start": "Почати роботу з Ki-Buddy",
+      "progressLabel": "Перебіг знайомства",
+      "stepLabel": "Перейти до кроку {{current}} з {{total}}",
+      "toolSupportTitle": "Продовжуйте користуватися знайомими інструментами ШІ",
+      "toolSupportDescription": "Ki-Buddy об’єднує консольні інструменти ШІ в одному робочому просторі. Під час знайомства програма не сканує комп’ютер і не звертається до Agents.",
+      "assistantFlowTitle": "Перетворіть інструмент на спеціалізованого помічника",
+      "assistantFlowDescription": "Один основний інструмент підтримує помічників із чіткими ролями для документів, презентацій, таблиць, дощок і досліджень.",
+      "capabilityTitle": "Можливості зберігаються з помічником",
+      "capabilityDescription": "Змінюйте базовий інструмент, зберігаючи інструкції, навички, інструменти та знання.",
+      "assistantProfile": "Профіль можливостей помічника",
+      "tools": {
+        "claudeCode": "Claude Code",
+        "codexCli": "Codex CLI",
+        "antigravity": "Antigravity",
+        "copilot": "Copilot",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "openCode": "OpenCode",
+        "aionCli": "AionCLI"
+      },
+      "assistants": {
+        "manager": "Менеджер простору",
+        "word": "Помічник Word",
+        "slides": "Помічник презентацій",
+        "sheets": "Помічник таблиць",
+        "board": "Помічник дощок",
+        "research": "Помічник досліджень"
+      },
+      "capabilities": {
+        "instructions": "Інструкції",
+        "skills": "Навички",
+        "tools": "Інструменти",
+        "knowledge": "Знання"
+      },
+      "replayTitle": "Знайомство з Ki-Buddy",
+      "replayDescription": "Повторно перегляньте трьохсторінкове знайомство будь-коли.",
+      "replay": "Переглянути знайомство"
+    },
+    "errors": {
+      "contractError": "Це розгортання Agents повернуло несумісну відповідь",
+      "invalidCredentials": "Невірне ім'я користувача або пароль",
+      "networkError": "Помилка з'єднання, будь ласка, спробуйте ще раз",
+      "serverError": "Помилка сервера Agents, спробуйте пізніше",
+      "unknown": "Помилка входу, будь ласка, спробуйте ще раз"
+    }
+  },
   "errors": {
     "empty": "Будь ласка, введіть ім'я користувача та пароль",
     "invalidCredentials": "Невірне ім'я користувача або пароль",

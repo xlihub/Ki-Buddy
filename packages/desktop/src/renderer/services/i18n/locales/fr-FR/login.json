@@ -15,6 +15,83 @@
   "languageToggle": "Changer de langue",
   "footerPrimary": "Transformez votre IA en ligne de commande",
   "footerSecondary": "Moderne et efficace",
+  "kiBuddy": {
+    "pageTitle": "Ki-Buddy - Connexion à Agents",
+    "brand": "Ki-Buddy",
+    "subtitle": "Connectez-vous avec votre compte Agents existant",
+    "agentsDeployment": "URL du déploiement Agents",
+    "baseUrlPlaceholder": "https://agents.example.com",
+    "clearDeployment": "Effacer l’URL de déploiement",
+    "lastSuccessfulDeployment": "Dernière connexion",
+    "accountOrEmail": "Compte ou e-mail",
+    "accountOrEmailPlaceholder": "Saisissez votre compte ou e-mail Agents",
+    "form": {
+      "required": "Ce champ est obligatoire"
+    },
+    "account": {
+      "title": "Compte",
+      "userId": "ID utilisateur",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "organization": "Organisation",
+      "roles": "Rôles",
+      "roleSeparator": ", ",
+      "deployment": "Déploiement Agents",
+      "openMenu": "Ouvrir le menu du compte",
+      "copyUserId": "Copier l’ID utilisateur",
+      "logout": "Se déconnecter",
+      "logoutTitle": "Se déconnecter",
+      "logoutDescription": "La déconnexion supprime de cet appareil l’identifiant Agents enregistré et le cache de l’espace de travail de ce compte."
+    },
+    "onboarding": {
+      "skip": "Passer",
+      "next": "Suivant",
+      "start": "Commencer avec Ki-Buddy",
+      "progressLabel": "Progression de la présentation",
+      "stepLabel": "Aller à l’étape {{current}} sur {{total}}",
+      "toolSupportTitle": "Continuez avec vos outils d’IA habituels",
+      "toolSupportDescription": "Ki-Buddy rassemble vos outils d’IA en ligne de commande dans un espace de travail. Cette présentation n’analyse pas l’ordinateur et ne contacte pas Agents.",
+      "assistantFlowTitle": "Transformez un outil en assistant spécialisé",
+      "assistantFlowDescription": "Un outil central alimente des assistants aux rôles clairs pour les documents, présentations, feuilles de calcul, tableaux et recherches.",
+      "capabilityTitle": "Les capacités restent liées à l’assistant",
+      "capabilityDescription": "Changez l’outil sous-jacent tout en conservant les instructions, compétences, outils et connaissances.",
+      "assistantProfile": "Profil de capacités de l’assistant",
+      "tools": {
+        "claudeCode": "Claude Code",
+        "codexCli": "Codex CLI",
+        "antigravity": "Antigravity",
+        "copilot": "Copilot",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "openCode": "OpenCode",
+        "aionCli": "AionCLI"
+      },
+      "assistants": {
+        "manager": "Gestionnaire d’espace",
+        "word": "Assistant Word",
+        "slides": "Assistant de présentation",
+        "sheets": "Assistant de feuille de calcul",
+        "board": "Assistant de tableau",
+        "research": "Assistant de recherche"
+      },
+      "capabilities": {
+        "instructions": "Instructions",
+        "skills": "Compétences",
+        "tools": "Outils",
+        "knowledge": "Connaissances"
+      },
+      "replayTitle": "Présentation de Ki-Buddy",
+      "replayDescription": "Revoyez à tout moment la présentation du produit en trois pages.",
+      "replay": "Voir la présentation"
+    },
+    "errors": {
+      "contractError": "Ce déploiement Agents a renvoyé une réponse incompatible",
+      "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide",
+      "networkError": "Connexion échouée, veuillez réessayer",
+      "serverError": "Erreur du serveur Agents, veuillez réessayer plus tard",
+      "unknown": "Échec de connexion, veuillez réessayer"
+    }
+  },
   "errors": {
     "empty": "Veuillez entrer un nom d'utilisateur et un mot de passe",
     "invalidCredentials": "Nom d'utilisateur ou mot de passe invalide",

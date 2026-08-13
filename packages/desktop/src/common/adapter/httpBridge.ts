@@ -154,7 +154,20 @@ export type HttpRequestOptions = {
   headers?: Record<string, string>;
 };
 
-const SENSITIVE_LOG_KEY_PATTERN = /api[_-]?key|authorization|auth[_-]?token|access[_-]?token|refresh[_-]?token|secret/i;
+export type HttpRequestTransport = {
+  getCredentials?: (request: { method: string; path: string }) => RequestCredentials | undefined;
+  getHeaders: (request: { method: string; path: string }) => Record<string, string>;
+};
+
+let requestTransport: HttpRequestTransport | null = null;
+
+/** Installs a runtime-specific transport policy without teaching the common bridge its protocol. */
+export function setHttpRequestTransport(transport: HttpRequestTransport | null): void {
+  requestTransport = transport;
+}
+
+const SENSITIVE_LOG_KEY_PATTERN =
+  /api[_-]?key|authorization|auth[_-]?token|access[_-]?token|refresh[_-]?token|secret|password|cookie/i;
 
 function redactForLog(value: unknown, depth = 0): unknown {
   if (depth > 8 || value === null || typeof value !== 'object') {
@@ -189,6 +202,10 @@ export async function httpRequest<T>(
     Object.assign(headers, options.headers);
   }
 
+  const request = { method, path };
+  Object.assign(headers, requestTransport?.getHeaders(request));
+  const credentials = requestTransport?.getCredentials?.(request);
+
   console.debug(
     `[httpBridge] ${method} ${path}`,
     body !== undefined ? JSON.stringify(redactForLog(body)).slice(0, 500) : '(no body)'
@@ -198,6 +215,7 @@ export async function httpRequest<T>(
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...(credentials ? { credentials } : {}),
   });
 
   if (!response.ok) {

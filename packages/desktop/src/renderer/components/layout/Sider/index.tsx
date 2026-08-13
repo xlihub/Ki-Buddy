@@ -8,7 +8,7 @@ import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { blurActiveElement } from '@renderer/utils/ui/focus';
 import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
 import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderAssistantEntry } from './SiderNav';
-import SiderFooter from './SiderFooter';
+import SiderFooter, { shouldShowAionUiSiderLogout } from './SiderFooter';
 import TeamSiderSection from './TeamSiderSection';
 import siderStyles from './Sider.module.css';
 
@@ -33,8 +33,10 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
-  const showLogout =
-    typeof window !== 'undefined' && !(window as { electronAPI?: unknown }).electronAPI && status === 'authenticated';
+  const showLogout = shouldShowAionUiSiderLogout({
+    authenticated: status === 'authenticated',
+    electronDesktop: typeof window !== 'undefined' && Boolean(window.electronAPI),
+  });
 
   useEffect(() => {
     if (!pathname.startsWith('/settings')) {

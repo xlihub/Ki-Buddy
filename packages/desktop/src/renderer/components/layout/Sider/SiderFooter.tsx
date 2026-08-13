@@ -24,6 +24,11 @@ interface SiderFooterProps {
   onLogoutClick?: () => void;
 }
 
+/** Preserves the upstream WebUI logout entry while desktop products use their own account surface. */
+export function shouldShowAionUiSiderLogout(options: { authenticated: boolean; electronDesktop: boolean }): boolean {
+  return options.authenticated && !options.electronDesktop;
+}
+
 const SiderFooter: React.FC<SiderFooterProps> = ({
   isMobile,
   isSettings,

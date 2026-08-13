@@ -7,6 +7,7 @@
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
 import { addEventListener } from '@/renderer/utils/emitter';
+import { registerAccountStateResetter } from '@/renderer/services/runtime/accountStateLifecycle';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 
 /**
@@ -134,6 +135,7 @@ let completionUnreadConversationIdsState = new Set<string>();
 let completedConversationIdsState = new Set<string>();
 let conversation_idsState = new Set<string>();
 let activeConversationIdState: string | null = null;
+let accountGeneration = 0;
 let snapshotState: ConversationListSyncSnapshot = {
   conversations: conversationsState,
   generatingConversationIds: generatingConversationIdsState,
@@ -159,9 +161,11 @@ const subscribeConversationListSync = (listener: () => void) => {
 const getConversationListSyncSnapshot = (): ConversationListSyncSnapshot => snapshotState;
 
 const refreshConversations = () => {
+  const refreshGeneration = accountGeneration;
   void ipcBridge.database.getUserConversations
     .invoke({ limit: 10000 })
     .then((result) => {
+      if (refreshGeneration !== accountGeneration) return;
       const items = result?.items;
       if (items && Array.isArray(items)) {
         const filteredData = items.filter((conv) => {
@@ -184,12 +188,29 @@ const refreshConversations = () => {
       emitStoreChange();
     })
     .catch((error) => {
+      if (refreshGeneration !== accountGeneration) return;
       console.error('[WorkspaceGroupedHistory] Failed to load conversations:', error);
       conversationsState = [];
       conversation_idsState = new Set();
       emitStoreChange();
     });
 };
+
+/** Clears account-scoped conversation state and reloads it for the active Core session. */
+export const resetConversationListSyncForAccountChange = (): void => {
+  accountGeneration += 1;
+  conversationsState = [];
+  generatingConversationIdsState = new Set();
+  completionUnreadConversationIdsState = new Set();
+  completedConversationIdsState = new Set();
+  completedTurnIdByConversation.clear();
+  conversation_idsState = new Set();
+  activeConversationIdState = null;
+  emitStoreChange();
+  if (isStoreInitialized) refreshConversations();
+};
+
+registerAccountStateResetter(resetConversationListSyncForAccountChange);
 
 const markGenerating = (conversation_id: string) => {
   if (generatingConversationIdsState.has(conversation_id)) {

@@ -15,6 +15,83 @@
   "languageToggle": "Sprache ändern",
   "footerPrimary": "Verwandle deine Kommandozeilen-KI",
   "footerSecondary": "Modern & Effizient",
+  "kiBuddy": {
+    "pageTitle": "Ki-Buddy - Bei Agents anmelden",
+    "brand": "Ki-Buddy",
+    "subtitle": "Mit einem vorhandenen Agents-Konto anmelden",
+    "agentsDeployment": "Agents-Bereitstellungs-URL",
+    "baseUrlPlaceholder": "https://agents.example.com",
+    "clearDeployment": "Bereitstellungs-URL löschen",
+    "lastSuccessfulDeployment": "Zuletzt angemeldet",
+    "accountOrEmail": "Konto oder E-Mail",
+    "accountOrEmailPlaceholder": "Agents-Konto oder E-Mail eingeben",
+    "form": {
+      "required": "Dieses Feld ist erforderlich"
+    },
+    "account": {
+      "title": "Konto",
+      "userId": "Benutzer-ID",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "organization": "Organisation",
+      "roles": "Rollen",
+      "roleSeparator": ", ",
+      "deployment": "Agents-Bereitstellung",
+      "openMenu": "Kontomenü öffnen",
+      "copyUserId": "Benutzer-ID kopieren",
+      "logout": "Abmelden",
+      "logoutTitle": "Abmelden",
+      "logoutDescription": "Beim Abmelden werden die gespeicherten Agents-Anmeldedaten und der Arbeitsbereich-Cache dieses Kontos von diesem Gerät entfernt."
+    },
+    "onboarding": {
+      "skip": "Überspringen",
+      "next": "Weiter",
+      "start": "Ki-Buddy starten",
+      "progressLabel": "Fortschritt der Einführung",
+      "stepLabel": "Zu Schritt {{current}} von {{total}} wechseln",
+      "toolSupportTitle": "Nutze deine vertrauten KI-Werkzeuge weiter",
+      "toolSupportDescription": "Ki-Buddy vereint deine Kommandozeilen-KI-Werkzeuge in einem Arbeitsbereich. Diese Einführung scannt weder den Computer noch eine Agents-Bereitstellung.",
+      "assistantFlowTitle": "Vom Werkzeug zum spezialisierten Assistenten",
+      "assistantFlowDescription": "Ein Werkzeug bildet die Basis für klar definierte Dokument-, Präsentations-, Tabellen-, Board- und Recherche-Assistenten.",
+      "capabilityTitle": "Fähigkeiten bleiben beim Assistenten",
+      "capabilityDescription": "Beim Wechsel des zugrunde liegenden Werkzeugs bleiben Anweisungen, Fähigkeiten, Werkzeuge und Wissen erhalten.",
+      "assistantProfile": "Assistentenprofil",
+      "tools": {
+        "claudeCode": "Claude Code",
+        "codexCli": "Codex CLI",
+        "antigravity": "Antigravity",
+        "copilot": "Copilot",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "openCode": "OpenCode",
+        "aionCli": "AionCLI"
+      },
+      "assistants": {
+        "manager": "Arbeitsbereichsverwaltung",
+        "word": "Word-Assistent",
+        "slides": "Präsentationsassistent",
+        "sheets": "Tabellenassistent",
+        "board": "Board-Assistent",
+        "research": "Recherche-Assistent"
+      },
+      "capabilities": {
+        "instructions": "Anweisungen",
+        "skills": "Fähigkeiten",
+        "tools": "Werkzeuge",
+        "knowledge": "Wissen"
+      },
+      "replayTitle": "Ki-Buddy-Einführung",
+      "replayDescription": "Die dreiseitige Produkteinführung jederzeit erneut ansehen.",
+      "replay": "Einführung ansehen"
+    },
+    "errors": {
+      "contractError": "Diese Agents-Bereitstellung hat eine inkompatible Antwort zurückgegeben",
+      "invalidCredentials": "Ungültiger Benutzername oder Passwort",
+      "networkError": "Verbindung fehlgeschlagen, bitte erneut versuchen",
+      "serverError": "Agents-Serverfehler, bitte später erneut versuchen",
+      "unknown": "Anmeldung fehlgeschlagen, bitte erneut versuchen"
+    }
+  },
   "errors": {
     "empty": "Bitte Benutzername und Passwort eingeben",
     "invalidCredentials": "Ungültiger Benutzername oder Passwort",

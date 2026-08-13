@@ -14,6 +14,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }));
 
+vi.mock('@/renderer/services/i18n', () => ({ syncLanguageFromConfig: vi.fn() }));
+
 import ExtensionSettingsPage from '@/renderer/pages/settings/ExtensionSettingsPage';
 
 describe('ExtensionSettingsPage', () => {

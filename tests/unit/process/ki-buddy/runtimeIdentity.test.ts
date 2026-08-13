@@ -1,0 +1,50 @@
+/**
+ * @license
+ * Copyright 2025 AionUi (aionui.com)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+  KI_BUDDY_PRODUCT_RUNTIME,
+  readKiBuddyRuntimeIdentity,
+  resolveKiBuddyRuntimeIdentity,
+  shouldEnableKiBuddyRuntime,
+  shouldEnsureDefaultCoreUser,
+} from '@/process/ki-buddy/runtimeIdentity';
+
+describe('Ki-Buddy product runtime identity', () => {
+  it('enables Ki-Buddy only for the explicit packaged product marker', () => {
+    expect(resolveKiBuddyRuntimeIdentity({ productRuntime: KI_BUDDY_PRODUCT_RUNTIME })).toBe(true);
+    expect(resolveKiBuddyRuntimeIdentity({ productName: 'Ki-Buddy' })).toBe(false);
+    expect(resolveKiBuddyRuntimeIdentity({ name: 'ki-buddy' })).toBe(false);
+    expect(resolveKiBuddyRuntimeIdentity({ productRuntime: 'aionui' })).toBe(false);
+    expect(resolveKiBuddyRuntimeIdentity(null)).toBe(false);
+  });
+
+  it('keeps the upstream AionUi package on the capability-missing path', () => {
+    const projectRoot = resolve(__dirname, '../../../../');
+    const packageJson = JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8')) as unknown;
+
+    expect(resolveKiBuddyRuntimeIdentity(packageJson)).toBe(false);
+    expect(readKiBuddyRuntimeIdentity(projectRoot)).toBe(false);
+    expect(readKiBuddyRuntimeIdentity(resolve(projectRoot, 'missing-directory'))).toBe(false);
+  });
+
+  it('disables product capabilities outside the Ki-Buddy desktop runtime', () => {
+    expect(shouldEnableKiBuddyRuntime({ productIdentity: false, webUi: false, resetPassword: false })).toBe(false);
+    expect(shouldEnableKiBuddyRuntime({ productIdentity: true, webUi: true, resetPassword: false })).toBe(false);
+    expect(shouldEnableKiBuddyRuntime({ productIdentity: true, webUi: false, resetPassword: true })).toBe(false);
+    expect(shouldEnableKiBuddyRuntime({ productIdentity: true, webUi: false, resetPassword: false })).toBe(true);
+  });
+
+  it('preserves default Core user initialization for ordinary AionUi runtimes', () => {
+    expect(shouldEnsureDefaultCoreUser(false)).toBe(true);
+  });
+
+  it('does not initialize the default Core user for the Ki-Buddy desktop runtime', () => {
+    expect(shouldEnsureDefaultCoreUser(true)).toBe(false);
+  });
+});

@@ -77,8 +77,8 @@ function getModulesToRebuild(platform) {
   } else if (platform === 'linux') {
     return ['better-sqlite3'];
   }
-  // macOS: only rebuild better-sqlite3, skip node-pty
-  return ['better-sqlite3'];
+  // macOS: rebuild native database and credential modules, skip node-pty
+  return ['better-sqlite3', 'keytar'];
 }
 
 /**
@@ -357,6 +357,7 @@ function findNodeFiles(dir, maxDepth = 3, currentDepth = 0) {
 function verifyModuleBinary(moduleRoot, moduleName) {
   const binaryPathsToCheck = {
     'better-sqlite3': [path.join(moduleRoot, 'build', 'Release', 'better_sqlite3.node')],
+    keytar: [path.join(moduleRoot, 'build', 'Release', 'keytar.node')],
     'node-pty': [
       path.join(moduleRoot, 'build', 'Release', 'pty.node'),
       path.join(moduleRoot, 'build', 'Release', 'conpty.node'),

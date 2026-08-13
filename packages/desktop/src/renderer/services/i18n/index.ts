@@ -4,6 +4,8 @@ import { initReactI18next } from 'react-i18next';
 import { configService } from '@/common/config/configService';
 import { ipcBridge } from '@/common';
 import i18nConfig from '@/common/config/i18n-config.json';
+import { resolveLanguagePreference } from '@/common/platform/ki-buddy';
+import { getKiBuddyRendererRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
 import {
   DEFAULT_LANGUAGE,
   normalizeLanguageCode,
@@ -27,6 +29,7 @@ import deDE from './locales/de-DE/index';
 import esES from './locales/es-ES/index';
 import frFR from './locales/fr-FR/index';
 import faIR from './locales/fa-IR/index';
+import { getLanguageHint, setLanguageHint } from './languageHint';
 export type { I18nKey, I18nModule } from './i18n-keys';
 
 // Re-exports
@@ -67,8 +70,7 @@ function getLocaleModules(locale: string): Record<string, unknown> {
 }
 
 function getLocalStorageLanguageHint(): string | null {
-  if (typeof localStorage === 'undefined') return null;
-  return localStorage.getItem('i18nextLng');
+  return getLanguageHint();
 }
 
 function getInjectedLanguageHint(): string | null {
@@ -82,12 +84,24 @@ function getElectronSystemLanguageHint(): string | null {
   return navigator.language || null;
 }
 
+function getKiBuddyDefaultLanguageHint(): string | null {
+  return getKiBuddyRendererRuntime()?.defaultLanguage ?? null;
+}
+
 function getInitialLanguage(): SupportedLanguage {
   const backendStartupFailed =
     typeof window !== 'undefined' && (window as Window & { __backendStartupFailed?: boolean }).__backendStartupFailed;
   const localStorageLanguage = getLocalStorageLanguageHint();
   const injectedLanguage = getInjectedLanguageHint();
+  const productLanguage = getKiBuddyDefaultLanguageHint();
   const systemLanguage = backendStartupFailed ? getElectronSystemLanguageHint() : null;
+  if (productLanguage) {
+    return resolveLanguagePreference({
+      savedLanguage: localStorageLanguage || injectedLanguage,
+      productLanguage,
+      systemLanguage: navigator.language,
+    });
+  }
   const hint = backendStartupFailed
     ? injectedLanguage || localStorageLanguage || systemLanguage
     : localStorageLanguage || injectedLanguage;
@@ -140,16 +154,24 @@ i18n
 // Wait until configService.whenReady() so we observe the authoritative value
 // fetched from the backend rather than the empty cache that exists during
 // module load.
-async function initLanguage(): Promise<void> {
+/** Reloads the saved language after the Core settings session becomes available. */
+export async function syncLanguageFromConfig(): Promise<void> {
   try {
+    const productLanguage = getKiBuddyDefaultLanguageHint();
+    const clientLanguage = productLanguage
+      ? resolveLanguagePreference({
+          savedLanguage: getLocalStorageLanguageHint() || getInjectedLanguageHint(),
+          productLanguage,
+          systemLanguage: navigator.language,
+        })
+      : null;
+    if (clientLanguage) configService.setLocal('language', clientLanguage);
     await configService.whenReady();
     const savedLanguage = configService.get('language');
-    const language = savedLanguage || normalizeLanguageCode(navigator.language || DEFAULT_LANGUAGE);
+    const language = clientLanguage ?? (savedLanguage || normalizeLanguageCode(navigator.language || DEFAULT_LANGUAGE));
     await ensureAndSwitch(i18n, language, loadLocaleModules);
     // Sync to localStorage so next page load can use it as a fast hint
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('i18nextLng', normalizeLanguageCode(language));
-    }
+    setLanguageHint(normalizeLanguageCode(language));
   } catch (error) {
     console.error('Failed to initialize language:', error);
   }
@@ -169,7 +191,7 @@ i18n.on('languageChanged', async (lang: string) => {
 });
 
 // Initialize on module load
-void initLanguage();
+void syncLanguageFromConfig();
 
 // Listen for language changes broadcast by the main process (from other renderers).
 // This enables real-time sync between desktop and WebUI — when one changes language,
@@ -179,9 +201,7 @@ ipcBridge.systemSettings.languageChanged.on(async ({ language }) => {
   // Skip if already on this language (we're the one who triggered the change)
   if (i18n.language === normalized) return;
   await ensureAndSwitch(i18n, normalized, loadLocaleModules);
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('i18nextLng', normalized);
-  }
+  setLanguageHint(normalized);
 });
 
 /**
@@ -190,13 +210,11 @@ ipcBridge.systemSettings.languageChanged.on(async ({ language }) => {
 export async function changeLanguage(lang: string): Promise<void> {
   await ensureAndSwitch(i18n, lang, loadLocaleModules);
   const normalized = normalizeLanguageCode(lang);
-  await configService.set('language', normalized);
   // Keep localStorage in sync so WebUI can use it as a fast hint on next load
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('i18nextLng', normalized);
-  }
+  setLanguageHint(normalized);
   // Notify main process to sync i18n (for tray menu, etc.)
   ipcBridge.systemSettings.changeLanguage.invoke({ language: normalized }).catch(() => {});
+  await configService.set('language', normalized);
 }
 
 // Clear translation cache (useful for development/testing)

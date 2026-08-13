@@ -15,6 +15,83 @@
   "languageToggle": "Mudar idioma",
   "footerPrimary": "Transforme sua IA de linha de comando",
   "footerSecondary": "Moderno e Eficiente",
+  "kiBuddy": {
+    "pageTitle": "Ki-Buddy - Entrar no Agents",
+    "brand": "Ki-Buddy",
+    "subtitle": "Entre com sua conta existente do Agents",
+    "agentsDeployment": "URL da implantação do Agents",
+    "baseUrlPlaceholder": "https://agents.example.com",
+    "clearDeployment": "Limpar URL de implantação",
+    "lastSuccessfulDeployment": "Último login",
+    "accountOrEmail": "Conta ou e-mail",
+    "accountOrEmailPlaceholder": "Digite sua conta ou e-mail do Agents",
+    "form": {
+      "required": "Este campo é obrigatório"
+    },
+    "account": {
+      "title": "Conta",
+      "userId": "ID do usuário",
+      "email": "E-mail",
+      "phone": "Telefone",
+      "organization": "Organização",
+      "roles": "Funções",
+      "roleSeparator": ", ",
+      "deployment": "Implantação do Agents",
+      "openMenu": "Abrir menu da conta",
+      "copyUserId": "Copiar ID do usuário",
+      "logout": "Sair",
+      "logoutTitle": "Sair",
+      "logoutDescription": "Ao sair, a credencial do Agents salva e o cache do espaço de trabalho desta conta serão removidos deste dispositivo."
+    },
+    "onboarding": {
+      "skip": "Pular",
+      "next": "Próximo",
+      "start": "Começar a usar o Ki-Buddy",
+      "progressLabel": "Progresso da introdução",
+      "stepLabel": "Ir para a etapa {{current}} de {{total}}",
+      "toolSupportTitle": "Continue usando suas ferramentas de IA favoritas",
+      "toolSupportDescription": "O Ki-Buddy reúne ferramentas de IA de linha de comando em um só espaço. Esta introdução não verifica o computador nem acessa uma implantação Agents.",
+      "assistantFlowTitle": "Transforme uma ferramenta em um assistente especializado",
+      "assistantFlowDescription": "Uma ferramenta central dá suporte a assistentes com funções claras para documentos, apresentações, planilhas, quadros e pesquisa.",
+      "capabilityTitle": "As capacidades permanecem com o assistente",
+      "capabilityDescription": "Troque a ferramenta subjacente sem perder instruções, habilidades, ferramentas e conhecimento.",
+      "assistantProfile": "Perfil de capacidades do assistente",
+      "tools": {
+        "claudeCode": "Claude Code",
+        "codexCli": "Codex CLI",
+        "antigravity": "Antigravity",
+        "copilot": "Copilot",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "openCode": "OpenCode",
+        "aionCli": "AionCLI"
+      },
+      "assistants": {
+        "manager": "Gerente do espaço",
+        "word": "Assistente do Word",
+        "slides": "Assistente de apresentações",
+        "sheets": "Assistente de planilhas",
+        "board": "Assistente de quadros",
+        "research": "Assistente de pesquisa"
+      },
+      "capabilities": {
+        "instructions": "Instruções",
+        "skills": "Habilidades",
+        "tools": "Ferramentas",
+        "knowledge": "Conhecimento"
+      },
+      "replayTitle": "Introdução ao Ki-Buddy",
+      "replayDescription": "Reveja a introdução de três páginas quando quiser.",
+      "replay": "Ver introdução"
+    },
+    "errors": {
+      "contractError": "Esta implantação do Agents retornou uma resposta incompatível",
+      "invalidCredentials": "Nome de usuário ou senha inválidos",
+      "networkError": "Falha na conexão, por favor tente novamente",
+      "serverError": "Erro no servidor do Agents, tente novamente mais tarde",
+      "unknown": "O login falhou, por favor tente novamente"
+    }
+  },
   "errors": {
     "empty": "Por favor, insira nome de usuário e senha",
     "invalidCredentials": "Nome de usuário ou senha inválidos",

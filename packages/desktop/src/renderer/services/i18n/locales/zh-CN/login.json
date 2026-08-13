@@ -15,6 +15,83 @@
   "languageToggle": "切换语言",
   "footerPrimary": "命令行 AI 的现代化体验",
   "footerSecondary": "高效且优雅",
+  "kiBuddy": {
+    "pageTitle": "Ki-Buddy - 登录 Agents",
+    "brand": "Ki-Buddy",
+    "subtitle": "使用现有 Agents 平台账户登录",
+    "agentsDeployment": "Agents 部署地址",
+    "baseUrlPlaceholder": "https://agents.example.com",
+    "clearDeployment": "清除部署地址",
+    "lastSuccessfulDeployment": "上次登录",
+    "accountOrEmail": "账号或邮箱",
+    "accountOrEmailPlaceholder": "请输入 Agents 账号或邮箱",
+    "form": {
+      "required": "此项为必填项"
+    },
+    "account": {
+      "title": "账户",
+      "userId": "用户 ID",
+      "email": "邮箱",
+      "phone": "电话",
+      "organization": "所属机构",
+      "roles": "角色",
+      "roleSeparator": "、",
+      "deployment": "Agents 部署",
+      "openMenu": "打开账户菜单",
+      "copyUserId": "复制用户 ID",
+      "logout": "退出登录",
+      "logoutTitle": "退出登录",
+      "logoutDescription": "退出后将清除本机保存的 Agents 凭据和当前账户的工作区缓存。"
+    },
+    "onboarding": {
+      "skip": "跳过",
+      "next": "下一步",
+      "start": "开始使用 Ki-Buddy",
+      "progressLabel": "使用介绍进度",
+      "stepLabel": "前往第 {{current}} 步，共 {{total}} 步",
+      "toolSupportTitle": "继续使用你熟悉的 AI 工具",
+      "toolSupportDescription": "Ki-Buddy 将命令行 AI 工具汇集到同一个工作区；此介绍不会扫描本机，也不会连接 Agents 部署。",
+      "assistantFlowTitle": "把通用工具变成专注的助手",
+      "assistantFlowDescription": "以一个工具为核心，为文档、演示文稿、表格、看板和研究助手分别设定清晰职责。",
+      "capabilityTitle": "助手能力跟随助手保留",
+      "capabilityDescription": "切换底层工具时，助手的指令、技能、工具和知识保持不变。",
+      "assistantProfile": "助手能力设定",
+      "tools": {
+        "claudeCode": "Claude Code",
+        "codexCli": "Codex CLI",
+        "antigravity": "Antigravity",
+        "copilot": "Copilot",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "openCode": "OpenCode",
+        "aionCli": "AionCLI"
+      },
+      "assistants": {
+        "manager": "工作区管家",
+        "word": "Word 助手",
+        "slides": "演示文稿助手",
+        "sheets": "表格助手",
+        "board": "看板助手",
+        "research": "研究助手"
+      },
+      "capabilities": {
+        "instructions": "指令",
+        "skills": "技能",
+        "tools": "工具",
+        "knowledge": "知识"
+      },
+      "replayTitle": "Ki-Buddy 使用介绍",
+      "replayDescription": "随时重新查看三页产品介绍。",
+      "replay": "重新查看使用介绍"
+    },
+    "errors": {
+      "contractError": "该 Agents 部署返回了不兼容的响应",
+      "invalidCredentials": "用户名或密码错误",
+      "networkError": "连接失败，请稍后重试",
+      "serverError": "Agents 服务异常，请稍后重试",
+      "unknown": "登录失败，请稍后再试"
+    }
+  },
   "errors": {
     "empty": "请输入用户名和密码",
     "invalidCredentials": "用户名或密码错误",

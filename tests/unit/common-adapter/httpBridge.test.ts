@@ -25,6 +25,7 @@ import {
   wsMappedEmitter,
   stubEmitter,
   httpRequest,
+  setHttpRequestTransport,
 } from '@/common/adapter/httpBridge';
 
 type FakeSocketEventMap = {
@@ -76,10 +77,16 @@ describe('httpBridge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    delete (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken;
+    delete (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken;
+    setHttpRequestTransport(null);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    delete (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken;
+    delete (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken;
+    setHttpRequestTransport(null);
   });
 
   describe('getBaseUrl', () => {
@@ -482,6 +489,60 @@ describe('httpBridge', () => {
 
       expect(fetchSpy.mock.calls[0][1]?.body).toBe('{"key":"value"}');
       expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({ 'Content-Type': 'application/json' });
+    });
+
+    it('does not interpret Ki-Buddy credentials in the common request adapter', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ data: {} }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      vi.stubGlobal('fetch', fetchSpy);
+      vi.spyOn(console, 'debug').mockImplementation(() => {});
+      (globalThis as typeof globalThis & { __coreAccessToken?: string }).__coreAccessToken = 'core-session-token';
+      (globalThis as typeof globalThis & { __coreCsrfToken?: string }).__coreCsrfToken = 'core-csrf-token';
+
+      await httpRequest('POST', '/api/create', { key: 'value' });
+
+      expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({ 'Content-Type': 'application/json' });
+    });
+
+    it('does not interpret Ki-Buddy renderer CSRF state in the common request adapter', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ data: {} }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      vi.stubGlobal('fetch', fetchSpy);
+      vi.stubGlobal('window', { __backendPort: 39123, __coreCsrfToken: 'renderer-csrf-token' });
+      vi.stubGlobal('document', {});
+      vi.spyOn(console, 'debug').mockImplementation(() => {});
+
+      await httpRequest('POST', '/api/create', { key: 'value' });
+
+      expect(fetchSpy.mock.calls[0][1]).toMatchObject({
+        headers: { 'Content-Type': 'application/json' },
+      });
+      expect(fetchSpy.mock.calls[0][1]).not.toHaveProperty('credentials');
+      expect(fetchSpy.mock.calls[0][1]?.headers).not.toHaveProperty('Authorization');
+      expect(fetchSpy.mock.calls[0][1]?.headers).not.toHaveProperty('Cookie');
+    });
+
+    it('returns unauthorized business responses without changing transport state', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue(new Response('Unauthorized', { status: 401 }));
+      vi.stubGlobal('fetch', fetchSpy);
+      vi.spyOn(console, 'debug').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      setHttpRequestTransport({ getHeaders: () => ({ 'x-session': 'current' }) });
+
+      await expect(httpRequest('GET', '/api/protected')).rejects.toMatchObject({ status: 401 });
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ headers: { 'x-session': 'current' } })
+      );
     });
   });
 

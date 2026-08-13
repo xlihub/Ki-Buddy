@@ -156,6 +156,21 @@ describe('buildSpawnArgs', () => {
     expect(args).not.toContain('--local');
   });
 
+  it('starts the product backend in external identity mode without local bypass', () => {
+    const args = buildSpawnArgs({
+      port: 12345,
+      dbPath: '/data/path',
+      local: false,
+      identityMode: 'aionpro',
+      appVersion: '9.9.9',
+      isPackaged: true,
+    });
+
+    expect(args).toContain('--identity-mode');
+    expect(args).toContain('aionpro');
+    expect(args).not.toContain('--local');
+  });
+
   it('passes prompt dump flag in development only when AIONUI_DUMP_PROMPTS is enabled', () => {
     const prev = process.env.AIONUI_DUMP_PROMPTS;
     process.env.AIONUI_DUMP_PROMPTS = '1';
@@ -239,6 +254,19 @@ describe('buildSpawnEnv', () => {
     expect(env.AIONUI_WORK_DIR).toBe('/w');
     expect(env.AIONUI_LOG_DIR).toBe('/l');
     expect(env.PATH).toBe(process.env.PATH); // inherits
+  });
+
+  it('passes the external identity bootstrap secret only through the child environment', () => {
+    const env = buildSpawnEnv(
+      {
+        cacheDir: '/c',
+        workDir: '/w',
+        logDir: '/l',
+      },
+      'bootstrap-secret'
+    );
+
+    expect(env.AIONCORE_BOOTSTRAP_SECRET).toBe('bootstrap-secret');
   });
 });
 

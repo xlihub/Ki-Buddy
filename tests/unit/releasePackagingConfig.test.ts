@@ -38,6 +38,22 @@ describe('release packaging configuration', () => {
     expect(winBlock).not.toContain('    - zip');
   });
 
+  it('includes and unpacks the native keytar credential module', () => {
+    const config = readProjectFile('packages/desktop/electron-builder.yml');
+    const filesBlock = yamlBlock(config, 'files');
+    const asarUnpackBlock = yamlBlock(config, 'asarUnpack');
+
+    expect(filesBlock).toContain('  - node_modules/keytar/**/*');
+    expect(asarUnpackBlock).toContain("  - '**/node_modules/keytar/**/*'");
+  });
+
+  it('rebuilds keytar for cross-architecture macOS artifacts', () => {
+    const script = readProjectFile('scripts/rebuildNativeModules.js');
+
+    expect(script).toContain("return ['better-sqlite3', 'keytar'];");
+    expect(script).toContain("keytar: [path.join(moduleRoot, 'build', 'Release', 'keytar.node')]");
+  });
+
   it('uploads mac zip artifacts without a stale Windows zip glob', () => {
     const workflow = readProjectFile('.github/workflows/_build-reusable.yml');
 

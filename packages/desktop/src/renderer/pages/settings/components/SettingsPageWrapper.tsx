@@ -26,6 +26,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
 import { BUILTIN_TAB_IDS, LEGACY_ANCHOR_REMAP } from './SettingsSider';
 import './settings.css';
+import { withKiBuddySettingsItem } from '@/renderer/services/runtime/kiBuddyRuntime';
 
 interface SettingsPageWrapperProps {
   children: React.ReactNode;
@@ -81,7 +82,10 @@ export function getBuiltinSettingsNavItems(isDesktop: boolean, t: TranslateFn): 
     about: { id: 'about', label: t('settings.about'), icon: <Info theme='outline' size='16' />, path: 'about' },
   };
 
-  return BUILTIN_TAB_IDS.map((id) => builtinMap[id]);
+  return withKiBuddySettingsItem(
+    BUILTIN_TAB_IDS.map((id) => builtinMap[id]),
+    t
+  );
 }
 
 const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, className, contentClassName }) => {

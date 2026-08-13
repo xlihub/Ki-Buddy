@@ -10,6 +10,7 @@ const {
   readProductConfig,
   readProductVersion,
   verifyKiBuddyRelease,
+  verifyProductPackageJson,
 } = require('../../../packages/shared-scripts/src/kiBuddyRelease');
 
 const projectRoot = resolve(__dirname, '../../..');
@@ -19,11 +20,63 @@ describe('Ki-Buddy product release identity', () => {
     expect(() => verifyKiBuddyRelease(projectRoot, { skipGit: true })).not.toThrow();
   });
 
+  it('allows only declared product dependencies in the upstream package comparison', () => {
+    const upstreamPackage = { name: 'AionUi', dependencies: { react: '^19.0.0' } };
+    const currentPackage = {
+      name: 'AionUi',
+      dependencies: { react: '^19.0.0', keytar: '^7.9.0' },
+    };
+
+    expect(() => verifyProductPackageJson(currentPackage, upstreamPackage, { keytar: '^7.9.0' })).not.toThrow();
+    expect(() =>
+      verifyProductPackageJson({ ...currentPackage, name: 'Ki-Buddy' }, upstreamPackage, { keytar: '^7.9.0' })
+    ).toThrow('only by declared product dependencies');
+    expect(() =>
+      verifyProductPackageJson(
+        { ...currentPackage, dependencies: { ...currentPackage.dependencies, keytar: '^8.0.0' } },
+        upstreamPackage,
+        { keytar: '^7.9.0' }
+      )
+    ).toThrow('must match the product configuration');
+  });
+
   it('stores only the current product release mapping', () => {
     const mapping = JSON.parse(readFileSync(join(projectRoot, 'ki-buddy-release.json'), 'utf8'));
 
     expect(mapping).not.toHaveProperty('versions');
     expect(mapping.release.version).toBe(readProductVersion(projectRoot));
+  });
+
+  it('keeps the Ki-Buddy defaults in the product configuration', () => {
+    expect(readProductConfig(projectRoot).defaults).toEqual({
+      agentsBaseUrl: 'https://ksapi.kingsware.cn',
+      language: 'zh-CN',
+    });
+  });
+
+  it('rejects malformed runtime identity and product defaults', () => {
+    const source = JSON.parse(readFileSync(join(projectRoot, 'ki-buddy-product.json'), 'utf8'));
+    for (const mutate of [
+      (config: typeof source) => {
+        config.runtimeIdentity = '';
+      },
+      (config: typeof source) => {
+        config.defaults.agentsBaseUrl = 'ftp://agents.example.com';
+      },
+      (config: typeof source) => {
+        config.defaults.language = '';
+      },
+    ]) {
+      const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-product-config-'));
+      try {
+        const config = structuredClone(source);
+        mutate(config);
+        writeFileSync(join(tempDir, 'ki-buddy-product.json'), JSON.stringify(config));
+        expect(() => readProductConfig(tempDir)).toThrow();
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    }
   });
 
   it('rejects a release mapping that does not describe the current product version', () => {
@@ -53,6 +106,7 @@ describe('Ki-Buddy product release identity', () => {
 
     expect(effectivePackage).toMatchObject({
       ...productConfig.packageMetadata,
+      productRuntime: 'ki-buddy',
       version: productVersion,
       main: upstreamPackage.main,
       dependencies: upstreamPackage.dependencies,
@@ -73,6 +127,7 @@ describe('Ki-Buddy product release identity', () => {
         ...productConfig.electronBuilder,
         extraMetadata: {
           ...productConfig.packageMetadata,
+          productRuntime: 'ki-buddy',
           version: productVersion,
         },
       });

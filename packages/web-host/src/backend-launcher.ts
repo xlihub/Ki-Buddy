@@ -65,6 +65,7 @@ type SpawnConfig = {
   port: number;
   dbPath: string;
   local: boolean;
+  identityMode?: 'webui' | 'aionpro';
   parentPid?: number;
   logDir?: string;
   workDir?: string;
@@ -169,6 +170,8 @@ export type BackendStartupErrorDetails = {
 
 export type BackendStartOptions = {
   allowPendingOnHealthTimeout?: boolean;
+  bootstrapSecret?: string;
+  identityMode?: 'webui' | 'aionpro';
   onHealthTimeout?: (error: BackendStartupError) => Promise<void> | void;
   onPendingExit?: (error: BackendStartupError) => Promise<void> | void;
   onReady?: (port: number) => Promise<void> | void;
@@ -211,6 +214,7 @@ export function buildSpawnArgs(config: SpawnConfig): string[] {
   if (config.logDir) args.push('--log-dir', config.logDir);
   if (config.workDir) args.push('--work-dir', config.workDir);
   if (config.local) args.push('--local');
+  if (config.identityMode) args.push('--identity-mode', config.identityMode);
   if (config.recoverCorruptedDatabase) args.push('--recover-corrupted-database');
   return args;
 }
@@ -221,12 +225,17 @@ export function buildSpawnArgs(config: SpawnConfig): string[] {
  * backend's `/api/system/info` matches what Electron main persists in
  * ProcessEnv('aionui.dir').
  */
-export function buildSpawnEnv(dirs: BackendDirConfig): NodeJS.ProcessEnv {
+export function buildSpawnEnv(dirs?: BackendDirConfig, bootstrapSecret?: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
-    AIONUI_CACHE_DIR: dirs.cacheDir,
-    AIONUI_WORK_DIR: dirs.workDir,
-    AIONUI_LOG_DIR: dirs.logDir,
+    ...(dirs
+      ? {
+          AIONUI_CACHE_DIR: dirs.cacheDir,
+          AIONUI_WORK_DIR: dirs.workDir,
+          AIONUI_LOG_DIR: dirs.logDir,
+        }
+      : {}),
+    ...(bootstrapSecret ? { AIONCORE_BOOTSTRAP_SECRET: bootstrapSecret } : {}),
   };
 }
 
@@ -658,7 +667,8 @@ export class BackendLifecycleManager {
     const args = buildSpawnArgs({
       port: this._port,
       dbPath,
-      local: true,
+      local: options?.identityMode === undefined,
+      identityMode: options?.identityMode,
       parentPid: process.pid,
       logDir,
       workDir: dirs?.workDir,
@@ -682,7 +692,7 @@ export class BackendLifecycleManager {
     try {
       this.childProcess = spawn(binaryPath, args, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: dirs ? buildSpawnEnv(dirs) : process.env,
+        env: buildSpawnEnv(dirs, options?.bootstrapSecret),
         cwd: dirs?.workDir ?? dbPath,
         detached: process.platform !== 'win32',
       });
