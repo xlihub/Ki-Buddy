@@ -7,7 +7,28 @@ import {
   type KiBuddyLoginParams,
   type KiBuddyRendererLoginResult,
 } from './kiBuddyAuthAdapter';
-import { registerKiBuddyUnauthorizedHandler } from './coreTransport';
+
+type KiBuddyAccountSwitchBarrier = {
+  observe: (userId: string | null) => void;
+};
+
+/** Remembers the last active Core user and reloads when a different account becomes active. */
+export function createKiBuddyAccountSwitchBarrier(reload: () => void): KiBuddyAccountSwitchBarrier {
+  let previousUserId: string | null = null;
+  let reloadRequested = false;
+
+  return {
+    observe: (userId) => {
+      if (!userId || reloadRequested) return;
+      if (previousUserId && previousUserId !== userId) {
+        reloadRequested = true;
+        reload();
+        return;
+      }
+      previousUserId = userId;
+    },
+  };
+}
 
 type KiBuddyAuthContextValue = {
   login: (params: KiBuddyLoginParams) => Promise<KiBuddyRendererLoginResult>;
@@ -19,14 +40,15 @@ const KiBuddyAuthContext = createContext<KiBuddyAuthContextValue | undefined>(un
 const KiBuddyAuthContextBridge: React.FC<
   React.PropsWithChildren<{ adapter: KiBuddyAuthAdapter; profile: KiBuddyAgentsProfile | null }>
 > = ({ adapter, children, profile }) => {
-  const { login: authenticate, logout } = useAuth();
+  const { login: authenticate, user } = useAuth();
+  const accountSwitchBarrier = useMemo(() => createKiBuddyAccountSwitchBarrier(() => window.location.reload()), []);
   const login = useCallback(
     (params: KiBuddyLoginParams) => adapter.login(params, authenticate),
     [adapter, authenticate]
   );
   const value = useMemo(() => ({ login, profile }), [login, profile]);
 
-  useEffect(() => registerKiBuddyUnauthorizedHandler(logout), [logout]);
+  useEffect(() => accountSwitchBarrier.observe(user?.id ?? null), [accountSwitchBarrier, user?.id]);
 
   return <KiBuddyAuthContext.Provider value={value}>{children}</KiBuddyAuthContext.Provider>;
 };

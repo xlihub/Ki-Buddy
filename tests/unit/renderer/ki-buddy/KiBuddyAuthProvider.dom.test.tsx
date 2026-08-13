@@ -10,6 +10,7 @@ import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, useAuth } from '@/renderer/hooks/context/AuthContext';
 import { KiBuddyAuthProvider, useKiBuddyAuth } from '@/renderer/pages/ki-buddy/Auth';
+import { createKiBuddyAccountSwitchBarrier } from '@/renderer/pages/ki-buddy/Auth/KiBuddyAuthProvider';
 import { configService } from '@/common/config/configService';
 import { httpRequest, setHttpRequestTransport } from '@/common/adapter/httpBridge';
 import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/Auth/coreTransport';
@@ -139,7 +140,25 @@ describe('Ki-Buddy product authentication context', () => {
     expect(configService.get('language')).toBe('en-US');
   });
 
-  it('returns to the login gate and clears the session after a runtime Core 401', async () => {
+  it('reloads once when a different Core account becomes active after logout', () => {
+    const reload = vi.fn();
+    const barrier = createKiBuddyAccountSwitchBarrier(reload);
+
+    barrier.observe(null);
+    barrier.observe('core-user-a');
+    expect(reload).not.toHaveBeenCalled();
+
+    barrier.observe(null);
+    expect(reload).not.toHaveBeenCalled();
+
+    barrier.observe('core-user-b');
+    expect(reload).toHaveBeenCalledOnce();
+
+    barrier.observe('core-user-b');
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the active account when a Core business request returns 401', async () => {
     getSessionMock.mockResolvedValue({
       status: 'authenticated',
       user: {
@@ -153,7 +172,6 @@ describe('Ki-Buddy product authentication context', () => {
         },
       },
     });
-    logoutMock.mockResolvedValue({ status: 'unauthenticated', user: null });
     window.electronAPI = {
       ...window.electronAPI,
       kiBuddyAuth: window.electronAPI?.kiBuddyAuth,
@@ -174,8 +192,9 @@ describe('Ki-Buddy product authentication context', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'core-request' }));
 
-    await waitFor(() => expect(screen.getByLabelText('auth-status')).toHaveTextContent('unauthenticated'));
-    expect(logoutMock).toHaveBeenCalledOnce();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(screen.getByLabelText('auth-status')).toHaveTextContent('authenticated');
+    expect(logoutMock).not.toHaveBeenCalled();
   });
 
   it('preserves ordinary AionUi desktop authentication when the product capability is absent', async () => {

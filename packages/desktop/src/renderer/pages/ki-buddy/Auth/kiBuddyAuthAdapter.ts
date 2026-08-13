@@ -115,6 +115,7 @@ export function createKiBuddyAuthAdapter(options: {
           }
         },
         logout: async () => {
+          state.setStatus('checking');
           try {
             await api.logout();
           } catch (error) {

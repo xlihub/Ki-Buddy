@@ -71,6 +71,24 @@ describe('Ki-Buddy renderer authentication handlers', () => {
     expect(setStatusMock).toHaveBeenCalledWith('unauthenticated');
   });
 
+  it('locks the business surface while main-process logout is still pending', async () => {
+    let finishLogout: (() => void) | undefined;
+    logoutMock.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishLogout = resolve;
+      })
+    );
+
+    const logout = createHandlers().handlers.logout();
+
+    expect(setStatusMock).toHaveBeenCalledWith('checking');
+    expect(setStatusMock).not.toHaveBeenCalledWith('unauthenticated');
+
+    finishLogout?.();
+    await logout;
+    expect(setStatusMock).toHaveBeenLastCalledWith('unauthenticated');
+  });
+
   it('clears account state when restoration reports an invalidated credential', async () => {
     getSessionMock.mockResolvedValue({ status: 'unauthenticated', user: null, cleanupRequired: true });
     configService.setLocal('language', 'en-US');

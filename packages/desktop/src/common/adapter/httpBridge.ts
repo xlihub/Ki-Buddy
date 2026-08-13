@@ -157,7 +157,6 @@ export type HttpRequestOptions = {
 export type HttpRequestTransport = {
   getCredentials?: (request: { method: string; path: string }) => RequestCredentials | undefined;
   getHeaders: (request: { method: string; path: string }) => Record<string, string>;
-  onUnauthorized?: (request: { method: string; path: string }) => Promise<void> | void;
 };
 
 let requestTransport: HttpRequestTransport | null = null;
@@ -220,13 +219,6 @@ export async function httpRequest<T>(
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      try {
-        await requestTransport?.onUnauthorized?.(request);
-      } catch (error) {
-        console.error(`[httpBridge] ${method} ${path} unauthorized cleanup failed`, error);
-      }
-    }
     // Response body can only be consumed once — read as text, then try JSON
     const rawText = await response.text().catch(() => '');
     let errorBody: unknown;
