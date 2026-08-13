@@ -20,6 +20,7 @@ import os from 'os';
 
 type Fixtures = {
   electronApp: ElectronApplication;
+  isolatedPackagedPage: Page;
   page: Page;
 };
 
@@ -202,18 +203,26 @@ function shouldUsePackagedMode(): boolean {
   return !!process.env.CI;
 }
 
+function createE2EEnvironment(userDataDir: string, stateFile: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    AIONUI_EXTENSIONS_PATH:
+      process.env.AIONUI_EXTENSIONS_PATH || path.join(path.resolve(__dirname, '../..'), 'examples'),
+    AIONUI_EXTENSION_STATES_FILE: process.env.AIONUI_EXTENSION_STATES_FILE || stateFile,
+    AIONUI_DISABLE_AUTO_UPDATE: '1',
+    AIONUI_DISABLE_DEVTOOLS: '1',
+    AIONUI_E2E_TEST: '1',
+    AIONUI_E2E_USER_DATA_DIR: userDataDir,
+    AIONUI_CDP_PORT: process.env.AIONUI_CDP_PORT || '9230',
+  };
+}
+
 async function launchApp(): Promise<ElectronApplication> {
   const projectRoot = path.resolve(__dirname, '../..');
   const usePackaged = shouldUsePackagedMode();
 
   const commonEnv = {
-    ...process.env,
-    AIONUI_EXTENSIONS_PATH: process.env.AIONUI_EXTENSIONS_PATH || path.join(projectRoot, 'examples'),
-    AIONUI_EXTENSION_STATES_FILE: process.env.AIONUI_EXTENSION_STATES_FILE || e2eStateFile,
-    AIONUI_DISABLE_AUTO_UPDATE: '1',
-    AIONUI_DISABLE_DEVTOOLS: '1',
-    AIONUI_E2E_TEST: '1',
-    AIONUI_E2E_USER_DATA_DIR: process.env.AIONUI_E2E_USER_DATA_DIR || e2eUserDataDir,
+    ...createE2EEnvironment(process.env.AIONUI_E2E_USER_DATA_DIR || e2eUserDataDir, e2eStateFile),
     /**
      * 以前这里设 '0' 把 CDP 整个关掉，因为那时开 CDP 等于开 Chromium 的应用级
      * remote-debugging-port —— 无认证地暴露每个 WebContents，还会在多实例间抢端口，
@@ -302,6 +311,42 @@ export const test = base.extend<Fixtures>({
     }
 
     await use(app);
+  },
+
+  // Process-lifecycle acceptance scenarios use their own packaged app and
+  // disposable userData, matching the repository's existing isolated-Electron
+  // suites. This keeps timers, Core memory, credentials, and database state
+  // independent from the shared singleton used by ordinary E2E tests.
+  // eslint-disable-next-line no-empty-pattern
+  isolatedPackagedPage: async ({}, use) => {
+    const packaged = resolvePackagedApp();
+    if (!packaged) {
+      throw new Error(
+        'Isolated packaged E2E: could not find packaged app under out/. ' +
+          'Run `node scripts/build-with-builder.js auto --<platform> --pack-only` first.'
+      );
+    }
+    const sandboxDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aionui-e2e-isolated-packaged-'));
+    const launchArgs = process.platform === 'linux' && process.env.CI ? ['--no-sandbox'] : [];
+    const isolatedApp = await electron.launch({
+      executablePath: packaged.executablePath,
+      args: launchArgs,
+      cwd: packaged.cwd,
+      env: {
+        ...createE2EEnvironment(sandboxDir, path.join(sandboxDir, 'extension-states.json')),
+        AIONUI_CDP_PORT: '0',
+        AIONUI_EXTENSION_STATES_FILE: path.join(sandboxDir, 'extension-states.json'),
+        NODE_ENV: 'production',
+      },
+      timeout: 60_000,
+    });
+
+    try {
+      await use(await resolveMainWindow(isolatedApp));
+    } finally {
+      await isolatedApp.close().catch(() => undefined);
+      fs.rmSync(sandboxDir, { recursive: true, force: true });
+    }
   },
 
   page: async ({ electronApp }, use, testInfo: TestInfo) => {

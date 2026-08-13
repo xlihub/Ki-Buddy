@@ -1,4 +1,4 @@
-import { app, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session } from 'electron';
 import { KI_BUDDY_AUTH_CHANNELS } from '@/common/platform/kiBuddyAuth';
 import type { KiBuddyLoginRequest, KiBuddyLoginResult } from '@/common/types/platform/kiBuddyAuth';
 import { AgentsAuthService } from './AgentsAuthService';
@@ -14,6 +14,7 @@ type RegisterKiBuddyAuthOptions = {
 
 const CORE_SESSION_COOKIE = 'aionui-session';
 const CORE_CSRF_COOKIE = 'aionui-csrf-token';
+const SESSION_VALIDATION_INTERVAL_MS = 60_000;
 
 function isLoginRequest(value: unknown): value is KiBuddyLoginRequest {
   if (typeof value !== 'object' || value === null) return false;
@@ -21,6 +22,20 @@ function isLoginRequest(value: unknown): value is KiBuddyLoginRequest {
   return (
     typeof record.baseUrl === 'string' && typeof record.loginName === 'string' && typeof record.password === 'string'
   );
+}
+
+function notifySessionInvalidated(): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send(KI_BUDDY_AUTH_CHANNELS.sessionInvalidated);
+  }
+}
+
+function scheduleSessionValidation(validate: () => Promise<void>): () => void {
+  const timer = setInterval(() => {
+    void validate().catch(() => console.warn('[Ki-Buddy Auth] Periodic token validation failed'));
+  }, SESSION_VALIDATION_INTERVAL_MS);
+  timer.unref();
+  return () => clearInterval(timer);
 }
 
 async function setCoreSessionCookie(
@@ -86,6 +101,8 @@ export function registerKiBuddyAuthBridge(options: RegisterKiBuddyAuthOptions): 
     credentialStore: new KeytarCredentialStore(app.getPath('userData')),
     fetch,
     getCoreBaseUrl: options.getCoreBaseUrl,
+    onSessionInvalidated: notifySessionInvalidated,
+    scheduleSessionValidation,
     setCoreSessionCookie: (header) => setCoreSessionCookie(options.getCoreBaseUrl(), options.coreTransport, header),
   });
 

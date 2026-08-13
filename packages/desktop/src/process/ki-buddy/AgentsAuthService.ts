@@ -32,7 +32,13 @@ type AgentsAuthServiceDependencies = {
   credentialStore: AgentsCredentialStore;
   fetch: typeof fetch;
   getCoreBaseUrl: () => string;
+  onSessionInvalidated?: () => void;
+  scheduleSessionValidation?: (validate: () => Promise<void>) => () => void;
   setCoreSessionCookie: (setCookieHeader: string) => Promise<void>;
+};
+
+type AgentsSessionReference = AgentsAccountIdentity & {
+  generation: number;
 };
 
 type AgentsIdentity = {
@@ -46,6 +52,7 @@ type AgentsIdentity = {
 };
 
 type AgentsLoginBody = AgentsIdentity & { token: string };
+type AuthenticatedKiBuddySession = Extract<KiBuddyAuthSession, { status: 'authenticated' }>;
 
 type CoreSessionProjection = {
   setCookieHeader: string;
@@ -161,9 +168,14 @@ function isCoreRevokeResponse(body: unknown): boolean {
 
 /** Owns the Ki-Buddy Agents session and its projected Core user session. */
 export class AgentsAuthService {
+  private activeCredential: StoredAgentsSession | null = null;
   private activeIdentity: AgentsAccountIdentity | null = null;
   private session: KiBuddyAuthSession = { status: 'unauthenticated', user: null };
+  private sessionAbortController: AbortController | null = null;
   private restoreAttempted = false;
+  private sessionGeneration = 0;
+  private sessionValidationPendingGeneration: number | null = null;
+  private stopSessionValidation: (() => void) | null = null;
 
   /** Creates the service with explicit network, credential, and Core-session dependencies. */
   constructor(private readonly dependencies: AgentsAuthServiceDependencies) {}
@@ -215,9 +227,7 @@ export class AgentsAuthService {
     const coreProjection = await this.establishCoreSession(stored.baseUrl, identity);
     if (coreProjection.success) {
       try {
-        await this.dependencies.setCoreSessionCookie(coreProjection.projection.setCookieHeader);
-        this.activeIdentity = { baseUrl: stored.baseUrl, userId: stored.userId };
-        this.session = { status: 'authenticated', user: coreProjection.projection.user };
+        await this.activateSession(stored, coreProjection.projection);
       } catch {
         await this.deactivateIdentity({ baseUrl: stored.baseUrl, userId: stored.userId });
         this.session = { status: 'unauthenticated', user: null, cleanupRequired: true };
@@ -293,11 +303,11 @@ export class AgentsAuthService {
     }
 
     try {
-      await this.dependencies.setCoreSessionCookie(coreProjection.projection.setCookieHeader);
-      this.activeIdentity = { baseUrl, userId: agentsUser.userId };
-      this.session = { status: 'authenticated', user: coreProjection.projection.user };
-      this.restoreAttempted = true;
-      return { success: true, session: this.session };
+      const session = await this.activateSession(
+        { baseUrl, token: agentsUser.token, userId: agentsUser.userId },
+        coreProjection.projection
+      );
+      return { success: true, session };
     } catch {
       await this.deactivateIdentity(nextIdentity);
       return { success: false, code: 'serverError', shouldClearCache: true };
@@ -312,8 +322,102 @@ export class AgentsAuthService {
     return this.session;
   }
 
+  /** Sends an authenticated request only to the active Agents deployment. */
+  async fetchAuthenticated(path: string, init: RequestInit = {}): Promise<Response> {
+    const credential = this.activeCredential;
+    const generation = this.sessionGeneration;
+    if (!credential) throw new Error('No active Agents session');
+    if (!path.startsWith('/') || path.startsWith('//')) {
+      throw new Error('Authenticated Agents requests require a deployment-relative path');
+    }
+
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', `Bearer ${credential.token}`);
+    const sessionSignal = this.sessionAbortController?.signal;
+    const signal =
+      init.signal && sessionSignal ? AbortSignal.any([init.signal, sessionSignal]) : (sessionSignal ?? init.signal);
+    const response = await this.dependencies.agentsFetch(`${credential.baseUrl}${path}`, {
+      ...init,
+      headers,
+      redirect: 'manual',
+      signal,
+    });
+    if (response.status === 401 || response.status === 403) {
+      await this.invalidateSessionIfCurrent({
+        baseUrl: credential.baseUrl,
+        generation,
+        userId: credential.userId,
+      });
+    }
+    return response;
+  }
+
+  /** Ends the active local session when a bound Agents request reports authentication loss. */
+  private async invalidateSessionIfCurrent(reference: AgentsSessionReference): Promise<boolean> {
+    const baseUrl = normalizeAgentsBaseUrl(reference.baseUrl);
+    const activeIdentity = this.activeIdentity;
+    if (
+      reference.generation !== this.sessionGeneration ||
+      !baseUrl ||
+      !activeIdentity ||
+      !this.isSameIdentity(activeIdentity, { baseUrl, userId: reference.userId })
+    ) {
+      return false;
+    }
+
+    const cleanupError = await this.deactivateIdentity(activeIdentity);
+    this.session = { status: 'unauthenticated', user: null, cleanupRequired: true };
+    this.dependencies.onSessionInvalidated?.();
+    if (cleanupError) throw cleanupError;
+    return true;
+  }
+
   private isSameIdentity(left: AgentsAccountIdentity, right: AgentsAccountIdentity): boolean {
     return left.baseUrl === right.baseUrl && left.userId === right.userId;
+  }
+
+  private async activateSession(
+    credential: StoredAgentsSession,
+    projection: CoreSessionProjection
+  ): Promise<AuthenticatedKiBuddySession> {
+    await this.dependencies.setCoreSessionCookie(projection.setCookieHeader);
+    this.sessionGeneration += 1;
+    this.sessionAbortController = new AbortController();
+    this.activeCredential = credential;
+    this.activeIdentity = { baseUrl: credential.baseUrl, userId: credential.userId };
+    const session: AuthenticatedKiBuddySession = { status: 'authenticated', user: projection.user };
+    this.session = session;
+    this.restoreAttempted = true;
+    this.startSessionValidation();
+    return session;
+  }
+
+  private startSessionValidation(): void {
+    this.stopSessionValidation?.();
+    this.stopSessionValidation =
+      this.dependencies.scheduleSessionValidation?.(async () => {
+        if (this.sessionValidationPendingGeneration !== null) return;
+        const credential = this.activeCredential;
+        if (!credential) return;
+        const generation = this.sessionGeneration;
+        this.sessionValidationPendingGeneration = generation;
+        try {
+          const response = await this.fetchAuthenticated('/kagent/system/user/validateToken', { method: 'POST' });
+          if (!response.ok) return;
+          const identity = parseAgentsIdentity(await readJson(response));
+          if (!identity || identity.userId !== credential.userId) {
+            await this.invalidateSessionIfCurrent({
+              baseUrl: credential.baseUrl,
+              generation,
+              userId: credential.userId,
+            });
+          }
+        } finally {
+          if (this.sessionValidationPendingGeneration === generation) {
+            this.sessionValidationPendingGeneration = null;
+          }
+        }
+      }) ?? null;
   }
 
   private async resolveExistingIdentity(): Promise<AgentsAccountIdentity | null> {
@@ -346,6 +450,12 @@ export class AgentsAuthService {
 
   private async deactivateIdentity(identity: AgentsAccountIdentity | null): Promise<unknown> {
     let cleanupError: unknown;
+    this.sessionGeneration += 1;
+    this.sessionAbortController?.abort();
+    this.sessionAbortController = null;
+    this.stopSessionValidation?.();
+    this.stopSessionValidation = null;
+    this.sessionValidationPendingGeneration = null;
     try {
       await this.dependencies.credentialStore.clear();
     } catch (error) {
@@ -358,6 +468,7 @@ export class AgentsAuthService {
         cleanupError ??= error;
       }
     }
+    this.activeCredential = null;
     this.activeIdentity = null;
     this.session = { status: 'unauthenticated', user: null };
     this.restoreAttempted = true;

@@ -37,4 +37,5 @@ export type KiBuddyAuthApi = {
   getSession: () => Promise<KiBuddyAuthSession>;
   login: (request: KiBuddyLoginRequest) => Promise<KiBuddyLoginResult>;
   logout: () => Promise<KiBuddyAuthSession>;
+  onSessionInvalidated: (listener: () => void) => () => void;
 };

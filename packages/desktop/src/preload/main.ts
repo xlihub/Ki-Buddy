@@ -28,6 +28,11 @@ const kiBuddyAuthCapability =
           login: (request: Parameters<KiBuddyAuthApi['login']>[0]) =>
             ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.login, request),
           logout: () => ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.logout),
+          onSessionInvalidated: (listener: () => void) => {
+            const handler = () => listener();
+            ipcRenderer.on(KI_BUDDY_AUTH_CHANNELS.sessionInvalidated, handler);
+            return () => ipcRenderer.off(KI_BUDDY_AUTH_CHANNELS.sessionInvalidated, handler);
+          },
         } satisfies KiBuddyAuthApi,
         ...(coreCsrfToken ? { kiBuddyCoreTransport: { csrfToken: coreCsrfToken } } : {}),
       }
