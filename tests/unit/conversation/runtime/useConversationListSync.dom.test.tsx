@@ -41,4 +41,23 @@ describe('conversation list account lifecycle', () => {
     expect(result.current.conversations).toEqual([]);
     await waitFor(() => expect(result.current.conversations.map(({ id }) => id)).toEqual(['new-conversation']));
   });
+
+  it('keeps the previous account snapshot cleared when the new account load fails', async () => {
+    const loadError = new Error('new account unavailable');
+    getUserConversationsMock.mockReset();
+    getUserConversationsMock
+      .mockResolvedValueOnce({ items: [{ id: 'old-conversation', title: 'Old account' }] })
+      .mockRejectedValueOnce(loadError);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    act(() => resetAccountScopedRendererState());
+    const { result } = renderHook(() => useConversationListSync());
+    await waitFor(() => expect(result.current.conversations.map(({ id }) => id)).toEqual(['old-conversation']));
+
+    act(() => resetAccountScopedRendererState());
+
+    expect(result.current.conversations).toEqual([]);
+    await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(String), loadError));
+    expect(result.current.conversations).toEqual([]);
+    consoleError.mockRestore();
+  });
 });

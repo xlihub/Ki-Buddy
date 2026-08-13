@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { httpRequest, setHttpRequestTransport } from '@/common/adapter/httpBridge';
-import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/auth/coreTransport';
+import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/Auth/coreTransport';
 
 describe('Ki-Buddy renderer Core transport', () => {
   const fetchMock = vi.fn<typeof fetch>();

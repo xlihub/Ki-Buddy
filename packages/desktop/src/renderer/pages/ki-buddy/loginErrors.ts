@@ -4,11 +4,11 @@ import type { I18nKey } from '@/renderer/services/i18n';
 export type KiBuddyLoginErrorCode = Extract<KiBuddyLoginResult, { success: false }>['code'] | 'unknown';
 
 export const KI_BUDDY_LOGIN_ERROR_KEYS: Record<KiBuddyLoginErrorCode, I18nKey> = {
-  contractError: 'login.errors.contractError',
-  invalidCredentials: 'login.errors.invalidCredentials',
-  networkError: 'login.errors.networkError',
-  serverError: 'login.errors.serverError',
-  unknown: 'login.errors.unknown',
+  contractError: 'login.kiBuddy.errors.contractError',
+  invalidCredentials: 'login.kiBuddy.errors.invalidCredentials',
+  networkError: 'login.kiBuddy.errors.networkError',
+  serverError: 'login.kiBuddy.errors.serverError',
+  unknown: 'login.kiBuddy.errors.unknown',
 };
 
 /** Normalizes errors crossing the generic AuthContext boundary into Ki-Buddy's product codes. */

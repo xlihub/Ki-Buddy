@@ -25,22 +25,22 @@ const OpeningGuide: React.FC<OpeningGuideProps> = ({ onFinish }) => {
     <main className={styles.shell}>
       <section className={styles.guide} aria-labelledby='ki-buddy-opening-guide-title'>
         <div className={styles.topline}>
-          <span className={styles.brand}>{t('login.kiBuddyBrand')}</span>
+          <span className={styles.brand}>{t('login.kiBuddy.brand')}</span>
           <Button type='text' onClick={onFinish}>
-            {t('login.onboarding.skip')}
+            {t('login.kiBuddy.onboarding.skip')}
           </Button>
         </div>
         <div className={styles.copy}>
           <Typography.Title id='ki-buddy-opening-guide-title' heading={2} className={styles.title}>
-            {t(`login.onboarding.${step.title}`)}
+            {t(`login.kiBuddy.onboarding.${step.title}`)}
           </Typography.Title>
           <Typography.Paragraph className={styles.description}>
-            {t(`login.onboarding.${step.description}`)}
+            {t(`login.kiBuddy.onboarding.${step.description}`)}
           </Typography.Paragraph>
         </div>
         <div className={styles.visual}>{step.content}</div>
         <div className={styles.footer}>
-          <div className={styles.dots} role='group' aria-label={t('login.onboarding.progressLabel')}>
+          <div className={styles.dots} role='group' aria-label={t('login.kiBuddy.onboarding.progressLabel')}>
             {STEPS.map((item, index) => (
               <Button
                 key={item.title}
@@ -48,7 +48,7 @@ const OpeningGuide: React.FC<OpeningGuideProps> = ({ onFinish }) => {
                 shape='circle'
                 size='mini'
                 className={index === stepIndex ? styles.activeDot : styles.dot}
-                aria-label={t('login.onboarding.stepLabel', { current: index + 1, total: STEPS.length })}
+                aria-label={t('login.kiBuddy.onboarding.stepLabel', { current: index + 1, total: STEPS.length })}
                 aria-current={index === stepIndex ? 'step' : undefined}
                 onClick={() => setStepIndex(index)}
               />
@@ -64,7 +64,7 @@ const OpeningGuide: React.FC<OpeningGuideProps> = ({ onFinish }) => {
               }
             }}
           >
-            {stepIndex === STEPS.length - 1 ? t('login.onboarding.start') : t('login.onboarding.next')}
+            {stepIndex === STEPS.length - 1 ? t('login.kiBuddy.onboarding.start') : t('login.kiBuddy.onboarding.next')}
           </Button>
         </div>
       </section>

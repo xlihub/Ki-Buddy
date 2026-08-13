@@ -24,14 +24,19 @@ const AccountCard: React.FC<AccountCardProps> = ({ profile, onRequestLogout }) =
   const { t } = useTranslation();
   const secondaryIdentity = profile.email ?? profile.username;
   const details: DetailItem[] = [
-    { label: t('login.account.userId'), value: profile.userId, copyable: true },
-    ...(profile.email ? [{ label: t('login.account.email'), value: profile.email }] : []),
-    ...(profile.phone ? [{ label: t('login.account.phone'), value: profile.phone }] : []),
-    ...(profile.organization ? [{ label: t('login.account.organization'), value: profile.organization }] : []),
+    { label: t('login.kiBuddy.account.userId'), value: profile.userId, copyable: true },
+    ...(profile.email ? [{ label: t('login.kiBuddy.account.email'), value: profile.email }] : []),
+    ...(profile.phone ? [{ label: t('login.kiBuddy.account.phone'), value: profile.phone }] : []),
+    ...(profile.organization ? [{ label: t('login.kiBuddy.account.organization'), value: profile.organization }] : []),
     ...(profile.roles.length > 0
-      ? [{ label: t('login.account.roles'), value: profile.roles.join(t('login.account.roleSeparator')) }]
+      ? [
+          {
+            label: t('login.kiBuddy.account.roles'),
+            value: profile.roles.join(t('login.kiBuddy.account.roleSeparator')),
+          },
+        ]
       : []),
-    { label: t('login.account.deployment'), value: profile.deploymentUrl },
+    { label: t('login.kiBuddy.account.deployment'), value: profile.deploymentUrl },
   ];
 
   const copyUserId = async () => {
@@ -53,7 +58,7 @@ const AccountCard: React.FC<AccountCardProps> = ({ profile, onRequestLogout }) =
         className='!h-auto !w-full !flex !items-center !justify-start !rd-8px !border-none !bg-transparent !px-12px !py-8px !text-13px !leading-20px !text-danger cursor-pointer transition-colors hover:!bg-[rgba(var(--danger-6),0.1)]'
         onClick={onRequestLogout}
       >
-        {t('login.account.logout')}
+        {t('login.kiBuddy.account.logout')}
       </Button>
     </div>
   );
@@ -78,7 +83,7 @@ const AccountCard: React.FC<AccountCardProps> = ({ profile, onRequestLogout }) =
             size='small'
             className='!h-36px !w-36px !rounded-12px !px-0 shrink-0 text-t-tertiary hover:!bg-2 hover:!text-t-primary'
             icon={<MoreOne theme='outline' size={18} />}
-            aria-label={t('login.account.openMenu')}
+            aria-label={t('login.kiBuddy.account.openMenu')}
           />
         </Dropdown>
       </div>
@@ -93,14 +98,14 @@ const AccountCard: React.FC<AccountCardProps> = ({ profile, onRequestLogout }) =
                   {item.value}
                 </span>
                 {item.copyable ? (
-                  <Tooltip content={t('login.account.copyUserId')}>
+                  <Tooltip content={t('login.kiBuddy.account.copyUserId')}>
                     <Button
                       type='text'
                       shape='circle'
                       size='mini'
                       className='shrink-0'
                       icon={<Copy theme='outline' />}
-                      aria-label={t('login.account.copyUserId')}
+                      aria-label={t('login.kiBuddy.account.copyUserId')}
                       onClick={() => void copyUserId()}
                     />
                   </Tooltip>

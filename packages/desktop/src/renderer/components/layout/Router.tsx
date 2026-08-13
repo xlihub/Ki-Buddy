@@ -3,7 +3,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-d
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { TEAM_MODE_ENABLED } from '@/common/config/constants';
-import { getKiBuddyRendererRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { getKiBuddyRouteComponents } from '@/renderer/services/runtime/kiBuddyRuntime';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
@@ -15,25 +15,10 @@ const ToolsSettings = React.lazy(() => import('@renderer/pages/settings/ToolsSet
 const AppearanceSettings = React.lazy(() => import('@renderer/pages/settings/AppearanceSettings'));
 const ModeSettings = React.lazy(() => import('@renderer/pages/settings/ModeSettings'));
 const SystemSettings = React.lazy(() => import('@renderer/pages/settings/SystemSettings'));
-const KiBuddyAccountSettings = React.lazy(() => {
-  const runtime = getKiBuddyRendererRuntime();
-  if (!runtime) throw new Error('Ki-Buddy account settings requested without its runtime');
-  return runtime.loadAccountSettings();
-});
 const WebuiSettings = React.lazy(() => import('@renderer/pages/settings/WebuiSettings'));
 const PetSettings = React.lazy(() => import('@renderer/pages/settings/PetSettings'));
 const ExtensionSettingsPage = React.lazy(() => import('@renderer/pages/settings/ExtensionSettingsPage'));
 const AionUiLoginPage = React.lazy(() => import('@renderer/pages/login'));
-const KiBuddyLoginPage = React.lazy(() => {
-  const runtime = getKiBuddyRendererRuntime();
-  if (!runtime) throw new Error('Ki-Buddy login requested without its runtime');
-  return runtime.loadLoginPage();
-});
-const KiBuddyStartupGate = React.lazy(() => {
-  const runtime = getKiBuddyRendererRuntime();
-  if (!runtime) throw new Error('Ki-Buddy startup gate requested without its runtime');
-  return runtime.loadStartupGate();
-});
 const ComponentsShowcase = React.lazy(() => import('@renderer/pages/TestShowcase'));
 const ScheduledTasksPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage'));
 const TaskDetailPage = React.lazy(() => import('@renderer/pages/cron/ScheduledTasksPage/TaskDetailPage'));
@@ -71,8 +56,8 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
 
 const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
-  const kiBuddyRuntime = getKiBuddyRendererRuntime();
-  const LoginPage = kiBuddyRuntime ? KiBuddyLoginPage : AionUiLoginPage;
+  const kiBuddyRoutes = getKiBuddyRouteComponents();
+  const LoginPage = kiBuddyRoutes?.LoginPage ?? AionUiLoginPage;
 
   const routes = (
     <HashRouter>
@@ -125,7 +110,11 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route
             path='/settings/account'
             element={
-              kiBuddyRuntime ? withRouteFallback(KiBuddyAccountSettings) : <Navigate to='/settings/agent' replace />
+              kiBuddyRoutes ? (
+                withRouteFallback(kiBuddyRoutes.AccountSettings)
+              ) : (
+                <Navigate to='/settings/agent' replace />
+              )
             }
           />
           <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
@@ -139,10 +128,11 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
     </HashRouter>
   );
 
-  if (kiBuddyRuntime) {
+  if (kiBuddyRoutes) {
+    const StartupGate = kiBuddyRoutes.StartupGate;
     return (
       <Suspense fallback={<AppLoader />}>
-        <KiBuddyStartupGate>{routes}</KiBuddyStartupGate>
+        <StartupGate>{routes}</StartupGate>
       </Suspense>
     );
   }

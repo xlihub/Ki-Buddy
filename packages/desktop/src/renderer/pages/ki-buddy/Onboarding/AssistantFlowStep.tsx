@@ -11,12 +11,16 @@ const AssistantFlowStep: React.FC = () => {
     <div className={styles.flowStage}>
       <div className={styles.flowSource}>
         <Terminal theme='outline' size='24' />
-        <span>AionCLI</span>
+        <span>{t('login.kiBuddy.onboarding.tools.aionCli')}</span>
       </div>
       <div className={styles.flowLine} aria-hidden='true' />
       <div className={styles.assistantGrid}>
         {KI_BUDDY_ASSISTANTS.map((assistant) => (
-          <AssistantAvatar key={assistant} kind={assistant} label={t(`login.onboarding.assistants.${assistant}`)} />
+          <AssistantAvatar
+            key={assistant}
+            kind={assistant}
+            label={t(`login.kiBuddy.onboarding.assistants.${assistant}`)}
+          />
         ))}
       </div>
     </div>

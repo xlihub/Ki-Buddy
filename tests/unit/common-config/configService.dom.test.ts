@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { configService } from '@/common/config/configService';
 import { setHttpRequestTransport } from '@/common/adapter/httpBridge';
-import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/auth/coreTransport';
+import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/Auth/coreTransport';
 
 const jsonResponse = (data?: unknown): Response =>
   new Response(data === undefined ? null : JSON.stringify({ data }), {

@@ -1,13 +1,4 @@
 {
-  "kiBuddyPageTitle": "Ki-Buddy - Agents oturumu aç",
-  "kiBuddyBrand": "Ki-Buddy",
-  "kiBuddySubtitle": "Mevcut Agents hesabınızla oturum açın",
-  "agentsDeployment": "Agents dağıtım URL'si",
-  "baseUrlPlaceholder": "https://agents.example.com",
-  "clearDeployment": "Dağıtım URL'sini temizle",
-  "lastSuccessfulDeployment": "Son giriş",
-  "accountOrEmail": "Hesap veya e-posta",
-  "accountOrEmailPlaceholder": "Agents hesabınızı veya e-postanızı girin",
   "pageTitle": "AionUi - Giriş Yap",
   "brand": "AionUi",
   "subtitle": "Tekrar hoş geldiniz, lütfen hesabınıza giriş yapın",
@@ -24,55 +15,89 @@
   "languageToggle": "Dili değiştir",
   "footerPrimary": "Komut satırı AI'nızı dönüştürün",
   "footerSecondary": "Modern ve Verimli",
-  "account": {
-    "title": "Hesap",
-    "userId": "Kullanıcı kimliği",
-    "email": "E-posta",
-    "phone": "Telefon",
-    "organization": "Kuruluş",
-    "roles": "Roller",
-    "roleSeparator": ", ",
-    "deployment": "Agents dağıtımı",
-    "openMenu": "Hesap menüsünü aç",
-    "copyUserId": "Kullanıcı kimliğini kopyala",
-    "logout": "Çıkış yap",
-    "logoutTitle": "Çıkış yap",
-    "logoutDescription": "Çıkış yaptığınızda kayıtlı Agents kimlik bilgisi ve bu hesabın çalışma alanı önbelleği bu cihazdan kaldırılır."
-  },
-  "onboarding": {
-    "skip": "Atla",
-    "next": "İleri",
-    "start": "Ki-Buddy'yi kullanmaya başla",
-    "progressLabel": "Tanıtım ilerlemesi",
-    "stepLabel": "{{total}} adımın {{current}}. adımına git",
-    "toolSupportTitle": "Alıştığınız yapay zekâ araçlarını kullanmaya devam edin",
-    "toolSupportDescription": "Ki-Buddy komut satırı yapay zekâ araçlarını tek çalışma alanında toplar. Bu tanıtım bilgisayarı taramaz veya Agents dağıtımına bağlanmaz.",
-    "assistantFlowTitle": "Bir aracı odaklı bir asistana dönüştürün",
-    "assistantFlowDescription": "Tek bir temel araç; belge, sunum, tablo, pano ve araştırma için açık rollere sahip asistanları destekler.",
-    "capabilityTitle": "Yetenekler asistanla birlikte kalır",
-    "capabilityDescription": "Alttaki aracı değiştirirken talimatları, becerileri, araçları ve bilgiyi koruyun.",
-    "assistantProfile": "Asistan yetenek profili",
-    "assistants": {
-      "manager": "Çalışma alanı yöneticisi",
-      "word": "Word asistanı",
-      "slides": "Sunum asistanı",
-      "sheets": "Tablo asistanı",
-      "board": "Pano asistanı",
-      "research": "Araştırma asistanı"
+  "kiBuddy": {
+    "pageTitle": "Ki-Buddy - Agents oturumu aç",
+    "brand": "Ki-Buddy",
+    "subtitle": "Mevcut Agents hesabınızla oturum açın",
+    "agentsDeployment": "Agents dağıtım URL'si",
+    "baseUrlPlaceholder": "https://agents.example.com",
+    "clearDeployment": "Dağıtım URL'sini temizle",
+    "lastSuccessfulDeployment": "Son giriş",
+    "accountOrEmail": "Hesap veya e-posta",
+    "accountOrEmailPlaceholder": "Agents hesabınızı veya e-postanızı girin",
+    "form": {
+      "required": "Bu alan zorunludur"
     },
-    "capabilities": { "instructions": "Talimatlar", "skills": "Beceriler", "tools": "Araçlar", "knowledge": "Bilgi" },
-    "replayTitle": "Ki-Buddy tanıtımı",
-    "replayDescription": "Üç sayfalık ürün tanıtımını istediğiniz zaman yeniden görüntüleyin.",
-    "replay": "Tanıtımı görüntüle"
+    "account": {
+      "title": "Hesap",
+      "userId": "Kullanıcı kimliği",
+      "email": "E-posta",
+      "phone": "Telefon",
+      "organization": "Kuruluş",
+      "roles": "Roller",
+      "roleSeparator": ", ",
+      "deployment": "Agents dağıtımı",
+      "openMenu": "Hesap menüsünü aç",
+      "copyUserId": "Kullanıcı kimliğini kopyala",
+      "logout": "Çıkış yap",
+      "logoutTitle": "Çıkış yap",
+      "logoutDescription": "Çıkış yaptığınızda kayıtlı Agents kimlik bilgisi ve bu hesabın çalışma alanı önbelleği bu cihazdan kaldırılır."
+    },
+    "onboarding": {
+      "skip": "Atla",
+      "next": "İleri",
+      "start": "Ki-Buddy'yi kullanmaya başla",
+      "progressLabel": "Tanıtım ilerlemesi",
+      "stepLabel": "{{total}} adımın {{current}}. adımına git",
+      "toolSupportTitle": "Alıştığınız yapay zekâ araçlarını kullanmaya devam edin",
+      "toolSupportDescription": "Ki-Buddy komut satırı yapay zekâ araçlarını tek çalışma alanında toplar. Bu tanıtım bilgisayarı taramaz veya Agents dağıtımına bağlanmaz.",
+      "assistantFlowTitle": "Bir aracı odaklı bir asistana dönüştürün",
+      "assistantFlowDescription": "Tek bir temel araç; belge, sunum, tablo, pano ve araştırma için açık rollere sahip asistanları destekler.",
+      "capabilityTitle": "Yetenekler asistanla birlikte kalır",
+      "capabilityDescription": "Alttaki aracı değiştirirken talimatları, becerileri, araçları ve bilgiyi koruyun.",
+      "assistantProfile": "Asistan yetenek profili",
+      "tools": {
+        "claudeCode": "Claude Code",
+        "codexCli": "Codex CLI",
+        "antigravity": "Antigravity",
+        "copilot": "Copilot",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "openCode": "OpenCode",
+        "aionCli": "AionCLI"
+      },
+      "assistants": {
+        "manager": "Çalışma alanı yöneticisi",
+        "word": "Word asistanı",
+        "slides": "Sunum asistanı",
+        "sheets": "Tablo asistanı",
+        "board": "Pano asistanı",
+        "research": "Araştırma asistanı"
+      },
+      "capabilities": {
+        "instructions": "Talimatlar",
+        "skills": "Beceriler",
+        "tools": "Araçlar",
+        "knowledge": "Bilgi"
+      },
+      "replayTitle": "Ki-Buddy tanıtımı",
+      "replayDescription": "Üç sayfalık ürün tanıtımını istediğiniz zaman yeniden görüntüleyin.",
+      "replay": "Tanıtımı görüntüle"
+    },
+    "errors": {
+      "contractError": "Bu Agents dağıtımı uyumsuz bir yanıt döndürdü",
+      "invalidCredentials": "Geçersiz kullanıcı adı veya şifre",
+      "networkError": "Bağlantı başarısız, lütfen tekrar deneyin",
+      "serverError": "Agents sunucu hatası, lütfen daha sonra tekrar deneyin",
+      "unknown": "Giriş başarısız, lütfen tekrar deneyin"
+    }
   },
   "errors": {
     "empty": "Lütfen kullanıcı adı ve şifre girin",
-    "required": "Bu alan zorunludur",
     "invalidCredentials": "Geçersiz kullanıcı adı veya şifre",
     "tooManyAttempts": "Çok fazla deneme, lütfen daha sonra tekrar deneyin",
     "networkError": "Bağlantı başarısız, lütfen tekrar deneyin",
-    "serverError": "Agents sunucu hatası, lütfen daha sonra tekrar deneyin",
-    "contractError": "Bu Agents dağıtımı uyumsuz bir yanıt döndürdü",
+    "serverError": "Sunucu hatası, lütfen daha sonra tekrar deneyin",
     "unknown": "Giriş başarısız, lütfen tekrar deneyin"
   }
 }

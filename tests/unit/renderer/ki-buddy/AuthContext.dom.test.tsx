@@ -9,7 +9,7 @@ import React from 'react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
-import { KiBuddyAuthProvider, useKiBuddyAuth } from '@/renderer/pages/ki-buddy/auth';
+import { KiBuddyAuthProvider, useKiBuddyAuth } from '@/renderer/pages/ki-buddy/Auth';
 
 const getSessionMock = vi.fn();
 const loginMock = vi.fn();

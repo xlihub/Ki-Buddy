@@ -1,13 +1,4 @@
 {
-  "kiBuddyPageTitle": "Ki-Buddy — Вход в Agents",
-  "kiBuddyBrand": "Ki-Buddy",
-  "kiBuddySubtitle": "Войдите с существующей учётной записью Agents",
-  "agentsDeployment": "URL развёртывания Agents",
-  "baseUrlPlaceholder": "https://agents.example.com",
-  "clearDeployment": "Очистить URL развёртывания",
-  "lastSuccessfulDeployment": "Последний вход",
-  "accountOrEmail": "Учётная запись или почта",
-  "accountOrEmailPlaceholder": "Введите учётную запись или почту Agents",
   "pageTitle": "AionUi — Вход",
   "brand": "AionUi",
   "subtitle": "Добро пожаловать! Войдите в свой аккаунт",
@@ -24,55 +15,89 @@
   "languageToggle": "Сменить язык",
   "footerPrimary": "Преобразуйте свой ИИ командной строки",
   "footerSecondary": "Современно и эффективно",
-  "account": {
-    "title": "Аккаунт",
-    "userId": "ID пользователя",
-    "email": "Эл. почта",
-    "phone": "Телефон",
-    "organization": "Организация",
-    "roles": "Роли",
-    "roleSeparator": ", ",
-    "deployment": "Развертывание Agents",
-    "openMenu": "Открыть меню аккаунта",
-    "copyUserId": "Копировать ID пользователя",
-    "logout": "Выйти",
-    "logoutTitle": "Выйти",
-    "logoutDescription": "При выходе сохраненные учетные данные Agents и кеш рабочего пространства этого аккаунта будут удалены с устройства."
-  },
-  "onboarding": {
-    "skip": "Пропустить",
-    "next": "Далее",
-    "start": "Начать работу с Ki-Buddy",
-    "progressLabel": "Ход знакомства",
-    "stepLabel": "Перейти к шагу {{current}} из {{total}}",
-    "toolSupportTitle": "Используйте привычные инструменты ИИ",
-    "toolSupportDescription": "Ki-Buddy объединяет консольные инструменты ИИ в одном рабочем пространстве. Во время знакомства приложение не сканирует компьютер и не обращается к Agents.",
-    "assistantFlowTitle": "Превратите инструмент в специализированного помощника",
-    "assistantFlowDescription": "Один основной инструмент поддерживает помощников с понятными ролями для документов, презентаций, таблиц, досок и исследований.",
-    "capabilityTitle": "Возможности сохраняются у помощника",
-    "capabilityDescription": "Меняйте базовый инструмент, сохраняя инструкции, навыки, инструменты и знания помощника.",
-    "assistantProfile": "Профиль возможностей помощника",
-    "assistants": {
-      "manager": "Менеджер пространства",
-      "word": "Помощник Word",
-      "slides": "Помощник презентаций",
-      "sheets": "Помощник таблиц",
-      "board": "Помощник досок",
-      "research": "Помощник исследований"
+  "kiBuddy": {
+    "pageTitle": "Ki-Buddy — Вход в Agents",
+    "brand": "Ki-Buddy",
+    "subtitle": "Войдите с существующей учётной записью Agents",
+    "agentsDeployment": "URL развёртывания Agents",
+    "baseUrlPlaceholder": "https://agents.example.com",
+    "clearDeployment": "Очистить URL развёртывания",
+    "lastSuccessfulDeployment": "Последний вход",
+    "accountOrEmail": "Учётная запись или почта",
+    "accountOrEmailPlaceholder": "Введите учётную запись или почту Agents",
+    "form": {
+      "required": "Обязательное поле"
     },
-    "capabilities": { "instructions": "Инструкции", "skills": "Навыки", "tools": "Инструменты", "knowledge": "Знания" },
-    "replayTitle": "Знакомство с Ki-Buddy",
-    "replayDescription": "Повторно откройте трёхстраничное знакомство в любое время.",
-    "replay": "Открыть знакомство"
+    "account": {
+      "title": "Аккаунт",
+      "userId": "ID пользователя",
+      "email": "Эл. почта",
+      "phone": "Телефон",
+      "organization": "Организация",
+      "roles": "Роли",
+      "roleSeparator": ", ",
+      "deployment": "Развертывание Agents",
+      "openMenu": "Открыть меню аккаунта",
+      "copyUserId": "Копировать ID пользователя",
+      "logout": "Выйти",
+      "logoutTitle": "Выйти",
+      "logoutDescription": "При выходе сохраненные учетные данные Agents и кеш рабочего пространства этого аккаунта будут удалены с устройства."
+    },
+    "onboarding": {
+      "skip": "Пропустить",
+      "next": "Далее",
+      "start": "Начать работу с Ki-Buddy",
+      "progressLabel": "Ход знакомства",
+      "stepLabel": "Перейти к шагу {{current}} из {{total}}",
+      "toolSupportTitle": "Используйте привычные инструменты ИИ",
+      "toolSupportDescription": "Ki-Buddy объединяет консольные инструменты ИИ в одном рабочем пространстве. Во время знакомства приложение не сканирует компьютер и не обращается к Agents.",
+      "assistantFlowTitle": "Превратите инструмент в специализированного помощника",
+      "assistantFlowDescription": "Один основной инструмент поддерживает помощников с понятными ролями для документов, презентаций, таблиц, досок и исследований.",
+      "capabilityTitle": "Возможности сохраняются у помощника",
+      "capabilityDescription": "Меняйте базовый инструмент, сохраняя инструкции, навыки, инструменты и знания помощника.",
+      "assistantProfile": "Профиль возможностей помощника",
+      "tools": {
+        "claudeCode": "Claude Code",
+        "codexCli": "Codex CLI",
+        "antigravity": "Antigravity",
+        "copilot": "Copilot",
+        "qwen": "Qwen",
+        "kimi": "Kimi",
+        "openCode": "OpenCode",
+        "aionCli": "AionCLI"
+      },
+      "assistants": {
+        "manager": "Менеджер пространства",
+        "word": "Помощник Word",
+        "slides": "Помощник презентаций",
+        "sheets": "Помощник таблиц",
+        "board": "Помощник досок",
+        "research": "Помощник исследований"
+      },
+      "capabilities": {
+        "instructions": "Инструкции",
+        "skills": "Навыки",
+        "tools": "Инструменты",
+        "knowledge": "Знания"
+      },
+      "replayTitle": "Знакомство с Ki-Buddy",
+      "replayDescription": "Повторно откройте трёхстраничное знакомство в любое время.",
+      "replay": "Открыть знакомство"
+    },
+    "errors": {
+      "contractError": "Это развёртывание Agents вернуло несовместимый ответ",
+      "invalidCredentials": "Неверное имя пользователя или пароль",
+      "networkError": "Ошибка подключения, попробуйте снова",
+      "serverError": "Ошибка сервера Agents, попробуйте позже",
+      "unknown": "Ошибка входа, попробуйте снова"
+    }
   },
   "errors": {
     "empty": "Введите имя пользователя и пароль",
-    "required": "Обязательное поле",
     "invalidCredentials": "Неверное имя пользователя или пароль",
     "tooManyAttempts": "Слишком много попыток, попробуйте позже",
     "networkError": "Ошибка подключения, попробуйте снова",
-    "serverError": "Ошибка сервера Agents, попробуйте позже",
-    "contractError": "Это развёртывание Agents вернуло несовместимый ответ",
+    "serverError": "Ошибка сервера, попробуйте позже",
     "unknown": "Ошибка входа, попробуйте снова"
   }
 }

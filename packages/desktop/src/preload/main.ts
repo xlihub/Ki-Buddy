@@ -11,9 +11,9 @@
 import '@sentry/electron/preload';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { ADAPTER_BRIDGE_EVENT_KEY } from '../common/adapter/constant';
-import { KI_BUDDY_AUTH_CHANNELS } from '../common/platform/kiBuddyAuth';
-import type { KiBuddyAuthApi } from '../common/types/platform/kiBuddyAuth';
-import { KI_BUDDY_CORE_TRANSPORT_CHANNEL, KI_BUDDY_PRODUCT_RUNTIME } from '../common/platform/ki-buddy';
+import { KI_BUDDY_CORE_TRANSPORT_CHANNEL, KI_BUDDY_PRODUCT_RUNTIME } from '@/common/platform/ki-buddy';
+import { KI_BUDDY_AUTH_CHANNELS } from '@/common/platform/kiBuddyAuth';
+import type { KiBuddyAuthApi } from '@/common/types/platform/kiBuddyAuth';
 
 const productRuntimeIdentity = ipcRenderer.sendSync('get-product-runtime-identity') as string | null;
 const coreCsrfToken =

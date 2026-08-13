@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getKiBuddyRendererRuntime, getKiBuddySettingsItem } from '@/renderer/services/runtime/kiBuddyRuntime';
+import {
+  getKiBuddyRendererRuntime,
+  getKiBuddyRouteComponents,
+  withKiBuddySettingsItem,
+} from '@/renderer/services/runtime/kiBuddyRuntime';
 
 const translateKey = (key: string) => key;
 
@@ -10,7 +14,8 @@ describe('Ki-Buddy renderer runtime selection', () => {
 
   it('preserves the AionUi runtime when no product capability is present', () => {
     expect(getKiBuddyRendererRuntime()).toBeNull();
-    expect(getKiBuddySettingsItem(translateKey)).toBeNull();
+    expect(getKiBuddyRouteComponents()).toBeNull();
+    expect(withKiBuddySettingsItem([], translateKey)).toEqual([]);
   });
 
   it('selects the Ki-Buddy runtime only when its preload capability is present', () => {
@@ -26,6 +31,11 @@ describe('Ki-Buddy renderer runtime selection', () => {
       authApi: kiBuddyAuth,
       defaultLanguage: 'zh-CN',
     });
-    expect(getKiBuddySettingsItem(translateKey)).toMatchObject({ id: 'account', path: 'account' });
+    expect(getKiBuddyRouteComponents()).toMatchObject({
+      AccountSettings: expect.any(Object),
+      LoginPage: expect.any(Object),
+      StartupGate: expect.any(Object),
+    });
+    expect(withKiBuddySettingsItem([], translateKey)[0]).toMatchObject({ id: 'account', path: 'account' });
   });
 });

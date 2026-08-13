@@ -10,5 +10,11 @@ export function registerAccountStateResetter(resetter: AccountStateResetter): ()
 
 /** Clears all renderer state registered as account-scoped. */
 export function resetAccountScopedRendererState(): void {
-  accountStateResetters.forEach((resetter) => resetter());
+  accountStateResetters.forEach((resetter) => {
+    try {
+      resetter();
+    } catch (error) {
+      console.error('[AccountStateLifecycle] Failed to reset account-scoped renderer state:', error);
+    }
+  });
 }

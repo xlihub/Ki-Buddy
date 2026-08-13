@@ -53,7 +53,7 @@ vi.mock('@/renderer/components/settings/SettingsModal/contents/AboutModalContent
 
 import PanelRoute from '@/renderer/components/layout/Router';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
-import { KiBuddyAuthProvider as AuthProvider } from '@/renderer/pages/ki-buddy/auth';
+import { KiBuddyAuthProvider as AuthProvider } from '@/renderer/pages/ki-buddy/Auth';
 
 const authenticatedUser = {
   id: 'core-user-42',
@@ -118,14 +118,14 @@ describe('Ki-Buddy Agents authentication gate', () => {
 
     await waitFor(() => expect(getSessionMock).toHaveBeenCalledOnce());
     expect(
-      await screen.findByText('login.onboarding.toolSupportTitle', undefined, { timeout: 5000 })
+      await screen.findByText('login.kiBuddy.onboarding.toolSupportTitle', undefined, { timeout: 5000 })
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'login.onboarding.stepLabel' })).toHaveLength(3);
-    expect(screen.queryByText('login.agentsDeployment')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'login.kiBuddy.onboarding.stepLabel' })).toHaveLength(3);
+    expect(screen.queryByText('login.kiBuddy.agentsDeployment')).not.toBeInTheDocument();
     expect(screen.queryByText('business-layout')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'login.onboarding.skip' }));
-    expect(await screen.findByText('login.agentsDeployment')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'login.kiBuddy.onboarding.skip' }));
+    expect(await screen.findByText('login.kiBuddy.agentsDeployment')).toBeInTheDocument();
     expect(screen.queryByText('business-layout')).not.toBeInTheDocument();
     expect(screen.queryByText('conversation-page')).not.toBeInTheDocument();
     expect(localStorage.getItem('ki-buddy.onboarding.openingGuideSeen_v1')).toBe('true');
@@ -147,11 +147,11 @@ describe('Ki-Buddy Agents authentication gate', () => {
     );
 
     await waitFor(() => expect(getSessionMock).toHaveBeenCalledOnce());
-    expect(screen.queryByText('login.agentsDeployment')).not.toBeInTheDocument();
+    expect(screen.queryByText('login.kiBuddy.agentsDeployment')).not.toBeInTheDocument();
     expect(screen.queryByText('business-layout')).not.toBeInTheDocument();
 
     completeVerification?.({ status: 'unauthenticated', user: null });
-    expect(await screen.findByText('login.agentsDeployment')).toBeInTheDocument();
+    expect(await screen.findByText('login.kiBuddy.agentsDeployment')).toBeInTheDocument();
   });
 
   it('prefills the public Agents deployment on the login page', async () => {
@@ -161,7 +161,7 @@ describe('Ki-Buddy Agents authentication gate', () => {
       </AuthProvider>
     );
 
-    expect(await screen.findByLabelText('login.agentsDeployment')).toHaveValue('https://ksapi.kingsware.cn');
+    expect(await screen.findByLabelText('login.kiBuddy.agentsDeployment')).toHaveValue('https://ksapi.kingsware.cn');
   });
 
   it('prefills the last successful deployment from history', async () => {
@@ -179,7 +179,7 @@ describe('Ki-Buddy Agents authentication gate', () => {
       </AuthProvider>
     );
 
-    const deploymentInput = await screen.findByLabelText('login.agentsDeployment');
+    const deploymentInput = await screen.findByLabelText('login.kiBuddy.agentsDeployment');
     expect(deploymentInput).toHaveValue('https://agents-two.example.com');
   });
 
@@ -191,10 +191,10 @@ describe('Ki-Buddy Agents authentication gate', () => {
       </AuthProvider>
     );
 
-    fireEvent.change(await screen.findByLabelText('login.agentsDeployment'), {
+    fireEvent.change(await screen.findByLabelText('login.kiBuddy.agentsDeployment'), {
       target: { value: 'https://failed.example.com' },
     });
-    fireEvent.change(screen.getByLabelText('login.accountOrEmail'), {
+    fireEvent.change(screen.getByLabelText('login.kiBuddy.accountOrEmail'), {
       target: { value: 'agents-user@example.com' },
     });
     fireEvent.change(screen.getByLabelText('login.password'), {
@@ -214,10 +214,10 @@ describe('Ki-Buddy Agents authentication gate', () => {
         <PanelRoute layout={<TestLayout />} />
       </AuthProvider>
     );
-    fireEvent.change(await screen.findByLabelText('login.agentsDeployment'), {
+    fireEvent.change(await screen.findByLabelText('login.kiBuddy.agentsDeployment'), {
       target: { value: 'https://successful.example.com/' },
     });
-    fireEvent.change(screen.getByLabelText('login.accountOrEmail'), {
+    fireEvent.change(screen.getByLabelText('login.kiBuddy.accountOrEmail'), {
       target: { value: 'agents-user@example.com' },
     });
     fireEvent.change(screen.getByLabelText('login.password'), {
@@ -247,10 +247,10 @@ describe('Ki-Buddy Agents authentication gate', () => {
       </AuthProvider>
     );
 
-    fireEvent.change(await screen.findByLabelText('login.agentsDeployment'), {
+    fireEvent.change(await screen.findByLabelText('login.kiBuddy.agentsDeployment'), {
       target: { value: 'https://agents.example.com/' },
     });
-    fireEvent.change(screen.getByLabelText('login.accountOrEmail'), {
+    fireEvent.change(screen.getByLabelText('login.kiBuddy.accountOrEmail'), {
       target: { value: 'agents-user@example.com' },
     });
     fireEvent.change(screen.getByLabelText('login.password'), {
@@ -278,10 +278,10 @@ describe('Ki-Buddy Agents authentication gate', () => {
       </AuthProvider>
     );
 
-    fireEvent.change(await screen.findByLabelText('login.agentsDeployment'), {
+    fireEvent.change(await screen.findByLabelText('login.kiBuddy.agentsDeployment'), {
       target: { value: 'https://agents.example.com' },
     });
-    fireEvent.change(screen.getByLabelText('login.accountOrEmail'), {
+    fireEvent.change(screen.getByLabelText('login.kiBuddy.accountOrEmail'), {
       target: { value: 'agents-user@example.com' },
     });
     fireEvent.change(screen.getByLabelText('login.password'), {
@@ -313,10 +313,10 @@ describe('Ki-Buddy Agents authentication gate', () => {
         </AuthProvider>
       );
 
-      fireEvent.change(await screen.findByLabelText('login.agentsDeployment'), {
+      fireEvent.change(await screen.findByLabelText('login.kiBuddy.agentsDeployment'), {
         target: { value: 'https://agents.example.com' },
       });
-      fireEvent.change(screen.getByLabelText('login.accountOrEmail'), {
+      fireEvent.change(screen.getByLabelText('login.kiBuddy.accountOrEmail'), {
         target: { value: 'agents-user@example.com' },
       });
       fireEvent.change(screen.getByLabelText('login.password'), {
@@ -324,7 +324,7 @@ describe('Ki-Buddy Agents authentication gate', () => {
       });
       fireEvent.click(screen.getByRole('button', { name: 'login.submit' }));
 
-      expect(await screen.findByRole('alert')).toHaveTextContent(`login.errors.${code}`);
+      expect(await screen.findByRole('alert')).toHaveTextContent(`login.kiBuddy.errors.${code}`);
       expect(screen.queryByText('business-layout')).not.toBeInTheDocument();
     }
   );
@@ -336,10 +336,10 @@ describe('Ki-Buddy Agents authentication gate', () => {
       </AuthProvider>
     );
 
-    await screen.findByText('login.agentsDeployment');
+    await screen.findByText('login.kiBuddy.agentsDeployment');
     fireEvent.click(screen.getByRole('button', { name: 'login.submit' }));
 
-    expect(await screen.findAllByText('login.errors.required')).toHaveLength(2);
+    expect(await screen.findAllByText('login.kiBuddy.form.required')).toHaveLength(2);
     expect(loginMock).not.toHaveBeenCalled();
   });
 
@@ -361,7 +361,7 @@ describe('Ki-Buddy Agents authentication gate', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'test-logout' }));
 
-    expect(await screen.findByText('login.agentsDeployment')).toBeInTheDocument();
+    expect(await screen.findByText('login.kiBuddy.agentsDeployment')).toBeInTheDocument();
     expect(logoutMock).toHaveBeenCalledOnce();
     expect(screen.queryByText('business-layout')).not.toBeInTheDocument();
     await waitFor(() => expect(swrCache.get('/api/assistants')?.data).toBeUndefined());
@@ -382,6 +382,6 @@ describe('Ki-Buddy Agents authentication gate', () => {
 
     expect(await screen.findByText('Agents User')).toBeInTheDocument();
     expect(screen.getByText('agents-user-42')).toBeInTheDocument();
-    expect(screen.getByText('login.onboarding.replayTitle')).toBeInTheDocument();
+    expect(screen.getByText('login.kiBuddy.onboarding.replayTitle')).toBeInTheDocument();
   });
 });

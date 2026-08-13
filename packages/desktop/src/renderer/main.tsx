@@ -51,7 +51,7 @@ import type { TFunction } from 'i18next';
 
 // Context providers
 import { AuthProvider } from './hooks/context/AuthContext';
-import { installKiBuddyRendererCoreTransport, KiBuddyAuthProvider } from './pages/ki-buddy/auth';
+import { installKiBuddyRendererCoreTransport, KiBuddyAuthProvider } from './pages/ki-buddy/Auth';
 import { getKiBuddyRendererRuntime } from './services/runtime/kiBuddyRuntime';
 import { FeedbackProvider } from './hooks/context/FeedbackContext';
 import { ThemeProvider } from './hooks/context/ThemeContext';

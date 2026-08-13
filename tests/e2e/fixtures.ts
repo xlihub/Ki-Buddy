@@ -154,29 +154,38 @@ function resolvePackagedApp(): { executablePath: string; cwd: string } | null {
   const platform = process.platform;
 
   if (platform === 'win32') {
-    // out/win-unpacked/AionUi.exe  or  out/win-x64-unpacked/AionUi.exe
+    // Product and upstream packages use different executable names.
     for (const dir of ['win-unpacked', 'win-x64-unpacked', 'win-arm64-unpacked']) {
-      const exe = path.join(outDir, dir, 'AionUi.exe');
-      if (fs.existsSync(exe)) return { executablePath: exe, cwd: path.join(outDir, dir) };
+      const dirPath = path.join(outDir, dir);
+      if (!fs.existsSync(dirPath)) continue;
+      const executable = ['Ki-Buddy.exe', 'AionUi.exe']
+        .map((name) => path.join(dirPath, name))
+        .find((candidate) => fs.existsSync(candidate));
+      if (executable) return { executablePath: executable, cwd: dirPath };
     }
   } else if (platform === 'darwin') {
-    // out/mac-arm64/AionUi.app/Contents/MacOS/AionUi  or  out/mac/AionUi.app/...
+    // Resolve the executable declared by either the Ki-Buddy or AionUi bundle.
     for (const dir of ['mac-arm64', 'mac-x64', 'mac', 'mac-universal']) {
       const macDir = path.join(outDir, dir);
       if (!fs.existsSync(macDir)) continue;
       const appBundle = fs.readdirSync(macDir).find((f) => f.endsWith('.app'));
       if (appBundle) {
-        const exe = path.join(macDir, appBundle, 'Contents', 'MacOS', 'AionUi');
-        if (fs.existsSync(exe)) return { executablePath: exe, cwd: macDir };
+        const executableDir = path.join(macDir, appBundle, 'Contents', 'MacOS');
+        const executable = fs.existsSync(executableDir)
+          ? fs
+              .readdirSync(executableDir)
+              .map((name) => path.join(executableDir, name))
+              .find((candidate) => fs.statSync(candidate).isFile())
+          : undefined;
+        if (executable) return { executablePath: executable, cwd: macDir };
       }
     }
   } else {
-    // Linux: out/linux-unpacked/aionui  (lowercase executable name)
+    // Linux packages may use the product or upstream executable name.
     for (const dir of ['linux-unpacked', 'linux-x64-unpacked', 'linux-arm64-unpacked']) {
       const dirPath = path.join(outDir, dir);
       if (!fs.existsSync(dirPath)) continue;
-      // Try common executable names
-      for (const name of ['aionui', 'AionUi']) {
+      for (const name of ['Ki-Buddy', 'ki-buddy', 'aionui', 'AionUi']) {
         const exe = path.join(dirPath, name);
         if (fs.existsSync(exe)) return { executablePath: exe, cwd: dirPath };
       }

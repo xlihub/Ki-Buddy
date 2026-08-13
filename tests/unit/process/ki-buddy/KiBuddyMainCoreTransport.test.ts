@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { httpRequest, setHttpRequestTransport } from '@/common/adapter/httpBridge';
-import { KiBuddyMainCoreTransport } from '@/process/ki-buddy/coreTransport';
+import { KiBuddyMainCoreTransport } from '@/process/ki-buddy/KiBuddyMainCoreTransport';
 
 describe('Ki-Buddy main-process Core transport', () => {
   const fetchMock = vi.fn<typeof fetch>();

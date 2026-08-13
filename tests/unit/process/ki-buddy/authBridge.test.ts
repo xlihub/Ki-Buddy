@@ -48,7 +48,7 @@ vi.mock('@/process/ki-buddy/CredentialStore', () => ({
 }));
 
 import { registerKiBuddyAuthBridge } from '@/process/ki-buddy/authBridge';
-import { KiBuddyMainCoreTransport } from '@/process/ki-buddy/coreTransport';
+import { KiBuddyMainCoreTransport } from '@/process/ki-buddy/KiBuddyMainCoreTransport';
 
 function registerBridgeWithSuccessfulLogin() {
   const coreTransport = new KiBuddyMainCoreTransport('core-csrf-token');

@@ -13,7 +13,7 @@ import {
 import { registerKiBuddyAuthBridge } from './authBridge';
 import { createKiBuddyCoreAuthOptions, type KiBuddyCoreAuthOptions } from './bootstrap';
 import { resolveKiBuddyCoreDataPath } from './coreDataPath';
-import { KiBuddyMainCoreTransport } from './coreTransport';
+import { KiBuddyMainCoreTransport } from './KiBuddyMainCoreTransport';
 import { KI_BUDDY_PRODUCT_RUNTIME, readKiBuddyRuntimeIdentity, shouldEnableKiBuddyRuntime } from './runtimeIdentity';
 
 export type KiBuddyRuntime = {

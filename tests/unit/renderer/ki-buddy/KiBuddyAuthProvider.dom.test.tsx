@@ -9,10 +9,10 @@ import React from 'react';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider, useAuth } from '@/renderer/hooks/context/AuthContext';
-import { KiBuddyAuthProvider, useKiBuddyAuth } from '@/renderer/pages/ki-buddy/auth';
+import { KiBuddyAuthProvider, useKiBuddyAuth } from '@/renderer/pages/ki-buddy/Auth';
 import { configService } from '@/common/config/configService';
 import { httpRequest, setHttpRequestTransport } from '@/common/adapter/httpBridge';
-import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/auth/coreTransport';
+import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/Auth/coreTransport';
 
 const getSessionMock = vi.fn();
 const loginMock = vi.fn();

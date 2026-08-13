@@ -19,15 +19,15 @@ const LogoutModal: React.FC<LogoutModalProps> = ({ visible, loading, onCancel, o
           {node}
         </div>
       )}
-      title={t('login.account.logoutTitle')}
+      title={t('login.kiBuddy.account.logoutTitle')}
       onCancel={onCancel}
       onOk={onConfirm}
       confirmLoading={loading}
       cancelText={t('common.cancel')}
-      okText={t('login.account.logout')}
+      okText={t('login.kiBuddy.account.logout')}
     >
       <Typography.Paragraph className='!mb-0 text-t-secondary'>
-        {t('login.account.logoutDescription')}
+        {t('login.kiBuddy.account.logoutDescription')}
       </Typography.Paragraph>
     </Modal>
   );

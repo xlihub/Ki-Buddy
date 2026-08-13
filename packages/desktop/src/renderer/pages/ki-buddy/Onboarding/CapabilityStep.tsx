@@ -23,15 +23,17 @@ const CapabilityStep: React.FC = () => {
           <Robot theme='outline' size='24' />
         </span>
         <div>
-          <strong>{t('login.onboarding.assistantProfile')}</strong>
-          <span className={styles.rotatingTool}>{KI_BUDDY_ROTATING_TOOLS[toolIndex]}</span>
+          <strong>{t('login.kiBuddy.onboarding.assistantProfile')}</strong>
+          <span className={styles.rotatingTool}>
+            {t(`login.kiBuddy.onboarding.tools.${KI_BUDDY_ROTATING_TOOLS[toolIndex]}`)}
+          </span>
         </div>
       </div>
       <div className={styles.capabilityList}>
         {KI_BUDDY_CAPABILITIES.map((capability) => (
           <div key={capability} className={styles.capabilityItem}>
             <CheckOne theme='outline' size='16' aria-hidden='true' />
-            <span>{t(`login.onboarding.capabilities.${capability}`)}</span>
+            <span>{t(`login.kiBuddy.onboarding.capabilities.${capability}`)}</span>
           </div>
         ))}
       </div>

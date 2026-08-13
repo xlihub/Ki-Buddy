@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createKiBuddyAuthAdapter } from '@/renderer/pages/ki-buddy/auth';
+import { createKiBuddyAuthAdapter } from '@/renderer/pages/ki-buddy/Auth';
 import { configService } from '@/common/config/configService';
 
 const getSessionMock = vi.fn();

@@ -4,7 +4,7 @@ import type { KiBuddyLoginRequest, KiBuddyLoginResult } from '@/common/types/pla
 import { AgentsAuthService } from './AgentsAuthService';
 import { createAgentsNetworkFetch } from './agentsNetworkClient';
 import { KeytarCredentialStore } from './CredentialStore';
-import type { KiBuddyMainCoreTransport } from './coreTransport';
+import type { KiBuddyMainCoreTransport } from './KiBuddyMainCoreTransport';
 
 type RegisterKiBuddyAuthOptions = {
   bootstrapSecret: string;

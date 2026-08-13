@@ -14,6 +14,11 @@ export type StoredAgentsSession = {
   userId: string;
 };
 
+type AgentsAccountIdentity = {
+  baseUrl: string;
+  userId: string;
+};
+
 export type AgentsCredentialStore = {
   load: () => Promise<StoredAgentsSession | null>;
   save: (session: StoredAgentsSession) => Promise<void>;
@@ -74,9 +79,9 @@ function parseRoleNames(value: unknown): string[] {
   });
 }
 
-function externalIdentity(baseUrl: string, userId: string): string {
+function externalIdentity(identity: AgentsAccountIdentity): string {
   const digest = createHash('sha256')
-    .update(JSON.stringify([baseUrl, userId]), 'utf8')
+    .update(JSON.stringify([identity.baseUrl, identity.userId]), 'utf8')
     .digest('base64url');
   return `agents-v1-${digest}`;
 }
@@ -156,7 +161,7 @@ function isCoreRevokeResponse(body: unknown): boolean {
 
 /** Owns the Ki-Buddy Agents session and its projected Core user session. */
 export class AgentsAuthService {
-  private activeIdentity: Pick<StoredAgentsSession, 'baseUrl' | 'userId'> | null = null;
+  private activeIdentity: AgentsAccountIdentity | null = null;
   private session: KiBuddyAuthSession = { status: 'unauthenticated', user: null };
   private restoreAttempted = false;
 
@@ -307,14 +312,11 @@ export class AgentsAuthService {
     return this.session;
   }
 
-  private isSameIdentity(
-    left: Pick<StoredAgentsSession, 'baseUrl' | 'userId'>,
-    right: Pick<StoredAgentsSession, 'baseUrl' | 'userId'>
-  ): boolean {
+  private isSameIdentity(left: AgentsAccountIdentity, right: AgentsAccountIdentity): boolean {
     return left.baseUrl === right.baseUrl && left.userId === right.userId;
   }
 
-  private async resolveExistingIdentity(): Promise<Pick<StoredAgentsSession, 'baseUrl' | 'userId'> | null> {
+  private async resolveExistingIdentity(): Promise<AgentsAccountIdentity | null> {
     if (this.activeIdentity) return this.activeIdentity;
     try {
       const stored = await this.dependencies.credentialStore.load();
@@ -324,7 +326,7 @@ export class AgentsAuthService {
     }
   }
 
-  private async revokeCoreProjection(identity: Pick<StoredAgentsSession, 'baseUrl' | 'userId'>): Promise<void> {
+  private async revokeCoreProjection(identity: AgentsAccountIdentity): Promise<void> {
     const coreBaseUrl = this.dependencies.getCoreBaseUrl();
     const response = await this.dependencies.fetch(`${coreBaseUrl}/api/auth/internal/external-sessions/revoke`, {
       method: 'POST',
@@ -334,7 +336,7 @@ export class AgentsAuthService {
       },
       body: JSON.stringify({
         user_type: 'aionpro',
-        external_user_id: externalIdentity(identity.baseUrl, identity.userId),
+        external_user_id: externalIdentity(identity),
       }),
     });
     if (!response.ok || !isCoreRevokeResponse(await readJson(response))) {
@@ -342,7 +344,7 @@ export class AgentsAuthService {
     }
   }
 
-  private async deactivateIdentity(identity: Pick<StoredAgentsSession, 'baseUrl' | 'userId'> | null): Promise<unknown> {
+  private async deactivateIdentity(identity: AgentsAccountIdentity | null): Promise<unknown> {
     let cleanupError: unknown;
     try {
       await this.dependencies.credentialStore.clear();
@@ -368,7 +370,7 @@ export class AgentsAuthService {
   }
 
   private async establishCoreSession(baseUrl: string, agentsUser: AgentsIdentity): Promise<CoreProjectionResult> {
-    const identity = externalIdentity(baseUrl, agentsUser.userId);
+    const identity = externalIdentity({ baseUrl, userId: agentsUser.userId });
     const coreBaseUrl = this.dependencies.getCoreBaseUrl();
     const coreHeaders = {
       'Content-Type': 'application/json',

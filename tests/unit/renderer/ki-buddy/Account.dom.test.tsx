@@ -37,7 +37,7 @@ vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => ({ logout: logoutMock, user: authState.user }),
 }));
 
-vi.mock('@/renderer/pages/ki-buddy/auth', () => ({
+vi.mock('@/renderer/pages/ki-buddy/Auth', () => ({
   useKiBuddyAuth: () => ({ profile: productAuthState.profile }),
 }));
 
@@ -52,7 +52,7 @@ vi.mock('@/renderer/pages/settings/components/SettingsPageWrapper', () => ({
   default: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
 
-vi.mock('@/renderer/pages/ki-buddy/onboarding', () => ({
+vi.mock('@/renderer/pages/ki-buddy/Onboarding', () => ({
   replayKiBuddyOpeningGuide: replayMock,
 }));
 
@@ -73,40 +73,42 @@ describe('KiBuddyAccountSettings', () => {
     render(<KiBuddyAccountSettings />);
 
     expect(screen.getByText('Agents User')).toBeInTheDocument();
-    expect(screen.getByText('login.account.userId').parentElement).toHaveTextContent('agents-user-42');
-    expect(screen.getByRole('button', { name: 'login.account.copyUserId' })).toBeInTheDocument();
+    expect(screen.getByText('login.kiBuddy.account.userId').parentElement).toHaveTextContent('agents-user-42');
+    expect(screen.getByRole('button', { name: 'login.kiBuddy.account.copyUserId' })).toBeInTheDocument();
     expect(screen.getByText('Kingsoft AI')).toBeInTheDocument();
-    expect(screen.getByText('设计人员login.account.roleSeparator审核人员')).toBeInTheDocument();
+    expect(screen.getByText('设计人员login.kiBuddy.account.roleSeparator审核人员')).toBeInTheDocument();
   });
 
   it('replays the product introduction', () => {
     render(<KiBuddyAccountSettings />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'login.onboarding.replay' }));
+    fireEvent.click(screen.getByRole('button', { name: 'login.kiBuddy.onboarding.replay' }));
     expect(replayMock).toHaveBeenCalledOnce();
   });
 
   it('opens an accessible logout action from the account menu', async () => {
     render(<KiBuddyAccountSettings />);
 
-    const menuButton = screen.getByRole('button', { name: 'login.account.openMenu' });
+    const menuButton = screen.getByRole('button', { name: 'login.kiBuddy.account.openMenu' });
     expect(screen.queryByTestId('ki-buddy-account-logout-menu-item')).not.toBeInTheDocument();
     fireEvent.click(menuButton);
 
-    expect(await screen.findByTestId('ki-buddy-account-logout-menu-item')).toHaveAccessibleName('login.account.logout');
+    expect(await screen.findByTestId('ki-buddy-account-logout-menu-item')).toHaveAccessibleName(
+      'login.kiBuddy.account.logout'
+    );
   });
 
   it('confirms logout and clears the in-memory workspace preview', async () => {
     render(<KiBuddyAccountSettings />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'login.account.openMenu' }));
-    const logoutMenuItem = (await screen.findByText('login.account.logout')).closest('button');
+    fireEvent.click(screen.getByRole('button', { name: 'login.kiBuddy.account.openMenu' }));
+    const logoutMenuItem = (await screen.findByText('login.kiBuddy.account.logout')).closest('button');
     if (!logoutMenuItem) throw new Error('logout menu item is missing');
     fireEvent.click(logoutMenuItem!);
-    expect(await screen.findByText('login.account.logoutDescription')).toBeInTheDocument();
+    expect(await screen.findByText('login.kiBuddy.account.logoutDescription')).toBeInTheDocument();
     expect(screen.getByTestId('ki-buddy-account-logout-modal')).toBeInTheDocument();
 
-    const logoutButtons = screen.getAllByRole('button', { name: 'login.account.logout' });
+    const logoutButtons = screen.getAllByRole('button', { name: 'login.kiBuddy.account.logout' });
     const confirmButton = logoutButtons[logoutButtons.length - 1];
     fireEvent.click(confirmButton);
 
@@ -121,6 +123,6 @@ describe('KiBuddyAccountSettings', () => {
     const { container } = render(<KiBuddyAccountSettings />);
 
     expect(container).toBeEmptyDOMElement();
-    expect(screen.queryByRole('button', { name: 'login.account.logout' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'login.kiBuddy.account.logout' })).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeKiBuddyLoginErrorCode } from '@/renderer/pages/ki-buddy/loginErrors';
+import { KI_BUDDY_LOGIN_ERROR_KEYS, normalizeKiBuddyLoginErrorCode } from '@/renderer/pages/ki-buddy/loginErrors';
 
 describe('Ki-Buddy login error normalization', () => {
   it.each(['contractError', 'invalidCredentials', 'networkError', 'serverError'])(
@@ -11,5 +11,9 @@ describe('Ki-Buddy login error normalization', () => {
 
   it.each([undefined, 'unexpectedError'])('maps missing or unknown error %s to unknown', (code) => {
     expect(normalizeKiBuddyLoginErrorCode(code)).toBe('unknown');
+  });
+
+  it('keeps product server errors separate from the public AionUi login copy', () => {
+    expect(KI_BUDDY_LOGIN_ERROR_KEYS.serverError).toBe('login.kiBuddy.errors.serverError');
   });
 });

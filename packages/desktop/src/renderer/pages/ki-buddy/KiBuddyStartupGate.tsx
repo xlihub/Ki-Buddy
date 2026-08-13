@@ -6,7 +6,7 @@ import {
   KI_BUDDY_OPENING_GUIDE_REPLAY_EVENT,
   markKiBuddyOpeningGuideSeen,
   OpeningGuide,
-} from './onboarding';
+} from './Onboarding';
 
 const KiBuddyStartupGate: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { status } = useAuth();
