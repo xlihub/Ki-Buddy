@@ -11,6 +11,7 @@ import {
   resolveLanguagePreference,
 } from '@/common/platform/ki-buddy';
 import { registerKiBuddyAuthBridge } from './authBridge';
+import type { AgentsAuthService } from './AgentsAuthService';
 import { createKiBuddyCoreAuthOptions, type KiBuddyCoreAuthOptions } from './bootstrap';
 import { resolveKiBuddyCoreDataPath } from './coreDataPath';
 import { KiBuddyMainCoreTransport } from './KiBuddyMainCoreTransport';
@@ -20,7 +21,7 @@ export type KiBuddyRuntime = {
   coreAuthOptions: KiBuddyCoreAuthOptions;
   coreTransportChannel: typeof KI_BUDDY_CORE_TRANSPORT_CHANNEL;
   productIdentity: typeof KI_BUDDY_PRODUCT_RUNTIME;
-  registerAuthBridge: (getCoreBaseUrl: () => string) => void;
+  registerAuthBridge: (getCoreBaseUrl: () => string) => AgentsAuthService;
   resolveDataPath: (dataPath: string) => string;
   resolveLanguage: (savedLanguage: string | null | undefined, systemLanguage: string | null) => SupportedLanguage;
 };
@@ -46,13 +47,12 @@ export function createKiBuddyRuntime(options: {
     coreAuthOptions,
     coreTransportChannel: KI_BUDDY_CORE_TRANSPORT_CHANNEL,
     productIdentity: KI_BUDDY_PRODUCT_RUNTIME,
-    registerAuthBridge: (getCoreBaseUrl) => {
+    registerAuthBridge: (getCoreBaseUrl) =>
       registerKiBuddyAuthBridge({
         bootstrapSecret: coreAuthOptions.bootstrapSecret,
         coreTransport,
         getCoreBaseUrl,
-      });
-    },
+      }),
     resolveDataPath: resolveKiBuddyCoreDataPath,
     resolveLanguage: (savedLanguage, systemLanguage) =>
       resolveLanguagePreference({

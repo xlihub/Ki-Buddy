@@ -10,6 +10,7 @@ const electronMock = vi.hoisted(() => ({
   agentsFetch: vi.fn(),
   fromPartition: vi.fn(),
   handlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
+  sendToRenderer: vi.fn(),
   removeCookie: vi.fn(),
   setCertificateVerifyProc: vi.fn(),
   setCookie: vi.fn(),
@@ -23,6 +24,9 @@ const credentialStoreMock = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp/ki-buddy-auth-test') },
+  BrowserWindow: {
+    getAllWindows: vi.fn(() => [{ isDestroyed: () => false, webContents: { send: electronMock.sendToRenderer } }]),
+  },
   ipcMain: {
     handle: vi.fn((channel: string, handler: (...args: unknown[]) => Promise<unknown>) => {
       electronMock.handlers.set(channel, handler);
@@ -100,12 +104,12 @@ function registerBridgeWithSuccessfulLogin() {
     );
   electronMock.agentsFetch.mockImplementation(fetchMock);
   vi.stubGlobal('fetch', fetchMock);
-  registerKiBuddyAuthBridge({
+  const authService = registerKiBuddyAuthBridge({
     bootstrapSecret: 'bootstrap-secret',
     coreTransport,
     getCoreBaseUrl: () => 'http://127.0.0.1:39123',
   });
-  return { coreTransport, fetchMock };
+  return { authService, coreTransport, fetchMock };
 }
 
 describe('Ki-Buddy authentication IPC bridge', () => {
@@ -122,6 +126,7 @@ describe('Ki-Buddy authentication IPC bridge', () => {
     electronMock.setCookie.mockReset();
     electronMock.removeCookie.mockResolvedValue(undefined);
     electronMock.setCookie.mockResolvedValue(undefined);
+    electronMock.sendToRenderer.mockReset();
     credentialStoreMock.clear.mockReset();
     credentialStoreMock.load.mockReset();
     credentialStoreMock.save.mockReset();
@@ -183,6 +188,26 @@ describe('Ki-Buddy authentication IPC bridge', () => {
 
     expect(credentialStoreMock.clear).toHaveBeenCalledOnce();
     expect(coreTransport.getHeaders({ method: 'GET' })).not.toHaveProperty('Authorization');
+  });
+
+  it('notifies the renderer after a trusted Agents authentication failure ends the active session', async () => {
+    const service = registerBridgeWithSuccessfulLogin();
+    const loginHandler = electronMock.handlers.get('ki-buddy-auth:login');
+    await loginHandler?.(null, {
+      baseUrl: 'https://agents.example.com',
+      loginName: 'agents-user@example.com',
+      password: 'password',
+    });
+    service.fetchMock.mockReset();
+    service.fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 })).mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: true, data: { user_id: 'core-user-42', session_generation: 1 } }), {
+        status: 200,
+      })
+    );
+
+    await service.authService.fetchAuthenticated('/kagent/bridge/catalog');
+
+    expect(electronMock.sendToRenderer).toHaveBeenCalledWith('ki-buddy-auth:session-invalidated');
   });
 
   it('rejects malformed login IPC requests before making a network request', async () => {

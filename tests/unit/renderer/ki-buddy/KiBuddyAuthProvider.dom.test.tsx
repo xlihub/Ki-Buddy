@@ -18,6 +18,8 @@ import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/A
 const getSessionMock = vi.fn();
 const loginMock = vi.fn();
 const logoutMock = vi.fn();
+const onSessionInvalidatedMock = vi.fn();
+let sessionInvalidatedListener: (() => void) | undefined;
 
 const ProductProbe: React.FC = () => {
   const auth = useAuth();
@@ -53,12 +55,21 @@ describe('Ki-Buddy product authentication context', () => {
     getSessionMock.mockReset();
     loginMock.mockReset();
     logoutMock.mockReset();
+    onSessionInvalidatedMock.mockReset();
+    sessionInvalidatedListener = undefined;
+    onSessionInvalidatedMock.mockImplementation((listener: () => void) => {
+      sessionInvalidatedListener = listener;
+      return () => {
+        sessionInvalidatedListener = undefined;
+      };
+    });
     window.electronAPI = {
       ...window.electronAPI,
       kiBuddyAuth: {
         getSession: getSessionMock,
         login: loginMock,
         logout: logoutMock,
+        onSessionInvalidated: onSessionInvalidatedMock,
       },
     };
     configService.reset();
@@ -195,6 +206,40 @@ describe('Ki-Buddy product authentication context', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     expect(screen.getByLabelText('auth-status')).toHaveTextContent('authenticated');
     expect(logoutMock).not.toHaveBeenCalled();
+  });
+
+  it('returns to the login state when main reports a trusted Agents authentication failure', async () => {
+    getSessionMock
+      .mockResolvedValueOnce({
+        status: 'authenticated',
+        user: {
+          id: 'core-user-42',
+          username: 'agents-user@example.com',
+          agents: {
+            userId: 'agents-user-42',
+            username: 'agents-user@example.com',
+            displayName: 'Agents User',
+            roles: [],
+            deploymentUrl: 'https://agents.example.com',
+          },
+        },
+      })
+      .mockResolvedValueOnce({ status: 'unauthenticated', user: null, cleanupRequired: true });
+
+    render(
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <KiBuddyAuthProvider>
+          <ProductProbe />
+        </KiBuddyAuthProvider>
+      </SWRConfig>
+    );
+    await waitFor(() => expect(screen.getByLabelText('auth-status')).toHaveTextContent('authenticated'));
+
+    sessionInvalidatedListener?.();
+
+    await waitFor(() => expect(screen.getByLabelText('auth-status')).toHaveTextContent('unauthenticated'));
+    expect(screen.getByLabelText('core-user')).toHaveTextContent('null');
+    expect(screen.getByLabelText('agents-profile')).toHaveTextContent('null');
   });
 
   it('preserves ordinary AionUi desktop authentication when the product capability is absent', async () => {

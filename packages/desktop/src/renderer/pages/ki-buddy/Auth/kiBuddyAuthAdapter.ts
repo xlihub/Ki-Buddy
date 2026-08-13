@@ -29,6 +29,7 @@ export type KiBuddyAuthAdapter = {
     params: KiBuddyLoginParams,
     authenticate: AuthHandlers<string>['login']
   ) => Promise<KiBuddyRendererLoginResult>;
+  subscribeToSessionInvalidation: (listener: () => void) => () => void;
 };
 
 /** Creates the renderer adapter for Ki-Buddy's main-process owned authentication. */
@@ -129,6 +130,10 @@ export function createKiBuddyAuthAdapter(options: {
           }
         },
       };
+    },
+    subscribeToSessionInvalidation: (listener) => {
+      const subscribe = getKiBuddyRendererRuntime()?.authApi.onSessionInvalidated;
+      return typeof subscribe === 'function' ? subscribe(listener) : () => {};
     },
   };
 }

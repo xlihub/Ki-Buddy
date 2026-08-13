@@ -40,7 +40,7 @@ const KiBuddyAuthContext = createContext<KiBuddyAuthContextValue | undefined>(un
 const KiBuddyAuthContextBridge: React.FC<
   React.PropsWithChildren<{ adapter: KiBuddyAuthAdapter; profile: KiBuddyAgentsProfile | null }>
 > = ({ adapter, children, profile }) => {
-  const { login: authenticate, user } = useAuth();
+  const { login: authenticate, refresh, user } = useAuth();
   const accountSwitchBarrier = useMemo(() => createKiBuddyAccountSwitchBarrier(() => window.location.reload()), []);
   const login = useCallback(
     (params: KiBuddyLoginParams) => adapter.login(params, authenticate),
@@ -49,6 +49,7 @@ const KiBuddyAuthContextBridge: React.FC<
   const value = useMemo(() => ({ login, profile }), [login, profile]);
 
   useEffect(() => accountSwitchBarrier.observe(user?.id ?? null), [accountSwitchBarrier, user?.id]);
+  useEffect(() => adapter.subscribeToSessionInvalidation(() => void refresh()), [adapter, refresh]);
 
   return <KiBuddyAuthContext.Provider value={value}>{children}</KiBuddyAuthContext.Provider>;
 };

@@ -12,6 +12,7 @@ import { KeytarCredentialStore } from '@/process/ki-buddy/CredentialStore';
 
 const keytarMock = {
   deletePassword: vi.fn<(service: string, account: string) => Promise<boolean>>(),
+  findCredentials: vi.fn<(service: string) => Promise<Array<{ account: string; password: string }>>>(),
   getPassword: vi.fn<(service: string, account: string) => Promise<string | null>>(),
   setPassword: vi.fn<(service: string, account: string, password: string) => Promise<void>>(),
 };
@@ -26,6 +27,8 @@ describe('KeytarCredentialStore', () => {
     keytarMock.deletePassword.mockResolvedValue(true);
     keytarMock.getPassword.mockReset();
     keytarMock.getPassword.mockResolvedValue('agents-fixed-token');
+    keytarMock.findCredentials.mockReset();
+    keytarMock.findCredentials.mockResolvedValue([]);
     keytarMock.setPassword.mockReset();
     keytarMock.setPassword.mockResolvedValue(undefined);
   });
@@ -47,13 +50,13 @@ describe('KeytarCredentialStore', () => {
 
     expect(keytarMock.setPassword).toHaveBeenCalledWith(
       expect.stringMatching(/^Ki-Buddy Agents \(profile-[a-f0-9]{16}\)$/),
-      'agents-session',
+      expect.stringMatching(/^agents-session-v2:[a-f0-9]{64}$/),
       'agents-fixed-token'
     );
     const metadataPath = path.join(userDataPath, 'ki-buddy', 'agents-session.json');
     const metadata = await readFile(metadataPath, 'utf8');
     expect(JSON.parse(metadata)).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       baseUrl: 'https://agents.example.com',
       userId: 'agents-user-42',
     });
@@ -76,7 +79,76 @@ describe('KeytarCredentialStore', () => {
 
     await expect(store.load()).resolves.toEqual(saved);
 
-    expect(keytarMock.getPassword).toHaveBeenCalledWith(service, 'agents-session');
+    expect(keytarMock.getPassword).toHaveBeenCalledWith(
+      service,
+      expect.stringMatching(/^agents-session-v2:[a-f0-9]{64}$/)
+    );
+  });
+
+  it('restores credentials written by the issue 15 storage format', async () => {
+    const metadataDirectory = path.join(userDataPath, 'ki-buddy');
+    await mkdir(metadataDirectory, { recursive: true });
+    await writeFile(
+      path.join(metadataDirectory, 'agents-session.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        baseUrl: 'https://agents.example.com',
+        userId: 'agents-user-42',
+      })
+    );
+    const store = createStore();
+
+    await expect(store.load()).resolves.toEqual({
+      baseUrl: 'https://agents.example.com',
+      token: 'agents-fixed-token',
+      userId: 'agents-user-42',
+    });
+    expect(keytarMock.getPassword).toHaveBeenCalledWith(expect.any(String), 'agents-session');
+    expect(keytarMock.setPassword).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringMatching(/^agents-session-v2:[a-f0-9]{64}$/),
+      'agents-fixed-token'
+    );
+    expect(keytarMock.deletePassword).toHaveBeenCalledWith(expect.any(String), 'agents-session');
+  });
+
+  it('uses different operating-system credential accounts for each deployment and Agents user', async () => {
+    const store = createStore();
+
+    await store.save({
+      baseUrl: 'https://agents.example.com',
+      token: 'first-token',
+      userId: 'agents-user-a',
+    });
+    await store.save({
+      baseUrl: 'https://agents.example.com',
+      token: 'second-token',
+      userId: 'agents-user-b',
+    });
+    await store.save({
+      baseUrl: 'https://other-agents.example.com',
+      token: 'third-token',
+      userId: 'agents-user-b',
+    });
+
+    const accounts = keytarMock.setPassword.mock.calls.map(([, account]) => account);
+    expect(new Set(accounts)).toHaveProperty('size', 3);
+    expect(keytarMock.deletePassword).toHaveBeenCalledWith(expect.any(String), accounts[0]);
+    expect(keytarMock.deletePassword).toHaveBeenCalledWith(expect.any(String), accounts[1]);
+  });
+
+  it('removes orphaned identity credentials before making a new account current', async () => {
+    const orphanedAccount = `agents-session-v2:${'b'.repeat(64)}`;
+    keytarMock.findCredentials.mockResolvedValue([{ account: orphanedAccount, password: 'orphaned-token' }]);
+    const store = createStore();
+
+    await store.save({
+      baseUrl: 'https://agents.example.com',
+      token: 'current-token',
+      userId: 'current-user',
+    });
+
+    expect(keytarMock.deletePassword).toHaveBeenCalledWith(expect.any(String), orphanedAccount);
   });
 
   it('fails closed without writing metadata when keytar is unavailable', async () => {
@@ -110,7 +182,7 @@ describe('KeytarCredentialStore', () => {
 
     expect(keytarMock.deletePassword).toHaveBeenCalledWith(
       expect.stringMatching(/^Ki-Buddy Agents \(profile-[a-f0-9]{16}\)$/),
-      'agents-session'
+      expect.stringMatching(/^agents-session-v2:[a-f0-9]{64}$/)
     );
   });
 
@@ -129,7 +201,10 @@ describe('KeytarCredentialStore', () => {
     await expect(readFile(path.join(userDataPath, 'ki-buddy', 'agents-session.json'))).rejects.toMatchObject({
       code: 'ENOENT',
     });
-    expect(keytarMock.deletePassword).toHaveBeenCalledWith(service, 'agents-session');
+    expect(keytarMock.deletePassword).toHaveBeenCalledWith(
+      service,
+      expect.stringMatching(/^agents-session-v2:[a-f0-9]{64}$/)
+    );
   });
 
   it('isolates test credentials with the configured storage namespace', async () => {
@@ -143,7 +218,7 @@ describe('KeytarCredentialStore', () => {
 
     expect(keytarMock.setPassword).toHaveBeenCalledWith(
       'Ki-Buddy Agents (smoke-001)',
-      'agents-session',
+      expect.stringMatching(/^agents-session-v2:[a-f0-9]{64}$/),
       'agents-fixed-token'
     );
   });
@@ -198,7 +273,23 @@ describe('KeytarCredentialStore', () => {
     );
   });
 
-  it('reports keytar cleanup failures after removing metadata', async () => {
+  it('clears identity-bound credentials even when session metadata is damaged', async () => {
+    const metadataDirectory = path.join(userDataPath, 'ki-buddy');
+    await mkdir(metadataDirectory, { recursive: true });
+    await writeFile(path.join(metadataDirectory, 'agents-session.json'), '{invalid json');
+    keytarMock.findCredentials.mockResolvedValue([
+      { account: `agents-session-v2:${'a'.repeat(64)}`, password: 'must-not-be-logged' },
+      { account: 'unrelated-account', password: 'unrelated-password' },
+    ]);
+    const store = createStore();
+
+    await store.clear();
+
+    expect(keytarMock.deletePassword).toHaveBeenCalledWith(expect.any(String), `agents-session-v2:${'a'.repeat(64)}`);
+    expect(keytarMock.deletePassword).not.toHaveBeenCalledWith(expect.any(String), 'unrelated-account');
+  });
+
+  it('preserves metadata when keytar cleanup fails so a later startup can retry', async () => {
     const store = createStore();
     await store.save({
       baseUrl: 'https://agents.example.com',
@@ -208,9 +299,111 @@ describe('KeytarCredentialStore', () => {
     keytarMock.deletePassword.mockRejectedValueOnce(new Error('keychain denied deletion'));
 
     await expect(store.clear()).rejects.toThrow('keychain denied deletion');
+    await expect(readFile(path.join(userDataPath, 'ki-buddy', 'agents-session.cleanup-pending'), 'utf8')).resolves.toBe(
+      '{"schemaVersion":1}'
+    );
+  });
+
+  it('prevents credential recovery when the cleanup marker and keytar deletion both fail', async () => {
+    const store = createStore();
+    await store.save({
+      baseUrl: 'https://agents.example.com',
+      token: 'agents-fixed-token',
+      userId: 'agents-user-42',
+    });
+    const metadataPath = path.join(userDataPath, 'ki-buddy', 'agents-session.json');
+    const cleanupTombstonePath = path.join(userDataPath, 'ki-buddy', 'agents-session.cleanup-pending');
+    const account = keytarMock.setPassword.mock.calls[0]?.[1];
+    if (!account) throw new Error('credential account was not recorded');
+    await mkdir(cleanupTombstonePath);
+    keytarMock.findCredentials.mockResolvedValue([{ account, password: 'agents-fixed-token' }]);
+    keytarMock.deletePassword.mockImplementation(async (_service, candidate) => {
+      if (candidate === account) throw new Error('keychain denied deletion');
+      return true;
+    });
+
+    await expect(store.clear()).rejects.toThrow('keychain denied deletion');
+    await expect(readFile(metadataPath)).rejects.toMatchObject({ code: 'ENOENT' });
+
+    await rm(cleanupTombstonePath, { recursive: true, force: true });
+    keytarMock.getPassword.mockClear();
+    await expect(createStore().load()).resolves.toBeNull();
+    expect(keytarMock.getPassword).not.toHaveBeenCalled();
+  });
+
+  it('can retry identity-bound credential cleanup after a keytar failure', async () => {
+    const store = createStore();
+    await store.save({
+      baseUrl: 'https://agents.example.com',
+      token: 'agents-fixed-token',
+      userId: 'agents-user-42',
+    });
+    const account = keytarMock.setPassword.mock.calls[0]?.[1];
+    if (!account) throw new Error('credential account was not recorded');
+    keytarMock.findCredentials.mockResolvedValue([{ account, password: 'agents-fixed-token' }]);
+    keytarMock.deletePassword.mockImplementation(async (_service, candidate) => {
+      if (candidate === account) throw new Error('keychain denied deletion');
+      return true;
+    });
+
+    await expect(store.clear()).rejects.toThrow('keychain denied deletion');
+
+    keytarMock.deletePassword.mockResolvedValue(true);
+    await expect(createStore().load()).resolves.toBeNull();
+    expect(keytarMock.deletePassword.mock.calls.filter(([, candidate]) => candidate === account)).toHaveLength(2);
     await expect(readFile(path.join(userDataPath, 'ki-buddy', 'agents-session.json'))).rejects.toMatchObject({
       code: 'ENOENT',
     });
+  });
+
+  it('retries cleanup on startup when damaged metadata and keytar deletion fail together', async () => {
+    const metadataDirectory = path.join(userDataPath, 'ki-buddy');
+    const account = `agents-session-v2:${'a'.repeat(64)}`;
+    await mkdir(metadataDirectory, { recursive: true });
+    await writeFile(path.join(metadataDirectory, 'agents-session.json'), '{invalid json');
+    keytarMock.findCredentials.mockResolvedValue([{ account, password: 'must-not-be-logged' }]);
+    keytarMock.deletePassword.mockImplementation(async (_service, candidate) => {
+      if (candidate === account) throw new Error('keychain denied deletion');
+      return true;
+    });
+    const store = createStore();
+
+    await expect(store.clear()).rejects.toThrow('keychain denied deletion');
+
+    keytarMock.deletePassword.mockResolvedValue(true);
+    await expect(createStore().load()).resolves.toBeNull();
+    expect(keytarMock.deletePassword.mock.calls.filter(([, candidate]) => candidate === account)).toHaveLength(2);
+    await expect(readFile(path.join(metadataDirectory, 'agents-session.cleanup-pending'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('removes a stale cleanup tombstone after a new login saves credentials', async () => {
+    const store = createStore();
+    const initial = {
+      baseUrl: 'https://agents.example.com',
+      token: 'old-agents-token',
+      userId: 'agents-user-42',
+    };
+    await store.save(initial);
+    const account = keytarMock.setPassword.mock.calls[0]?.[1];
+    if (!account) throw new Error('credential account was not recorded');
+    keytarMock.findCredentials.mockResolvedValue([{ account, password: initial.token }]);
+    keytarMock.deletePassword.mockImplementation(async (_service, candidate) => {
+      if (candidate === account) throw new Error('keychain denied deletion');
+      return true;
+    });
+    await expect(store.clear()).rejects.toThrow('keychain denied deletion');
+
+    keytarMock.deletePassword.mockResolvedValue(true);
+    keytarMock.getPassword.mockResolvedValue('new-agents-token');
+    const replacement = { ...initial, token: 'new-agents-token' };
+    await store.save(replacement);
+
+    await expect(createStore().load()).resolves.toEqual(replacement);
+    await expect(readFile(path.join(userDataPath, 'ki-buddy', 'agents-session.cleanup-pending'))).rejects.toMatchObject(
+      { code: 'ENOENT' }
+    );
   });
 
   function createStore(storageNamespace?: string): KeytarCredentialStore {

@@ -1,5 +1,6 @@
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
 import { test, expect } from '../../fixtures';
 
 type CoreCurrentUserResponse = {
@@ -54,11 +55,18 @@ const COMMON_USER_FIELDS = {
   roles: [{ name: 'member' }],
 };
 
-async function startFakeAgentsServer(options: { invalidLoginAttempts?: number } = {}): Promise<{
+async function startFakeAgentsServer(
+  options: { invalidLoginAttempts?: number; repeatFirstUser?: boolean } = {}
+): Promise<{
   baseUrl: string;
   close: () => Promise<void>;
+  expireToken: (token: string) => void;
+  getValidationRequestCount: () => number;
+  restoreToken: (token: string) => void;
 }> {
+  const expiredTokens = new Set<string>();
   let loginAttempts = 0;
+  let validationRequestCount = 0;
   const invalidLoginAttempts = options.invalidLoginAttempts ?? 0;
   const server = http.createServer((request, response) => {
     const isLogin = request.method === 'POST' && request.url === '/kagent/login';
@@ -75,11 +83,17 @@ async function startFakeAgentsServer(options: { invalidLoginAttempts?: number } 
       return;
     }
 
+    if (isValidation) validationRequestCount += 1;
     const user = isLogin
-      ? AGENTS_USERS[Math.min(loginAttempts - invalidLoginAttempts - 1, 1)]
+      ? AGENTS_USERS[options.repeatFirstUser ? 0 : Math.min(loginAttempts - invalidLoginAttempts - 1, 1)]
       : findUserByToken(request.headers.authorization);
     if (!user) {
       response.writeHead(401).end();
+      return;
+    }
+    if (isValidation && expiredTokens.has(user.token)) {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ errorCode: 401, responseBody: null }));
       return;
     }
 
@@ -103,6 +117,9 @@ async function startFakeAgentsServer(options: { invalidLoginAttempts?: number } 
   return {
     baseUrl: `http://127.0.0.1:${port}`,
     close: () => new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve()))),
+    expireToken: (token) => expiredTokens.add(token),
+    getValidationRequestCount: () => validationRequestCount,
+    restoreToken: (token) => expiredTokens.delete(token),
   };
 }
 
@@ -123,9 +140,87 @@ async function readCoreCurrentUser(page: import('@playwright/test').Page): Promi
   });
 }
 
+async function createCoreConversation(page: import('@playwright/test').Page, name: string): Promise<string> {
+  return page.evaluate(
+    async ({ conversationName, workspace }) => {
+      const port = (window as Window & { __backendPort?: number }).__backendPort;
+      if (!port) throw new Error('Ki-Core backend port is unavailable in the renderer');
+      const baseUrl = `http://127.0.0.1:${port}`;
+      const assistantsResponse = await fetch(`${baseUrl}/api/assistants`, { credentials: 'include' });
+      if (!assistantsResponse.ok) {
+        throw new Error(`GET /api/assistants failed with status ${assistantsResponse.status}`);
+      }
+      const assistantsBody = (await assistantsResponse.json()) as { data?: Array<{ id?: string }> };
+      const assistantId = assistantsBody.data?.find((assistant) => assistant.id)?.id;
+      if (!assistantId) throw new Error('Ki-Buddy E2E requires at least one Core assistant');
+      const csrfToken = window.electronAPI?.kiBuddyCoreTransport?.csrfToken;
+      if (!csrfToken) throw new Error('Ki-Buddy Core CSRF token is unavailable in the renderer');
+
+      const response = await fetch(`${baseUrl}/api/conversations`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+        body: JSON.stringify({
+          name: conversationName,
+          assistant: { id: assistantId },
+          extra: { workspace, custom_workspace: true, session_mode: 'default' },
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`POST /api/conversations failed with status ${response.status}: ${await response.text()}`);
+      }
+      const body = (await response.json()) as { data?: { id?: string } };
+      if (!body.data?.id) throw new Error('POST /api/conversations returned no conversation id');
+      return body.data.id;
+    },
+    { conversationName: name, workspace: os.tmpdir() }
+  );
+}
+
+async function readCoreConversationStatus(
+  page: import('@playwright/test').Page,
+  conversationId: string
+): Promise<number> {
+  return page.evaluate(async (id) => {
+    const port = (window as Window & { __backendPort?: number }).__backendPort;
+    if (!port) throw new Error('Ki-Core backend port is unavailable in the renderer');
+    const response = await fetch(`http://127.0.0.1:${port}/api/conversations/${encodeURIComponent(id)}`, {
+      credentials: 'include',
+    });
+    return response.status;
+  }, conversationId);
+}
+
+async function deleteCoreConversation(page: import('@playwright/test').Page, conversationId: string): Promise<void> {
+  await page.evaluate(async (id) => {
+    const port = (window as Window & { __backendPort?: number }).__backendPort;
+    if (!port) return;
+    const csrfToken = window.electronAPI?.kiBuddyCoreTransport?.csrfToken;
+    if (!csrfToken) return;
+    await fetch(`http://127.0.0.1:${port}/api/conversations/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'x-csrf-token': csrfToken },
+    }).catch(() => undefined);
+  }, conversationId);
+}
+
+async function waitForLoginSuccess(page: import('@playwright/test').Page): Promise<void> {
+  try {
+    await expect(page.locator('input[autocomplete="username"]')).toHaveCount(0, { timeout: 30_000 });
+  } catch (error) {
+    const session = await page.evaluate(() => window.electronAPI?.kiBuddyAuth?.getSession()).catch(() => null);
+    const visibleText = (await page.locator('body').innerText()).slice(0, 2_000);
+    throw new Error(
+      `Ki-Buddy login did not leave the login form. Session: ${JSON.stringify(session)}. Visible text: ${visibleText}`,
+      { cause: error }
+    );
+  }
+}
+
 test.describe('Ki-Buddy packaged Agents authentication', () => {
   test.skip(process.env.E2E_PACKAGED !== '1', 'This acceptance seam requires the packaged Electron application.');
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
 
   test('rejects invalid Agents credentials without creating a Core user', async ({ page }) => {
     const agents = await startFakeAgentsServer({ invalidLoginAttempts: 1 });
@@ -274,6 +369,68 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
         });
       await expect(page.locator('input[autocomplete="username"]')).toHaveCount(0);
     } finally {
+      await page.evaluate(() => window.electronAPI?.kiBuddyAuth?.logout()).catch(() => undefined);
+      await agents.close();
+    }
+  });
+
+  test('ends the active session after trusted token expiry and preserves Core history', async ({
+    isolatedPackagedPage: page,
+  }) => {
+    const agents = await startFakeAgentsServer({ repeatFirstUser: true });
+    let conversationId: string | null = null;
+
+    try {
+      await page
+        .locator('#ki-buddy-opening-guide-title, input[autocomplete="username"]')
+        .first()
+        .waitFor({ state: 'visible', timeout: 30_000 });
+      const skipGuide = page.getByRole('button', { name: /^(跳过|Skip)$/i });
+      if (await skipGuide.isVisible().catch(() => false)) await skipGuide.click();
+      await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible', timeout: 30_000 });
+      await fillLoginForm(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_A.userName });
+      await page.getByRole('button', { name: /^(登录|Sign In)$/i }).click();
+
+      await waitForLoginSuccess(page);
+      const initialCoreUser = await readCoreCurrentUser(page);
+      expect(initialCoreUser).toMatchObject({
+        status: 200,
+        body: { user: { id: expect.any(String), username: AGENTS_USER_A.userName } },
+      });
+      conversationId = await createCoreConversation(page, `E2E trusted auth expiry ${Date.now()}`);
+      expect(await readCoreConversationStatus(page, conversationId)).toBe(200);
+
+      const validationCountBeforeExpiry = agents.getValidationRequestCount();
+      agents.expireToken(AGENTS_USER_A.token);
+      await expect
+        .poll(() => agents.getValidationRequestCount(), {
+          timeout: 75_000,
+          message: 'Waiting for the packaged main process to validate the active Agents token',
+        })
+        .toBeGreaterThan(validationCountBeforeExpiry);
+
+      await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible', timeout: 30_000 });
+      expect((await readCoreCurrentUser(page)).status).toBe(401);
+      expect(await readCoreConversationStatus(page, conversationId)).toBe(401);
+
+      agents.restoreToken(AGENTS_USER_A.token);
+      await fillLoginForm(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_A.userName });
+      await page.getByRole('button', { name: /^(登录|Sign In)$/i }).click();
+
+      await waitForLoginSuccess(page);
+      expect(await readCoreCurrentUser(page)).toMatchObject({
+        status: 200,
+        body: {
+          user: {
+            id: initialCoreUser.body.user?.id,
+            username: AGENTS_USER_A.userName,
+          },
+        },
+      });
+      expect(await readCoreConversationStatus(page, conversationId)).toBe(200);
+      await expect(page.locator(`#c-${conversationId}`)).toBeVisible({ timeout: 30_000 });
+    } finally {
+      if (conversationId) await deleteCoreConversation(page, conversationId).catch(() => undefined);
       await page.evaluate(() => window.electronAPI?.kiBuddyAuth?.logout()).catch(() => undefined);
       await agents.close();
     }

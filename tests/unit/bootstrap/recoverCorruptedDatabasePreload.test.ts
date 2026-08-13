@@ -67,6 +67,7 @@ describe('recover corrupted database preload bridge', () => {
             getSession: () => Promise<unknown>;
             login: (request: { baseUrl: string; loginName: string; password: string }) => Promise<unknown>;
             logout: () => Promise<unknown>;
+            onSessionInvalidated: (listener: () => void) => () => void;
           };
           kiBuddyCoreTransport?: { csrfToken: string };
         }
@@ -80,10 +81,17 @@ describe('recover corrupted database preload bridge', () => {
     await electronApi?.kiBuddyAuth?.getSession();
     await electronApi?.kiBuddyAuth?.login(request);
     await electronApi?.kiBuddyAuth?.logout();
+    const invalidated = vi.fn();
+    const unsubscribe = electronApi?.kiBuddyAuth?.onSessionInvalidated(invalidated);
+    const subscription = on.mock.calls.find(([channel]) => channel === 'ki-buddy-auth:session-invalidated');
+    subscription?.[1]();
+    unsubscribe?.();
 
     expect(invoke).toHaveBeenCalledWith('ki-buddy-auth:get-session');
     expect(invoke).toHaveBeenCalledWith('ki-buddy-auth:login', request);
     expect(invoke).toHaveBeenCalledWith('ki-buddy-auth:logout');
+    expect(invalidated).toHaveBeenCalledOnce();
+    expect(off).toHaveBeenCalledWith('ki-buddy-auth:session-invalidated', subscription?.[1]);
     expect(electronApi?.kiBuddyCoreTransport).toEqual({ csrfToken: 'core-csrf-token' });
   });
 
