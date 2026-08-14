@@ -40,14 +40,20 @@ const ProductProbe: React.FC = () => {
       >
         product-login
       </button>
+      <button onClick={() => void auth.logout()}>product-logout</button>
       <button onClick={() => void httpRequest('GET', '/api/settings/client').catch(() => {})}>core-request</button>
     </div>
   );
 };
 
 const CommonProbe: React.FC = () => {
-  const { status, user } = useAuth();
-  return <output aria-label='common-session'>{JSON.stringify({ status, user })}</output>;
+  const { logout, status, user } = useAuth();
+  return (
+    <div>
+      <output aria-label='common-session'>{JSON.stringify({ status, user })}</output>
+      <button onClick={() => void logout()}>common-logout</button>
+    </div>
+  );
 };
 
 describe('Ki-Buddy product authentication context', () => {
@@ -151,22 +157,79 @@ describe('Ki-Buddy product authentication context', () => {
     expect(configService.get('language')).toBe('en-US');
   });
 
-  it('reloads once when a different Core account becomes active after logout', () => {
+  it('blocks a different Core account before requesting one renderer reload', () => {
     const reload = vi.fn();
     const barrier = createKiBuddyAccountSwitchBarrier(reload);
 
-    barrier.observe(null);
-    barrier.observe('core-user-a');
+    expect(barrier.shouldBlock(null)).toBe(false);
+    expect(barrier.shouldBlock('core-user-a')).toBe(false);
+    barrier.recordCommittedUser('core-user-a');
     expect(reload).not.toHaveBeenCalled();
 
-    barrier.observe(null);
+    expect(barrier.shouldBlock(null)).toBe(false);
     expect(reload).not.toHaveBeenCalled();
 
-    barrier.observe('core-user-b');
+    expect(barrier.shouldBlock('core-user-b')).toBe(true);
+    expect(reload).not.toHaveBeenCalled();
+
+    barrier.requestReload();
     expect(reload).toHaveBeenCalledOnce();
 
-    barrier.observe('core-user-b');
+    expect(barrier.shouldBlock('core-user-b')).toBe(true);
+    barrier.requestReload();
     expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('removes product children before reloading for another Core account', async () => {
+    const reload = vi.fn();
+    getSessionMock.mockResolvedValue({
+      status: 'authenticated',
+      user: {
+        id: 'core-user-a',
+        username: 'shared-visible-name',
+        agents: {
+          userId: 'agents-user-a',
+          username: 'account-a@example.com',
+          displayName: 'Shared visible name',
+          roles: [],
+          deploymentUrl: 'https://agents.example.com',
+        },
+      },
+    });
+    logoutMock.mockResolvedValue(undefined);
+    loginMock.mockResolvedValue({
+      success: true,
+      session: {
+        status: 'authenticated',
+        user: {
+          id: 'core-user-b',
+          username: 'shared-visible-name',
+          agents: {
+            userId: 'agents-user-b',
+            username: 'account-b@example.com',
+            displayName: 'Shared visible name',
+            roles: [],
+            deploymentUrl: 'https://agents.example.com',
+          },
+        },
+      },
+    });
+
+    render(
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <KiBuddyAuthProvider reload={reload}>
+          <ProductProbe />
+        </KiBuddyAuthProvider>
+      </SWRConfig>
+    );
+    await waitFor(() => expect(screen.getByLabelText('core-user')).toHaveTextContent('core-user-a'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'product-logout' }));
+    await waitFor(() => expect(screen.getByLabelText('auth-status')).toHaveTextContent('unauthenticated'));
+    fireEvent.click(screen.getByRole('button', { name: 'product-login' }));
+
+    await waitFor(() => expect(reload).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('button', { name: 'product-login' })).not.toBeInTheDocument();
   });
 
   it('keeps the active account when a Core business request returns 401', async () => {
@@ -284,5 +347,45 @@ describe('Ki-Buddy product authentication context', () => {
     await waitFor(() => expect(screen.getByLabelText('common-session')).toHaveTextContent('web-user'));
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/user', expect.objectContaining({ method: 'GET' }));
     expect(configService.get('language')).toBe('en-US');
+  });
+
+  it('keeps the WebUI logout cleanup contract when no product adapter is active', async () => {
+    window.electronAPI = undefined;
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (input === '/api/auth/user') {
+        return new Response(JSON.stringify({ success: true, user: { id: 'web-user', username: 'web-admin' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    localStorage.setItem('auth-session', 'remove');
+    localStorage.setItem('csrf-state', 'remove');
+    localStorage.setItem('access-token', 'remove');
+    localStorage.setItem('preview-ui:web-project', '{"tabs":[]}');
+    localStorage.setItem('client-layout', 'preserve');
+
+    render(
+      <SWRConfig value={{ provider: () => new Map() }}>
+        <AuthProvider>
+          <CommonProbe />
+        </AuthProvider>
+      </SWRConfig>
+    );
+    await waitFor(() => expect(screen.getByLabelText('common-session')).toHaveTextContent('web-user'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'common-logout' }));
+
+    await waitFor(() => expect(screen.getByLabelText('common-session')).toHaveTextContent('unauthenticated'));
+    expect(localStorage.getItem('auth-session')).toBeNull();
+    expect(localStorage.getItem('csrf-state')).toBeNull();
+    expect(localStorage.getItem('access-token')).toBeNull();
+    expect(localStorage.getItem('preview-ui:web-project')).toBeNull();
+    expect(localStorage.getItem('client-layout')).toBe('preserve');
   });
 });

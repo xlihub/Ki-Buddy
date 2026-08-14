@@ -25,6 +25,8 @@ function createHandlers() {
 
 describe('Ki-Buddy renderer authentication handlers', () => {
   beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
     getSessionMock.mockReset();
     loginMock.mockReset();
     logoutMock.mockReset();
@@ -66,7 +68,7 @@ describe('Ki-Buddy renderer authentication handlers', () => {
 
     await createHandlers().handlers.logout();
 
-    expect(clearAccountStateMock).toHaveBeenCalledOnce();
+    expect(clearAccountStateMock).toHaveBeenCalledWith({ preserveRendererStorage: true });
     expect(setUserMock).toHaveBeenCalledWith(null);
     expect(setStatusMock).toHaveBeenCalledWith('unauthenticated');
   });
@@ -95,7 +97,7 @@ describe('Ki-Buddy renderer authentication handlers', () => {
 
     await createHandlers().handlers.refresh();
 
-    expect(clearAccountStateMock).toHaveBeenCalledOnce();
+    expect(clearAccountStateMock).toHaveBeenCalledWith({ preserveRendererStorage: true });
     expect(configService.get('language')).toBe('en-US');
     expect(setStatusMock).toHaveBeenLastCalledWith('unauthenticated');
   });
@@ -116,7 +118,7 @@ describe('Ki-Buddy renderer authentication handlers', () => {
       )
     ).resolves.toEqual({ success: false, code: 'serverError', shouldClearCache: true });
 
-    expect(clearAccountStateMock).toHaveBeenCalledOnce();
+    expect(clearAccountStateMock).toHaveBeenCalledWith({ preserveRendererStorage: true });
     expect(configService.get('language')).toBe('en-US');
     expect(setProfileMock).toHaveBeenCalledWith(null);
     expect(setUserMock).toHaveBeenCalledWith(null);
@@ -156,7 +158,59 @@ describe('Ki-Buddy renderer authentication handlers', () => {
     ).resolves.toEqual({ success: true });
 
     expect(localStorage.getItem('i18nextLng')).toBe('en-US');
-    expect(clearAccountStateMock).toHaveBeenCalledOnce();
+    expect(clearAccountStateMock).toHaveBeenCalledWith({ preserveRendererStorage: true });
+  });
+
+  it('requests storage-preserving cleanup for every Core account activation', async () => {
+    const agentsProfile = {
+      userId: 'agents-user',
+      username: 'shared-visible-name',
+      displayName: 'Shared visible name',
+      roles: [],
+      deploymentUrl: 'https://agents.example.com',
+    };
+    loginMock
+      .mockResolvedValueOnce({
+        success: true,
+        session: {
+          status: 'authenticated',
+          user: { id: 'core-user-a', username: 'shared-visible-name', agents: agentsProfile },
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        session: {
+          status: 'authenticated',
+          user: { id: 'core-user-b', username: 'shared-visible-name', agents: agentsProfile },
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        session: {
+          status: 'authenticated',
+          user: { id: 'core-user-a', username: 'shared-visible-name', agents: agentsProfile },
+        },
+      });
+    const { adapter, handlers } = createHandlers();
+    const login = () =>
+      adapter.login(
+        {
+          baseUrl: 'https://agents.example.com',
+          username: 'shared-visible-name',
+          password: 'password',
+        },
+        handlers.login
+      );
+
+    await login();
+    await login();
+    await login();
+
+    expect(clearAccountStateMock.mock.calls).toEqual([
+      [{ preserveRendererStorage: true }],
+      [{ preserveRendererStorage: true }],
+      [{ preserveRendererStorage: true }],
+    ]);
   });
 
   it('does not create product handlers when the Ki-Buddy capability is absent', () => {

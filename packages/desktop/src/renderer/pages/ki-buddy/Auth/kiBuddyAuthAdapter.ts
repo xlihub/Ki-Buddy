@@ -51,7 +51,7 @@ export function createKiBuddyAuthAdapter(options: {
       const api = getKiBuddyRendererRuntime()?.authApi;
       if (!api) return null;
       const clearAccountState = () => {
-        state.clearAccountState();
+        state.clearAccountState({ preserveRendererStorage: true });
         configService.resetForAccountChange();
       };
 

@@ -2,16 +2,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { authState, productAuthState, clearPreviewForScopeMock, closePreviewMock, logoutMock, replayMock } = vi.hoisted(
-  () => ({
-    authState: { user: null as { id: string; username: string } | null },
-    productAuthState: { profile: null as typeof agentsProfile | null },
-    clearPreviewForScopeMock: vi.fn(),
-    closePreviewMock: vi.fn(),
-    logoutMock: vi.fn(),
-    replayMock: vi.fn(),
-  })
-);
+const { authState, productAuthState, logoutMock, replayMock } = vi.hoisted(() => ({
+  authState: { user: null as { id: string; username: string } | null },
+  productAuthState: { profile: null as typeof agentsProfile | null },
+  logoutMock: vi.fn(),
+  replayMock: vi.fn(),
+}));
 
 const agentsProfile = {
   userId: 'agents-user-42',
@@ -41,13 +37,6 @@ vi.mock('@/renderer/pages/ki-buddy/Auth', () => ({
   useKiBuddyAuth: () => ({ profile: productAuthState.profile }),
 }));
 
-vi.mock('@/renderer/pages/conversation/Preview/context/PreviewContext', () => ({
-  usePreviewContext: () => ({
-    closePreview: closePreviewMock,
-    clearPreviewForScope: clearPreviewForScopeMock,
-  }),
-}));
-
 vi.mock('@/renderer/pages/settings/components/SettingsPageWrapper', () => ({
   default: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
 }));
@@ -64,8 +53,6 @@ describe('KiBuddyAccountSettings', () => {
     productAuthState.profile = agentsProfile;
     logoutMock.mockReset();
     logoutMock.mockResolvedValue(undefined);
-    closePreviewMock.mockReset();
-    clearPreviewForScopeMock.mockReset();
     replayMock.mockReset();
   });
 
@@ -98,7 +85,7 @@ describe('KiBuddyAccountSettings', () => {
     );
   });
 
-  it('confirms logout and clears the in-memory workspace preview', async () => {
+  it('confirms logout without treating the client preview as Agents account state', async () => {
     render(<KiBuddyAccountSettings />);
 
     fireEvent.click(screen.getByRole('button', { name: 'login.kiBuddy.account.openMenu' }));
@@ -113,8 +100,6 @@ describe('KiBuddyAccountSettings', () => {
     fireEvent.click(confirmButton);
 
     await waitFor(() => expect(logoutMock).toHaveBeenCalledOnce());
-    expect(closePreviewMock).toHaveBeenCalledOnce();
-    expect(clearPreviewForScopeMock).toHaveBeenCalledOnce();
   });
 
   it('does not expose account controls without an Agents profile', () => {

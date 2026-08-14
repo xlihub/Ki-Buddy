@@ -1,6 +1,8 @@
 import http from 'node:http';
+import { mkdtemp, rm } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
+import path from 'node:path';
 import { test, expect } from '../../fixtures';
 
 type CoreCurrentUserResponse = {
@@ -14,7 +16,7 @@ type CoreCurrentUserResponse = {
 const AGENTS_USERS = [
   {
     email: 'ki-buddy-e2e-a@example.com',
-    name: 'Ki-Buddy E2E User A',
+    name: 'Ki-Buddy Shared Visible Name',
     orgName: 'Ki-Buddy E2E',
     phone: '10086',
     roles: [{ name: 'member' }],
@@ -24,7 +26,7 @@ const AGENTS_USERS = [
   },
   {
     email: 'ki-buddy-e2e-b@example.com',
-    name: 'Ki-Buddy E2E User B',
+    name: 'Ki-Buddy Shared Visible Name',
     orgName: 'Ki-Buddy E2E',
     phone: '10010',
     roles: [{ name: 'member' }],
@@ -36,6 +38,9 @@ const AGENTS_USERS = [
 
 const AGENTS_USER_A = AGENTS_USERS[0];
 const AGENTS_USER_B = AGENTS_USERS[1];
+const BROWSER_SITE_COOKIE = 'ki-buddy-browser-session=preserved';
+const BROWSER_SITE_STORAGE_KEY = 'ki-buddy-browser-storage';
+const BROWSER_SITE_STORAGE_VALUE = 'preserved';
 
 function findUserByToken(authorization: string | undefined) {
   return AGENTS_USERS.find((user) => authorization === `Bearer ${user.token}`);
@@ -56,7 +61,11 @@ const COMMON_USER_FIELDS = {
 };
 
 async function startFakeAgentsServer(
-  options: { invalidLoginAttempts?: number; repeatFirstUser?: boolean } = {}
+  options: {
+    invalidLoginAttempts?: number;
+    loginUserSequence?: readonly (typeof AGENTS_USERS)[number][];
+    repeatFirstUser?: boolean;
+  } = {}
 ): Promise<{
   baseUrl: string;
   close: () => Promise<void>;
@@ -69,6 +78,12 @@ async function startFakeAgentsServer(
   let validationRequestCount = 0;
   const invalidLoginAttempts = options.invalidLoginAttempts ?? 0;
   const server = http.createServer((request, response) => {
+    if (request.method === 'GET' && request.url === '/browser-state') {
+      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      response.end('<title>Ki-Buddy Browser State</title><main>Read-only browser partition probe</main>');
+      return;
+    }
+
     const isLogin = request.method === 'POST' && request.url === '/kagent/login';
     const isValidation = request.method === 'POST' && request.url === '/kagent/system/user/validateToken';
 
@@ -84,8 +99,12 @@ async function startFakeAgentsServer(
     }
 
     if (isValidation) validationRequestCount += 1;
+    const loginIndex = Math.max(loginAttempts - invalidLoginAttempts - 1, 0);
+    const sequenceUser = options.loginUserSequence?.length
+      ? options.loginUserSequence[Math.min(loginIndex, options.loginUserSequence.length - 1)]
+      : undefined;
     const user = isLogin
-      ? AGENTS_USERS[options.repeatFirstUser ? 0 : Math.min(loginAttempts - invalidLoginAttempts - 1, 1)]
+      ? (sequenceUser ?? AGENTS_USERS[options.repeatFirstUser ? 0 : Math.min(loginIndex, 1)])
       : findUserByToken(request.headers.authorization);
     if (!user) {
       response.writeHead(401).end();
@@ -140,7 +159,11 @@ async function readCoreCurrentUser(page: import('@playwright/test').Page): Promi
   });
 }
 
-async function createCoreConversation(page: import('@playwright/test').Page, name: string): Promise<string> {
+async function createCoreConversation(
+  page: import('@playwright/test').Page,
+  name: string,
+  workspace = os.tmpdir()
+): Promise<string> {
   return page.evaluate(
     async ({ conversationName, workspace }) => {
       const port = (window as Window & { __backendPort?: number }).__backendPort;
@@ -173,8 +196,35 @@ async function createCoreConversation(page: import('@playwright/test').Page, nam
       if (!body.data?.id) throw new Error('POST /api/conversations returned no conversation id');
       return body.data.id;
     },
-    { conversationName: name, workspace: os.tmpdir() }
+    { conversationName: name, workspace }
   );
+}
+
+type CoreConversationResponse = {
+  success: boolean;
+  data?: {
+    id?: string;
+    extra?: {
+      workspace?: string;
+    };
+  };
+};
+
+async function readCoreConversation(
+  page: import('@playwright/test').Page,
+  conversationId: string
+): Promise<{ body: CoreConversationResponse; status: number }> {
+  return page.evaluate(async (id) => {
+    const port = (window as Window & { __backendPort?: number }).__backendPort;
+    if (!port) throw new Error('Ki-Core backend port is unavailable in the renderer');
+    const response = await fetch(`http://127.0.0.1:${port}/api/conversations/${encodeURIComponent(id)}`, {
+      credentials: 'include',
+    });
+    return {
+      body: (await response.json()) as CoreConversationResponse,
+      status: response.status,
+    };
+  }, conversationId);
 }
 
 async function readCoreConversationStatus(
@@ -216,6 +266,245 @@ async function waitForLoginSuccess(page: import('@playwright/test').Page): Promi
       { cause: error }
     );
   }
+}
+
+async function loginThroughUi(
+  page: import('@playwright/test').Page,
+  params: { baseUrl: string; username: string }
+): Promise<void> {
+  await fillLoginForm(page, params);
+  await page.getByRole('button', { name: /^(登录|Sign In)$/i }).click();
+  await waitForLoginSuccess(page);
+}
+
+async function logoutThroughUi(page: import('@playwright/test').Page): Promise<void> {
+  if (!/#\/settings\//.test(page.url())) {
+    await page
+      .locator('.sider-footer')
+      .getByText(/^(设置|Settings)$/i)
+      .click();
+  }
+  await page.locator('[data-settings-id="account"]').click();
+  await expect(page).toHaveURL(/#\/settings\/account$/);
+  try {
+    await expect(page.getByTestId('ki-buddy-account-card')).toBeVisible({ timeout: 30_000 });
+  } catch (error) {
+    const session = await page.evaluate(() => window.electronAPI?.kiBuddyAuth?.getSession()).catch(() => null);
+    const visibleText = (await page.locator('body').innerText()).slice(0, 2_000);
+    throw new Error(
+      `Ki-Buddy account page did not render. Session: ${JSON.stringify(session)}. Visible text: ${visibleText}`,
+      { cause: error }
+    );
+  }
+  await page.getByTestId('ki-buddy-account-menu-button').click();
+  await page.getByTestId('ki-buddy-account-logout-menu-item').click();
+  const logoutModal = page.getByTestId('ki-buddy-account-logout-modal');
+  await expect(logoutModal).toBeVisible();
+  await logoutModal.getByRole('button', { name: /^(退出登录|Sign out)$/i }).click();
+  await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible' });
+}
+
+type PersistedBrowserTab = {
+  content: string;
+  content_type: string;
+  id: string;
+  title: string;
+};
+
+async function readPersistedBrowserTabs(page: import('@playwright/test').Page): Promise<PersistedBrowserTab[]> {
+  return page.evaluate(() => {
+    const tabs: PersistedBrowserTab[] = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith('preview-ui:')) continue;
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) ?? '{}') as { tabs?: unknown };
+        if (!Array.isArray(parsed.tabs)) continue;
+        for (const value of parsed.tabs) {
+          if (!value || typeof value !== 'object') continue;
+          const tab = value as Partial<PersistedBrowserTab>;
+          if (
+            tab.content_type === 'browser' &&
+            typeof tab.id === 'string' &&
+            typeof tab.title === 'string' &&
+            typeof tab.content === 'string'
+          ) {
+            tabs.push(tab as PersistedBrowserTab);
+          }
+        }
+      } catch {
+        // Corrupt preview state is not a valid browser tab.
+      }
+    }
+    return tabs;
+  });
+}
+
+async function openClientBrowserForConversation(
+  page: import('@playwright/test').Page,
+  conversationId: string,
+  expectedUrl = 'about:blank'
+): Promise<PersistedBrowserTab> {
+  const conversation = page.locator(`#c-${conversationId}`);
+  await expect(conversation).toBeVisible({ timeout: 30_000 });
+  await conversation.click();
+  await expect(page.locator('.workspace-open-button__dropdown-btn')).toBeVisible({ timeout: 30_000 });
+  await page.locator('.workspace-open-button__dropdown-btn').click();
+  await page
+    .locator('.workspace-open-dropdown-item')
+    .filter({ hasText: /^(浏览器|Browser)$/i })
+    .click();
+  await expect(page.locator('.aion-url-viewer-toolbar .toolbar-input')).toBeVisible({ timeout: 30_000 });
+  await expect
+    .poll(async () => (await readPersistedBrowserTabs(page)).find((tab) => tab.content === expectedUrl), {
+      timeout: 30_000,
+    })
+    .toMatchObject({
+      content: expectedUrl,
+      content_type: 'browser',
+      id: expect.any(String),
+      title: expect.any(String),
+    });
+  const browserTab = (await readPersistedBrowserTabs(page)).find((tab) => tab.content === expectedUrl);
+  if (!browserTab) throw new Error('The client browser tab was not persisted');
+  return browserTab;
+}
+
+async function restoreClientBrowserForConversation(
+  page: import('@playwright/test').Page,
+  conversationId: string,
+  expectedTab: PersistedBrowserTab
+): Promise<void> {
+  const conversation = page.locator(`#c-${conversationId}`);
+  await expect(conversation).toBeVisible({ timeout: 30_000 });
+  await conversation.click();
+  expect(await page.evaluate(() => localStorage.getItem('workspace-open-preference'))).toBe('browser');
+  await page.locator('.workspace-open-button__btn').click();
+  await page.locator(`span[title=${JSON.stringify(expectedTab.title)}]`).click();
+  await expect(
+    page.locator(`.aion-url-viewer-toolbar .toolbar-input[value=${JSON.stringify(expectedTab.content)}]`)
+  ).toHaveCount(1, { timeout: 30_000 });
+  expect(await readPersistedBrowserTabs(page)).toContainEqual(expectedTab);
+}
+
+async function navigateClientBrowser(
+  page: import('@playwright/test').Page,
+  tabId: string,
+  targetUrl: string,
+  expectedTitle: string
+): Promise<PersistedBrowserTab> {
+  const addressBar = page.locator('.aion-url-viewer-toolbar .toolbar-input');
+  await addressBar.fill(targetUrl);
+  await addressBar.press('Enter');
+  await expect
+    .poll(async () => (await readPersistedBrowserTabs(page)).find((tab) => tab.id === tabId), { timeout: 30_000 })
+    .toMatchObject({ content: targetUrl, id: tabId, title: expectedTitle });
+  const browserTab = (await readPersistedBrowserTabs(page)).find((tab) => tab.id === tabId);
+  if (!browserTab) throw new Error('The navigated client browser tab was not persisted');
+  await expect(page.locator('webview[partition="persist:aionui-browser"]')).toHaveCount(1);
+  return browserTab;
+}
+
+type BrowserSiteState = {
+  cookie: string;
+  storageValue: string | null;
+};
+
+async function writeBrowserSiteState(page: import('@playwright/test').Page): Promise<BrowserSiteState> {
+  return page.locator('webview[partition="persist:aionui-browser"]').evaluate(
+    async (element, state) => {
+      const webview = element as HTMLElement & {
+        executeJavaScript: (script: string) => Promise<BrowserSiteState>;
+      };
+      return webview.executeJavaScript(`(() => {
+        document.cookie = ${JSON.stringify(`${state.cookie}; Path=/; SameSite=Lax`)};
+        localStorage.setItem(${JSON.stringify(state.storageKey)}, ${JSON.stringify(state.storageValue)});
+        return {
+          cookie: document.cookie,
+          storageValue: localStorage.getItem(${JSON.stringify(state.storageKey)})
+        };
+      })()`);
+    },
+    {
+      cookie: BROWSER_SITE_COOKIE,
+      storageKey: BROWSER_SITE_STORAGE_KEY,
+      storageValue: BROWSER_SITE_STORAGE_VALUE,
+    }
+  );
+}
+
+async function readBrowserSiteState(
+  page: import('@playwright/test').Page,
+  targetUrl: string
+): Promise<BrowserSiteState> {
+  return page
+    .locator(`webview[partition="persist:aionui-browser"][src=${JSON.stringify(targetUrl)}]`)
+    .evaluate(async (element, storageKey) => {
+      const webview = element as HTMLElement & {
+        executeJavaScript: (script: string) => Promise<BrowserSiteState>;
+      };
+      return webview.executeJavaScript(`({
+        cookie: document.cookie,
+        storageValue: localStorage.getItem(${JSON.stringify(storageKey)})
+      })`);
+    }, BROWSER_SITE_STORAGE_KEY);
+}
+
+async function readClientStorage(
+  page: import('@playwright/test').Page,
+  localKeys: string[],
+  sessionKeys: string[]
+): Promise<{ local: Record<string, string | null>; session: Record<string, string | null> }> {
+  return page.evaluate(
+    ({ localKeys: expectedLocalKeys, sessionKeys: expectedSessionKeys }) => ({
+      local: Object.fromEntries(expectedLocalKeys.map((key) => [key, localStorage.getItem(key)])),
+      session: Object.fromEntries(expectedSessionKeys.map((key) => [key, sessionStorage.getItem(key)])),
+    }),
+    { localKeys, sessionKeys }
+  );
+}
+
+type BrowserDataClearCalls = {
+  authCache: number;
+  httpCache: number;
+  storage: number;
+};
+
+async function trackBrowserDataClearCalls(electronApp: import('@playwright/test').ElectronApplication): Promise<void> {
+  await electronApp.evaluate(async ({ session }, partition) => {
+    const state = globalThis as typeof globalThis & {
+      __kiBuddyBrowserDataClearCalls?: BrowserDataClearCalls;
+    };
+    const calls: BrowserDataClearCalls = { authCache: 0, httpCache: 0, storage: 0 };
+    state.__kiBuddyBrowserDataClearCalls = calls;
+    const browserSession = session.fromPartition(partition);
+    const clearStorageData = browserSession.clearStorageData.bind(browserSession);
+    const clearCache = browserSession.clearCache.bind(browserSession);
+    const clearAuthCache = browserSession.clearAuthCache.bind(browserSession);
+    browserSession.clearStorageData = async (options) => {
+      calls.storage += 1;
+      await clearStorageData(options);
+    };
+    browserSession.clearCache = async () => {
+      calls.httpCache += 1;
+      await clearCache();
+    };
+    browserSession.clearAuthCache = async () => {
+      calls.authCache += 1;
+      await clearAuthCache();
+    };
+  }, 'persist:aionui-browser');
+}
+
+async function readBrowserDataClearCalls(
+  electronApp: import('@playwright/test').ElectronApplication
+): Promise<BrowserDataClearCalls> {
+  return electronApp.evaluate(async () => {
+    const state = globalThis as typeof globalThis & {
+      __kiBuddyBrowserDataClearCalls?: BrowserDataClearCalls;
+    };
+    return state.__kiBuddyBrowserDataClearCalls ?? { authCache: 0, httpCache: 0, storage: 0 };
+  });
 }
 
 test.describe('Ki-Buddy packaged Agents authentication', () => {
@@ -303,16 +592,7 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
       });
       await staleRequestStarted;
 
-      await page.evaluate(() => {
-        window.location.hash = '#/settings/account';
-      });
-      await expect(page.getByTestId('ki-buddy-account-card')).toBeVisible();
-      await page.getByTestId('ki-buddy-account-menu-button').click();
-      await page.getByTestId('ki-buddy-account-logout-menu-item').click();
-      const logoutModal = page.getByTestId('ki-buddy-account-logout-modal');
-      await expect(logoutModal).toBeVisible();
-      await logoutModal.getByRole('button', { name: /^(退出登录|Sign out)$/i }).click();
-      await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible' });
+      await logoutThroughUi(page);
 
       await fillLoginForm(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_B.userName });
       await page.getByRole('button', { name: /^(登录|Sign In)$/i }).click();
@@ -371,6 +651,153 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
     } finally {
       await page.evaluate(() => window.electronAPI?.kiBuddyAuth?.logout()).catch(() => undefined);
       await agents.close();
+    }
+  });
+
+  test('uses Core user scope while preserving client storage, browser, and workspace semantics', async ({
+    isolatedPackagedApp: electronApp,
+    isolatedPackagedPage: page,
+  }) => {
+    const agents = await startFakeAgentsServer({
+      loginUserSequence: [AGENTS_USER_A, AGENTS_USER_B, AGENTS_USER_A],
+    });
+    const projectWorkspace = await mkdtemp(path.join(os.tmpdir(), 'ki-buddy-account-workspace-'));
+    let accountAConversationId: string | null = null;
+
+    try {
+      await trackBrowserDataClearCalls(electronApp);
+      await page
+        .locator('#ki-buddy-opening-guide-title, input[autocomplete="username"]')
+        .first()
+        .waitFor({ state: 'visible', timeout: 30_000 });
+      const skipGuide = page.getByRole('button', { name: /^(跳过|Skip)$/i });
+      if (await skipGuide.isVisible().catch(() => false)) await skipGuide.click();
+      await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible', timeout: 30_000 });
+
+      await loginThroughUi(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_A.userName });
+      const accountACoreUser = await readCoreCurrentUser(page);
+      expect(accountACoreUser).toMatchObject({
+        status: 200,
+        body: { user: { id: expect.any(String), username: AGENTS_USER_A.userName } },
+      });
+      accountAConversationId = await createCoreConversation(
+        page,
+        `E2E account A project ${Date.now()}`,
+        projectWorkspace
+      );
+      expect(await readCoreConversation(page, accountAConversationId)).toMatchObject({
+        status: 200,
+        body: {
+          data: {
+            extra: { workspace: projectWorkspace },
+          },
+        },
+      });
+      const blankBrowserTab = await openClientBrowserForConversation(page, accountAConversationId);
+      const browserPageUrl = `${agents.baseUrl}/browser-state`;
+      const clientBrowserTab = await navigateClientBrowser(
+        page,
+        blankBrowserTab.id,
+        browserPageUrl,
+        'Ki-Buddy Browser State'
+      );
+      await expect
+        .poll(() => writeBrowserSiteState(page), { timeout: 30_000 })
+        .toEqual({ cookie: BROWSER_SITE_COOKIE, storageValue: BROWSER_SITE_STORAGE_VALUE });
+      const clientStorage = {
+        'aionui:recent-workspaces': JSON.stringify([{ path: projectWorkspace, name: 'Local client workspace' }]),
+        'conversation.historySearch.recentKeywords': JSON.stringify(['client search history']),
+        'explorer-ui:e2e-client-project': JSON.stringify({ expanded: ['src'], selected: 'src/index.ts' }),
+        'team-section-expanded': 'false',
+      };
+      const clientSessionStorage = {
+        'aion:last-non-settings-path': '/guid',
+        'conversation-command-queue/e2e-client-conversation': JSON.stringify({ items: [{ input: 'client draft' }] }),
+      };
+      await page.evaluate(
+        ({ localEntries, sessionEntries }) => {
+          for (const [key, value] of Object.entries(localEntries)) localStorage.setItem(key, value);
+          for (const [key, value] of Object.entries(sessionEntries)) sessionStorage.setItem(key, value);
+        },
+        { localEntries: clientStorage, sessionEntries: clientSessionStorage }
+      );
+      const expectedClientStorage = { local: clientStorage, session: clientSessionStorage };
+
+      const accountADocumentTimeOrigin = await page.evaluate(() => performance.timeOrigin);
+      await logoutThroughUi(page);
+      await loginThroughUi(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_B.userName });
+      await expect
+        .poll(async () => page.evaluate(() => performance.timeOrigin), { timeout: 30_000 })
+        .not.toBe(accountADocumentTimeOrigin);
+      await expect(page).toHaveURL(/#\/guid$/);
+      const accountBCoreUser = await readCoreCurrentUser(page);
+      expect(accountBCoreUser).toMatchObject({
+        status: 200,
+        body: { user: { id: expect.any(String), username: AGENTS_USER_B.userName } },
+      });
+      expect(accountBCoreUser.body.user?.id).not.toBe(accountACoreUser.body.user?.id);
+      expect(await readPersistedBrowserTabs(page)).toEqual([clientBrowserTab]);
+      expect(await readClientStorage(page, Object.keys(clientStorage), Object.keys(clientSessionStorage))).toEqual(
+        expectedClientStorage
+      );
+      expect((await readCoreConversation(page, accountAConversationId)).status).toBe(404);
+      await expect(page.locator(`#c-${accountAConversationId}`)).toHaveCount(0);
+
+      const accountBConversationId = await createCoreConversation(
+        page,
+        `E2E account B same project ${Date.now()}`,
+        projectWorkspace
+      );
+      expect(await readCoreConversation(page, accountBConversationId)).toMatchObject({
+        status: 200,
+        body: {
+          data: {
+            extra: { workspace: projectWorkspace },
+          },
+        },
+      });
+
+      const accountBDocumentTimeOrigin = await page.evaluate(() => performance.timeOrigin);
+      await logoutThroughUi(page);
+      await loginThroughUi(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_A.userName });
+      await expect
+        .poll(async () => page.evaluate(() => performance.timeOrigin), { timeout: 30_000 })
+        .not.toBe(accountBDocumentTimeOrigin);
+      await expect(page).toHaveURL(/#\/guid$/);
+      expect(await readCoreCurrentUser(page)).toMatchObject({
+        status: 200,
+        body: {
+          user: {
+            id: accountACoreUser.body.user?.id,
+            username: AGENTS_USER_A.userName,
+          },
+        },
+      });
+      expect(await readPersistedBrowserTabs(page)).toEqual([clientBrowserTab]);
+      expect(await readClientStorage(page, Object.keys(clientStorage), Object.keys(clientSessionStorage))).toEqual(
+        expectedClientStorage
+      );
+      expect(await readCoreConversation(page, accountAConversationId)).toMatchObject({
+        status: 200,
+        body: {
+          data: {
+            extra: { workspace: projectWorkspace },
+          },
+        },
+      });
+      expect((await readCoreConversation(page, accountBConversationId)).status).toBe(404);
+      await expect(page.locator(`#c-${accountAConversationId}`)).toBeVisible({ timeout: 30_000 });
+      await expect(page.locator(`#c-${accountBConversationId}`)).toHaveCount(0);
+      await restoreClientBrowserForConversation(page, accountAConversationId, clientBrowserTab);
+      await expect
+        .poll(() => readBrowserSiteState(page, browserPageUrl), { timeout: 30_000 })
+        .toEqual({ cookie: BROWSER_SITE_COOKIE, storageValue: BROWSER_SITE_STORAGE_VALUE });
+      expect(await readBrowserDataClearCalls(electronApp)).toEqual({ authCache: 0, httpCache: 0, storage: 0 });
+    } finally {
+      if (accountAConversationId) await deleteCoreConversation(page, accountAConversationId).catch(() => undefined);
+      await page.evaluate(() => window.electronAPI?.kiBuddyAuth?.logout()).catch(() => undefined);
+      await agents.close();
+      await rm(projectWorkspace, { force: true, recursive: true });
     }
   });
 
