@@ -43,7 +43,7 @@ export type AuthHandlers<TCode extends string = string> = {
 };
 
 export type AuthHandlerFactoryOptions = {
-  clearAccountState: () => void;
+  clearAccountState: (options?: { preserveRendererStorage?: boolean }) => void;
   setReady: (ready: boolean) => void;
   setStatus: (status: AuthStatus) => void;
   setUser: (user: AuthUser | null) => void;
@@ -84,9 +84,7 @@ function clearAuthCache(): void {
     clearCookie(CSRF_COOKIE_NAME, '/');
 
     // Clear localStorage auth-related items, plus per-user UI state that must not
-    // leak across accounts. Preview scopes are keyed by project id and hold file
-    // content, so leaving them behind would show the next user the previous one's
-    // open tabs — and nothing else ever cleaned them up.
+    // leak across accounts in the WebUI authentication contract.
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -308,9 +306,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children, handlerFac
   const handlers = useMemo(
     () =>
       handlerFactory?.({
-        clearAccountState: () => {
+        clearAccountState: (options) => {
           clearSWRCache(swrCache);
-          clearAuthCache();
+          if (!options?.preserveRendererStorage) clearAuthCache();
           resetAccountScopedRendererState();
         },
         setReady,

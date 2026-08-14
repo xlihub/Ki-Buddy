@@ -15,6 +15,32 @@ const getSessionMock = vi.fn();
 const loginMock = vi.fn();
 const logoutMock = vi.fn();
 
+const browserTab = {
+  id: 'client-browser-tab',
+  title: 'Client documentation',
+  content: 'https://docs.example.com',
+  content_type: 'browser',
+};
+
+function setMixedPreviewState(key: string): void {
+  localStorage.setItem(
+    key,
+    JSON.stringify({
+      isOpen: true,
+      tabs: [
+        {
+          id: 'account-file-tab',
+          title: 'secret.txt',
+          content: 'previous account data',
+          content_type: 'code',
+        },
+        browserTab,
+      ],
+      activeTabId: 'account-file-tab',
+    })
+  );
+}
+
 const AuthStatusProbe: React.FC = () => {
   const { status } = useAuth();
   const { login } = useKiBuddyAuth();
@@ -39,6 +65,7 @@ const AuthStatusProbe: React.FC = () => {
 describe('Ki-Buddy AuthProvider session restoration', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     getSessionMock.mockReset();
     loginMock.mockReset();
     logoutMock.mockReset();
@@ -49,13 +76,14 @@ describe('Ki-Buddy AuthProvider session restoration', () => {
     };
   });
 
-  it('clears account-scoped renderer state when the saved Agents credential is invalidated', async () => {
+  it('clears runtime state without deleting client storage when the credential is invalidated', async () => {
     getSessionMock.mockResolvedValue({
       status: 'unauthenticated',
       user: null,
       cleanupRequired: true,
     });
-    localStorage.setItem('preview-ui:previous-account-project', '{"activeFile":"secret.txt"}');
+    setMixedPreviewState('preview-ui:previous-account-project');
+    localStorage.setItem('client-auth-layout', 'preserved');
     const swrCache = new Map<string, { data?: unknown }>();
     swrCache.set('/api/assistants', { data: [{ id: 'previous-account-assistant' }] });
 
@@ -68,7 +96,8 @@ describe('Ki-Buddy AuthProvider session restoration', () => {
     );
 
     expect(await screen.findByLabelText('authentication-status')).toHaveTextContent('unauthenticated');
-    await waitFor(() => expect(localStorage.getItem('preview-ui:previous-account-project')).toBeNull());
+    expect(JSON.parse(localStorage.getItem('preview-ui:previous-account-project') ?? '{}').tabs).toHaveLength(2);
+    expect(localStorage.getItem('client-auth-layout')).toBe('preserved');
     expect(swrCache.get('/api/assistants')?.data).toBeUndefined();
   });
 
@@ -91,7 +120,7 @@ describe('Ki-Buddy AuthProvider session restoration', () => {
     expect(swrCache.get('/api/assistants')?.data).toEqual([{ id: 'current-account-assistant' }]);
   });
 
-  it('clears preserved account state before activating a newly signed-in Agents account', async () => {
+  it('clears runtime state without deleting client storage before activating a new account', async () => {
     getSessionMock.mockResolvedValue({ status: 'unauthenticated', user: null });
     loginMock.mockResolvedValue({
       success: true,
@@ -110,7 +139,8 @@ describe('Ki-Buddy AuthProvider session restoration', () => {
         },
       },
     });
-    localStorage.setItem('preview-ui:previous-account-project', '{"activeFile":"secret.txt"}');
+    setMixedPreviewState('preview-ui:previous-account-project');
+    sessionStorage.setItem('conversation-command-queue/previous-account', '{"items":[{"input":"draft"}]}');
     const swrCache = new Map<string, { data?: unknown }>();
     swrCache.set('/api/assistants', { data: [{ id: 'previous-account-assistant' }] });
     render(
@@ -125,7 +155,13 @@ describe('Ki-Buddy AuthProvider session restoration', () => {
     fireEvent.click(screen.getByRole('button', { name: 'sign-in-new-account' }));
 
     await waitFor(() => expect(screen.getByLabelText('authentication-status')).toHaveTextContent('authenticated'));
-    expect(localStorage.getItem('preview-ui:previous-account-project')).toBeNull();
+    expect({
+      previewTabs: JSON.parse(localStorage.getItem('preview-ui:previous-account-project') ?? '{}').tabs.length,
+      queuedCommand: sessionStorage.getItem('conversation-command-queue/previous-account'),
+    }).toEqual({
+      previewTabs: 2,
+      queuedCommand: '{"items":[{"input":"draft"}]}',
+    });
     expect(swrCache.get('/api/assistants')?.data).toBeUndefined();
   });
 });

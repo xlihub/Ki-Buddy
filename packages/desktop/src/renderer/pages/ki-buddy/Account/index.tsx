@@ -3,7 +3,6 @@ import { ReplayFive } from '@icon-park/react';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
-import { usePreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import SettingsPageWrapper from '@/renderer/pages/settings/components/SettingsPageWrapper';
 import { replayKiBuddyOpeningGuide } from '../Onboarding';
 import AccountCard from './AccountCard';
@@ -14,7 +13,6 @@ const KiBuddyAccountSettings: React.FC = () => {
   const { t } = useTranslation();
   const { logout, user } = useAuth();
   const { profile } = useKiBuddyAuth();
-  const { clearPreviewForScope, closePreview } = usePreviewContext();
   const [logoutVisible, setLogoutVisible] = useState(false);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
@@ -22,9 +20,7 @@ const KiBuddyAccountSettings: React.FC = () => {
 
   const handleLogout = async () => {
     setLogoutLoading(true);
-    closePreview();
     await logout();
-    clearPreviewForScope();
   };
 
   return (

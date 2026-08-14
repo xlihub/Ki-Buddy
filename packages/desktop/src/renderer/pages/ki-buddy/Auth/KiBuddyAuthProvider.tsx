@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { AuthProvider, useAuth } from '@/renderer/hooks/context/AuthContext';
 import type { KiBuddyAgentsProfile } from '@/common/types/platform/kiBuddyAuth';
 import {
@@ -9,23 +9,29 @@ import {
 } from './kiBuddyAuthAdapter';
 
 type KiBuddyAccountSwitchBarrier = {
-  observe: (userId: string | null) => void;
+  recordCommittedUser: (userId: string | null) => void;
+  requestReload: () => void;
+  shouldBlock: (userId: string | null) => boolean;
 };
 
-/** Remembers the last active Core user and reloads when a different account becomes active. */
+/** Remembers the last active Core user and blocks a different account until the renderer reloads. */
 export function createKiBuddyAccountSwitchBarrier(reload: () => void): KiBuddyAccountSwitchBarrier {
   let previousUserId: string | null = null;
   let reloadRequested = false;
 
   return {
-    observe: (userId) => {
-      if (!userId || reloadRequested) return;
-      if (previousUserId && previousUserId !== userId) {
+    recordCommittedUser: (userId) => {
+      if (userId) previousUserId = userId;
+    },
+    requestReload: () => {
+      if (!reloadRequested) {
         reloadRequested = true;
         reload();
-        return;
       }
-      previousUserId = userId;
+    },
+    shouldBlock: (userId) => {
+      if (!userId) return false;
+      return Boolean(previousUserId && previousUserId !== userId);
     },
   };
 }
@@ -37,31 +43,50 @@ type KiBuddyAuthContextValue = {
 
 const KiBuddyAuthContext = createContext<KiBuddyAuthContextValue | undefined>(undefined);
 
+function reloadRenderer(): void {
+  window.location.reload();
+}
+
 const KiBuddyAuthContextBridge: React.FC<
-  React.PropsWithChildren<{ adapter: KiBuddyAuthAdapter; profile: KiBuddyAgentsProfile | null }>
-> = ({ adapter, children, profile }) => {
+  React.PropsWithChildren<{
+    adapter: KiBuddyAuthAdapter;
+    profile: KiBuddyAgentsProfile | null;
+    reload: () => void;
+  }>
+> = ({ adapter, children, profile, reload }) => {
   const { login: authenticate, refresh, user } = useAuth();
-  const accountSwitchBarrier = useMemo(() => createKiBuddyAccountSwitchBarrier(() => window.location.reload()), []);
+  const accountSwitchBarrier = useMemo(() => createKiBuddyAccountSwitchBarrier(reload), [reload]);
   const login = useCallback(
     (params: KiBuddyLoginParams) => adapter.login(params, authenticate),
     [adapter, authenticate]
   );
   const value = useMemo(() => ({ login, profile }), [login, profile]);
+  const accountSwitchBlocked = accountSwitchBarrier.shouldBlock(user?.id ?? null);
 
-  useEffect(() => accountSwitchBarrier.observe(user?.id ?? null), [accountSwitchBarrier, user?.id]);
+  useLayoutEffect(() => {
+    if (accountSwitchBlocked) {
+      accountSwitchBarrier.requestReload();
+      return;
+    }
+    accountSwitchBarrier.recordCommittedUser(user?.id ?? null);
+  }, [accountSwitchBarrier, accountSwitchBlocked, user?.id]);
   useEffect(() => adapter.subscribeToSessionInvalidation(() => void refresh()), [adapter, refresh]);
 
+  if (accountSwitchBlocked) return null;
   return <KiBuddyAuthContext.Provider value={value}>{children}</KiBuddyAuthContext.Provider>;
 };
 
 /** Owns Ki-Buddy-only authentication state while delegating common session state to AuthContext. */
-export const KiBuddyAuthProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+export const KiBuddyAuthProvider: React.FC<React.PropsWithChildren<{ reload?: () => void }>> = ({
+  children,
+  reload = reloadRenderer,
+}) => {
   const [profile, setProfile] = useState<KiBuddyAgentsProfile | null>(null);
   const adapter = useMemo(() => createKiBuddyAuthAdapter({ setProfile }), []);
 
   return (
     <AuthProvider handlerFactory={adapter.handlerFactory}>
-      <KiBuddyAuthContextBridge adapter={adapter} profile={profile}>
+      <KiBuddyAuthContextBridge adapter={adapter} profile={profile} reload={reload}>
         {children}
       </KiBuddyAuthContextBridge>
     </AuthProvider>

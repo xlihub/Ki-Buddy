@@ -20,6 +20,11 @@ import os from 'os';
 
 type Fixtures = {
   electronApp: ElectronApplication;
+  isolatedPackagedApp: ElectronApplication;
+  isolatedPackagedContext: {
+    electronApp: ElectronApplication;
+    page: Page;
+  };
   isolatedPackagedPage: Page;
   page: Page;
 };
@@ -318,7 +323,7 @@ export const test = base.extend<Fixtures>({
   // suites. This keeps timers, Core memory, credentials, and database state
   // independent from the shared singleton used by ordinary E2E tests.
   // eslint-disable-next-line no-empty-pattern
-  isolatedPackagedPage: async ({}, use) => {
+  isolatedPackagedContext: async ({}, use) => {
     const packaged = resolvePackagedApp();
     if (!packaged) {
       throw new Error(
@@ -342,11 +347,19 @@ export const test = base.extend<Fixtures>({
     });
 
     try {
-      await use(await resolveMainWindow(isolatedApp));
+      await use({ electronApp: isolatedApp, page: await resolveMainWindow(isolatedApp) });
     } finally {
       await isolatedApp.close().catch(() => undefined);
       fs.rmSync(sandboxDir, { recursive: true, force: true });
     }
+  },
+
+  isolatedPackagedApp: async ({ isolatedPackagedContext }, use) => {
+    await use(isolatedPackagedContext.electronApp);
+  },
+
+  isolatedPackagedPage: async ({ isolatedPackagedContext }, use) => {
+    await use(isolatedPackagedContext.page);
   },
 
   page: async ({ electronApp }, use, testInfo: TestInfo) => {
