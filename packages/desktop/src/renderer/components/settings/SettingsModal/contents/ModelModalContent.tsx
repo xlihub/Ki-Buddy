@@ -32,6 +32,9 @@ import { useSettingsViewMode } from '../settingsViewContext';
 import SettingsPageHeader from '@/renderer/pages/settings/components/SettingsPageHeader';
 import { consumePendingDeepLink } from '@/renderer/hooks/system/useDeepLink';
 import '../model-provider.css';
+import { getProductDocumentationUrl } from '@/renderer/services/runtime/productBrandRuntime';
+
+const AION_UI_MODEL_CONFIGURATION_URL = 'https://github.com/iOfficeAI/AionUi/wiki/LLM-Configuration';
 
 /**
  * 获取协议显示标签颜色
@@ -106,6 +109,7 @@ const isModelEnabled = (platform: IProvider, model: string): boolean => {
 };
 
 const ModelModalContent: React.FC = () => {
+  const modelConfigurationUrl = getProductDocumentationUrl(AION_UI_MODEL_CONFIGURATION_URL);
   const { t } = useTranslation();
   const viewMode = useSettingsViewMode();
   const isPageMode = viewMode === 'page';
@@ -408,7 +412,7 @@ const ModelModalContent: React.FC = () => {
             <p className='text-14px text-t-secondary text-center max-w-400px'>
               {t('settings.needHelpConfigGuide')}
               <a
-                href='https://github.com/iOfficeAI/AionUi/wiki/LLM-Configuration'
+                href={modelConfigurationUrl}
                 target='_blank'
                 rel='noopener noreferrer'
                 className='text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] underline ml-4px'

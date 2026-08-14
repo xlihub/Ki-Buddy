@@ -7,10 +7,26 @@
 import type { BrowserWindow } from 'electron';
 import { ipcBridge } from '@/common';
 
-export const PROTOCOL_SCHEME = 'aionui';
+export const AION_UI_PROTOCOL_SCHEME = 'aionui';
+
+let protocolScheme = AION_UI_PROTOCOL_SCHEME;
+let pendingDeepLinkUrl: string | null = null;
+
+/** Finds a URL for the currently configured desktop protocol in process arguments. */
+export function findDeepLinkUrl(argv: readonly string[]): string | null {
+  return argv.find((arg) => arg.startsWith(`${protocolScheme}://`)) ?? null;
+}
+
+/** Selects one protocol for parsing, registration, single-instance transfer and pending startup delivery. */
+export function configureDeepLinkProtocol(scheme: string, argv: readonly string[] = process.argv): string {
+  if (!/^[a-z][a-z0-9+.-]*$/i.test(scheme)) throw new Error('Desktop protocol scheme must be a valid URL scheme');
+  protocolScheme = scheme;
+  pendingDeepLinkUrl = findDeepLinkUrl(argv);
+  return protocolScheme;
+}
 
 /**
- * Parse an aionui:// URL into action and params.
+ * Parse a URL for the configured desktop protocol into action and params.
  * Supports two formats:
  *   1. aionui://add-provider?base_url=xxx&api_key=xxx
  *   2. aionui://provider/add?v=1&data=<base64 JSON>  (one-api / new-api style)
@@ -18,7 +34,7 @@ export const PROTOCOL_SCHEME = 'aionui';
 export const parseDeepLinkUrl = (url: string): { action: string; params: Record<string, string> } | null => {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== `${PROTOCOL_SCHEME}:`) return null;
+    if (parsed.protocol !== `${protocolScheme}:`) return null;
 
     const hostname = parsed.hostname || '';
     const pathname = parsed.pathname.replace(/^\/+/, '');
@@ -49,7 +65,6 @@ export const parseDeepLinkUrl = (url: string): { action: string; params: Record<
 };
 
 let mainWindowRef: BrowserWindow | null = null;
-let pendingDeepLinkUrl: string | null = process.argv.find((arg) => arg.startsWith(`${PROTOCOL_SCHEME}://`)) || null;
 
 export const setDeepLinkMainWindow = (win: BrowserWindow): void => {
   mainWindowRef = win;

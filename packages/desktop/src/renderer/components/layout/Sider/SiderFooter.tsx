@@ -68,6 +68,7 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
         <Tooltip {...siderTooltipProps} content={isSettings ? t('common.back') : t('common.settings')} position='right'>
           <div
             onClick={onSettingsClick}
+            data-sider-nav-selected={isSettings ? 'true' : 'false'}
             className={classNames(
               'group h-34px flex items-center rd-0.5rem cursor-pointer transition-colors',
               collapsed ? 'w-full justify-center' : 'flex-1 min-w-0 justify-start gap-8px pl-10px pr-8px',
@@ -78,7 +79,9 @@ const SiderFooter: React.FC<SiderFooterProps> = ({
               }
             )}
           >
-            <span className='size-22px flex items-center justify-center shrink-0 text-t-secondary'>{settingsIcon}</span>
+            <span className='sider-nav__icon size-22px flex items-center justify-center shrink-0 text-t-secondary'>
+              {settingsIcon}
+            </span>
             <span className='collapsed-hidden text-t-primary text-14px font-[500] leading-24px truncate'>
               {isSettings ? t('common.back') : t('common.settings')}
             </span>

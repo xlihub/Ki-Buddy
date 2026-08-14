@@ -7,6 +7,8 @@
 import { Alert, Button, Link, Space, Typography } from '@arco-design/web-react';
 import { IconExclamationCircle } from '@arco-design/web-react/icon';
 import React from 'react';
+import { getRendererBrand } from '@/renderer/services/runtime/productBrandRuntime';
+import { useTranslation } from 'react-i18next';
 
 const { Paragraph, Text } = Typography;
 
@@ -26,70 +28,72 @@ export const ChannelConflictWarning: React.FC<ChannelConflictWarningProps> = ({
   onDisableOpenClaw,
   onIgnore,
 }) => {
+  const { t } = useTranslation();
   const platformName = platform === 'lark' ? 'Lark/Feishu' : 'Telegram';
   const channelKey = platform === 'lark' ? 'feishu' : 'telegram';
+  const productName = getRendererBrand().productName;
 
   return (
     <Alert
       type='warning'
       icon={<IconExclamationCircle />}
-      title={`${platformName} Channel Conflict Detected`}
+      title={t('agent.channelConflict.title', { platformName })}
       content={
         <Space direction='vertical' size='medium' style={{ width: '100%' }}>
           <Paragraph>
-            <Text bold>OpenClaw is handling {platformName} messages, not AionUi.</Text>
+            <Text bold>{t('agent.channelConflict.handling', { platformName, productName })}</Text>
           </Paragraph>
 
           <Paragraph>
-            Your {platformName} bot credentials are also configured in OpenClaw. This means:
+            {t('agent.channelConflict.credentialsIntro', { platformName })}
             <ul>
               <li>
-                <Text type='error'>✗ Switching agents in AionUi will have no effect</Text>
+                <Text type='error'>{t('agent.channelConflict.switchingNoEffect', { productName })}</Text>
               </li>
               <li>
-                <Text type='error'>✗ Messages are processed by OpenClaw's agent</Text>
+                <Text type='error'>{t('agent.channelConflict.messagesProcessed')}</Text>
               </li>
               <li>
-                <Text type='success'>✓ Messages still work (via OpenClaw)</Text>
+                <Text type='success'>{t('agent.channelConflict.messagesStillWork')}</Text>
               </li>
             </ul>
           </Paragraph>
 
           <Paragraph>
-            <Text bold>To use AionUi Channels and switch agents:</Text>
+            <Text bold>{t('agent.channelConflict.useChannels', { productName })}</Text>
           </Paragraph>
 
           <Paragraph>
-            <Text type='secondary'>Option 1: Disable OpenClaw {platformName} (Recommended)</Text>
+            <Text type='secondary'>{t('agent.channelConflict.optionDisable', { platformName })}</Text>
             <br />
-            Edit: <Text code>{openclawConfigPath}</Text>
+            {t('agent.channelConflict.edit')} <Text code>{openclawConfigPath}</Text>
             <br />
-            Set: <Text code>{`channels.${channelKey}.enabled = false`}</Text>
+            {t('agent.channelConflict.set')} <Text code>{`channels.${channelKey}.enabled = false`}</Text>
             <br />
-            Then restart OpenClaw and AionUi.
+            {t('agent.channelConflict.restart', { productName })}
           </Paragraph>
 
           <Paragraph>
-            <Text type='secondary'>Option 2: Use a different bot</Text>
+            <Text type='secondary'>{t('agent.channelConflict.optionDifferentBot')}</Text>
             <br />
-            Create a new {platformName} bot with different credentials for AionUi.
+            {t('agent.channelConflict.createDifferentBot', { platformName, productName })}
           </Paragraph>
 
           <Paragraph>
-            <Text type='secondary'>Option 3: Keep using OpenClaw</Text>
+            <Text type='secondary'>{t('agent.channelConflict.optionKeepOpenClaw')}</Text>
             <br />
-            Disable {platformName} in AionUi Channels and continue using OpenClaw's integration.
+            {t('agent.channelConflict.disableChannels', { platformName, productName })}
           </Paragraph>
 
           <Space>
             {onDisableOpenClaw && (
               <Button type='primary' onClick={onDisableOpenClaw}>
-                Help me disable OpenClaw {platformName}
+                {t('agent.channelConflict.helpDisable', { platformName })}
               </Button>
             )}
             {onIgnore && (
               <Button type='text' onClick={onIgnore}>
-                Ignore (I know what I'm doing)
+                {t('agent.channelConflict.ignore')}
               </Button>
             )}
           </Space>
@@ -108,6 +112,7 @@ export const ChannelConflictBanner: React.FC<{ platform: 'lark' | 'telegram'; on
   platform,
   onLearnMore,
 }) => {
+  const { t } = useTranslation();
   const platformName = platform === 'lark' ? 'Lark/Feishu' : 'Telegram';
 
   return (
@@ -115,8 +120,8 @@ export const ChannelConflictBanner: React.FC<{ platform: 'lark' | 'telegram'; on
       type='warning'
       content={
         <Space>
-          <Text>⚠️ OpenClaw {platformName} conflict detected - Agent switching won't work.</Text>
-          <Link onClick={onLearnMore}>Learn more</Link>
+          <Text>{t('agent.channelConflict.banner', { platformName })}</Text>
+          <Link onClick={onLearnMore}>{t('agent.channelConflict.learnMore')}</Link>
         </Space>
       }
       closable

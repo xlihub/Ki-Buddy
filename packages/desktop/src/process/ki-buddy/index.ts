@@ -8,6 +8,7 @@ import type { SupportedLanguage } from '@/common/config/i18n';
 import {
   KI_BUDDY_CORE_TRANSPORT_CHANNEL,
   KI_BUDDY_DEFAULT_LANGUAGE,
+  KI_BUDDY_PRODUCT_CONFIG,
   resolveLanguagePreference,
 } from '@/common/platform/ki-buddy';
 import { registerKiBuddyAuthBridge } from './authBridge';
@@ -16,14 +17,23 @@ import { createKiBuddyCoreAuthOptions, type KiBuddyCoreAuthOptions } from './boo
 import { resolveKiBuddyCoreDataPath } from './coreDataPath';
 import { KiBuddyMainCoreTransport } from './KiBuddyMainCoreTransport';
 import { KI_BUDDY_PRODUCT_RUNTIME, readKiBuddyRuntimeIdentity, shouldEnableKiBuddyRuntime } from './runtimeIdentity';
+import { createKiBuddyUpdateBridgeConfiguration, createKiBuddyUpdateFeedConfiguration } from './update/updateFeed';
+import type { UpdateBridgeConfiguration } from '@process/bridge/updateBridge';
+import type { UpdateFeedConfiguration } from '@process/services/updateFeed';
 
 export type KiBuddyRuntime = {
+  brand: {
+    iconPath: string;
+    productName: string;
+  };
   coreAuthOptions: KiBuddyCoreAuthOptions;
   coreTransportChannel: typeof KI_BUDDY_CORE_TRANSPORT_CHANNEL;
   productIdentity: typeof KI_BUDDY_PRODUCT_RUNTIME;
   registerAuthBridge: (getCoreBaseUrl: () => string) => AgentsAuthService;
   resolveDataPath: (dataPath: string) => string;
   resolveLanguage: (savedLanguage: string | null | undefined, systemLanguage: string | null) => SupportedLanguage;
+  updateBridge: UpdateBridgeConfiguration;
+  updateFeed: UpdateFeedConfiguration;
 };
 
 /** Creates and installs the main-process Ki-Buddy runtime when explicit product metadata selects it. */
@@ -44,6 +54,10 @@ export function createKiBuddyRuntime(options: {
   coreTransport.install();
 
   return {
+    brand: {
+      iconPath: KI_BUDDY_PRODUCT_CONFIG.assets.packaged.icon,
+      productName: KI_BUDDY_PRODUCT_CONFIG.brand.productName,
+    },
     coreAuthOptions,
     coreTransportChannel: KI_BUDDY_CORE_TRANSPORT_CHANNEL,
     productIdentity: KI_BUDDY_PRODUCT_RUNTIME,
@@ -60,7 +74,9 @@ export function createKiBuddyRuntime(options: {
         productLanguage: KI_BUDDY_DEFAULT_LANGUAGE,
         systemLanguage,
       }),
+    updateBridge: createKiBuddyUpdateBridgeConfiguration(),
+    updateFeed: createKiBuddyUpdateFeedConfiguration(),
   };
 }
 
-export { shouldEnsureDefaultCoreUser } from './runtimeIdentity';
+export { resolveKiBuddyProtocolScheme, shouldEnsureDefaultCoreUser } from './runtimeIdentity';

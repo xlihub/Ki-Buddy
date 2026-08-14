@@ -20,6 +20,17 @@ let closeToTrayEnabled = false;
 let isQuitting = false;
 let mainWindowRef: BrowserWindow | null = null;
 let cachedActiveCount = 0;
+let trayBrand = { iconPath: 'app.png', productName: 'AionUi' };
+
+/** Replaces the upstream product name in tray locale text with the selected product name. */
+export function formatTrayBrandText(text: string, productName: string): string {
+  return text.replaceAll('AionUi', productName);
+}
+
+/** Configures the generic tray surface from the selected product runtime. */
+export function configureTrayBrand(brand: { iconPath: string; productName: string }): void {
+  trayBrand = brand;
+}
 
 export const setTrayMainWindow = (win: BrowserWindow): void => {
   mainWindowRef = win;
@@ -84,7 +95,7 @@ export const toggleMainWindowFromTray = (): void => {
  */
 const getTrayIcon = (): Electron.NativeImage => {
   const resourcesPath = app.isPackaged ? process.resourcesPath : path.join(process.cwd(), 'resources');
-  const icon = nativeImage.createFromPath(path.join(resourcesPath, 'app.png'));
+  const icon = nativeImage.createFromPath(path.join(resourcesPath, trayBrand.iconPath));
   if (process.platform === 'darwin') {
     return icon.resize({ width: 16, height: 16 });
   }
@@ -114,7 +125,7 @@ const buildTrayContextMenu = async (): Promise<Electron.Menu> => {
 
   const template: Electron.MenuItemConstructorOptions[] = [
     {
-      label: i18n.t('common.tray.showWindow'),
+      label: formatTrayBrandText(i18n.t('common.tray.showWindow'), trayBrand.productName),
       click: showAndFocusMainWindow,
     },
     {
@@ -226,7 +237,7 @@ const buildTrayContextMenu = async (): Promise<Electron.Menu> => {
   });
   template.push({ type: 'separator' });
   template.push({
-    label: i18n.t('common.tray.about'),
+    label: formatTrayBrandText(i18n.t('common.tray.about'), trayBrand.productName),
     click: () => {
       showAndFocusMainWindow();
       mainWindowRef?.webContents.send('tray:open-about');
@@ -262,7 +273,7 @@ export const createOrUpdateTray = (): void => {
   try {
     const icon = getTrayIcon();
     tray = new Tray(icon);
-    tray.setToolTip('AionUi');
+    tray.setToolTip(trayBrand.productName);
     void buildTrayContextMenu().then((menu) => tray?.setContextMenu(menu));
 
     // Double-click: always show/focus (Windows/Linux; macOS rarely fires this).

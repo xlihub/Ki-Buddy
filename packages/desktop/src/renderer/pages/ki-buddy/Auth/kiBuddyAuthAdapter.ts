@@ -2,7 +2,7 @@ import type { AuthHandlerFactory, AuthHandlers, LoginResult } from '@/renderer/h
 import { getKiBuddyRendererRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
 import type { KiBuddyAgentsProfile } from '@/common/types/platform/kiBuddyAuth';
 import { configService } from '@/common/config/configService';
-import { normalizeKiBuddyLoginErrorCode, type KiBuddyLoginErrorCode } from '../loginErrors';
+import { normalizeKiBuddyLoginErrorCode, type KiBuddyLoginErrorCode } from '../Login/loginErrors';
 
 export type KiBuddyLoginParams = {
   baseUrl: string;

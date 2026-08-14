@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { getRendererBrand } from '@/renderer/services/runtime/productBrandRuntime';
 import {
   createBrowserNotificationController,
   shouldShowNotification,
@@ -24,6 +25,7 @@ import {
 export const useBrowserNotification = (): void => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { productName } = getRendererBrand();
 
   useEffect(() => {
     if (isElectronDesktop()) return;
@@ -54,12 +56,12 @@ export const useBrowserNotification = (): void => {
           : t('settings.browserNotification.bodyTurnCompleted'),
       show: ({ body, conversationId }) => {
         try {
-          const notification = new Notification('AionUi', { body });
-          notification.onclick = () => {
+          const notification = new Notification(productName, { body });
+          notification.addEventListener('click', () => {
             window.focus();
             if (conversationId) void navigate(`/conversation/${conversationId}`);
             notification.close();
-          };
+          });
         } catch (error) {
           console.error('[useBrowserNotification] Failed to show notification:', error);
         }
@@ -70,5 +72,5 @@ export const useBrowserNotification = (): void => {
     return () => {
       disposeStream();
     };
-  }, [navigate, t]);
+  }, [navigate, productName, t]);
 };

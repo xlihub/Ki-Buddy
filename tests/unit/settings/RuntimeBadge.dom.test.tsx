@@ -8,6 +8,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 const resolveAgentLogoMock = vi.fn();
 
@@ -47,6 +48,7 @@ describe('RuntimeBadge', () => {
   beforeEach(() => {
     resolveAgentLogoMock.mockReset();
     resolveAgentLogoMock.mockReturnValue(null);
+    window.__kiBuddyProductPresentation = null;
   });
 
   it('renders the runtime label by default and hides it when showLabel is false', () => {
@@ -81,6 +83,17 @@ describe('RuntimeBadge', () => {
     const img = badge.querySelector('img');
     expect(img).not.toBeNull();
     expect(img?.getAttribute('src')).toBe('http://127.0.0.1/logo.png');
+  });
+
+  it('uses the Ki-Buddy logo for the internal CLI runtime', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    resolveAgentLogoMock.mockReturnValue('/api/assets/logos/aionui.svg');
+
+    render(<RuntimeBadge assistant={makeAssistant({ id: 'ki-cli', agent: { type: 'aionrs', source: 'internal' } })} />);
+
+    expect(screen.getByTestId('assistant-runtime-ki-cli').querySelector('img')?.getAttribute('src')).toMatch(
+      /^data:image\/png;base64,/
+    );
   });
 
   it('falls back to the robot icon when no logo resolves', () => {

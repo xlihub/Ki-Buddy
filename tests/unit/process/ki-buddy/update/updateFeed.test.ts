@@ -1,0 +1,30 @@
+import { describe, expect, it } from 'vitest';
+import { KiBuddyGitHubProvider } from '@/process/ki-buddy/update/githubUpdateProvider';
+import {
+  createKiBuddyUpdateBridgeConfiguration,
+  createKiBuddyUpdateFeedConfiguration,
+} from '@/process/ki-buddy/update/updateFeed';
+
+describe('Ki-Buddy update feed', () => {
+  it('uses the product-owned custom provider and tag namespace', () => {
+    expect(createKiBuddyUpdateFeedConfiguration()).toEqual({
+      feedOptions: {
+        owner: 'xlihub',
+        provider: 'custom',
+        repo: 'Ki-Buddy',
+        tagPrefix: 'ki-buddy-v',
+        updateProvider: KiBuddyGitHubProvider,
+      },
+      label: 'Ki-Buddy GitHub provider',
+      updaterCacheDirName: 'com.xlihub.ki-buddy',
+    });
+  });
+
+  it('uses the same product tag namespace for manual checks', () => {
+    expect(createKiBuddyUpdateBridgeConfiguration()).toMatchObject({
+      allowRepositoryOverride: false,
+      repository: 'xlihub/Ki-Buddy',
+      tagPrefix: 'ki-buddy-v',
+    });
+  });
+});

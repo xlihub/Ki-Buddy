@@ -13,6 +13,11 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 const rootPackageJson = JSON.parse(readFileSync(resolve(__dirname, '../../package.json'), 'utf-8')) as {
   version: string;
 };
+const kiBuddyProductVersion = readFileSync(resolve(__dirname, '../../ki-buddy-version.txt'), 'utf-8').trim();
+
+if (!kiBuddyProductVersion) {
+  throw new Error('Ki-Buddy product version must not be empty');
+}
 
 // Build builtin MCP servers after main process bundle so they survive out/main/ cleanup.
 function buildMcpServersPlugin() {
@@ -306,6 +311,9 @@ export default defineConfig(({ mode }) => {
         // can show it without importing packages/desktop/package.json, which is
         // a workspace-internal placeholder frozen at "0.0.0".
         __APP_VERSION__: JSON.stringify(rootPackageJson.version),
+        // Ki-Buddy packages use an independent release version. Renderer code
+        // selects this value only when the explicit product capability exists.
+        __KI_BUDDY_VERSION__: JSON.stringify(kiBuddyProductVersion),
         // Renderer-side discontinued-build flag; consumed via discontinuedBuild.ts.
         __IS_DISCONTINUED_BUILD__: JSON.stringify(process.env.IS_DISCONTINUED_BUILD === 'true'),
         global: 'globalThis',

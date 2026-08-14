@@ -30,13 +30,16 @@ vi.mock('@/common', () => ({
 
 vi.mock('@/renderer/utils/model/agentTypes', () => ({
   MANAGED_AGENTS_SWR_KEY: 'agents.managed',
-  fetchManagedAgents: vi.fn(),
+}));
+
+vi.mock('@/renderer/services/runtime/productBrandRuntime', () => ({
+  fetchProductManagedAgents: vi.fn(),
 }));
 
 import { getManagedAgents, useManagedAgents } from '@/renderer/hooks/agent/useManagedAgents';
 import { ipcBridge } from '@/common';
 import useSWR, { mutate } from 'swr';
-import { fetchManagedAgents } from '@/renderer/utils/model/agentTypes';
+import { fetchProductManagedAgents } from '@/renderer/services/runtime/productBrandRuntime';
 
 describe('useManagedAgents', () => {
   beforeEach(() => {
@@ -48,7 +51,7 @@ describe('useManagedAgents', () => {
 
     renderHook(() => useManagedAgents());
 
-    expect(useSWR).toHaveBeenCalledWith('agents.managed', fetchManagedAgents);
+    expect(useSWR).toHaveBeenCalledWith('agents.managed', fetchProductManagedAgents);
   });
 
   it('exposes the agents returned by SWR', () => {
@@ -114,11 +117,11 @@ describe('useManagedAgents', () => {
     const managedAgents = [
       { id: 'managed-1', name: 'Managed Agent', agent_type: 'acp', agent_source: 'builtin', enabled: true },
     ];
-    (fetchManagedAgents as any).mockResolvedValue(managedAgents);
+    (fetchProductManagedAgents as any).mockResolvedValue(managedAgents);
 
     const result = await getManagedAgents();
 
-    expect(fetchManagedAgents).toHaveBeenCalledTimes(1);
+    expect(fetchProductManagedAgents).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledWith('agents.managed', managedAgents, { revalidate: false });
     expect(mutate).not.toHaveBeenCalledWith('agents.detected');
     expect(result).toEqual(managedAgents);

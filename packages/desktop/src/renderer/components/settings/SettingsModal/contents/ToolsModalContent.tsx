@@ -33,6 +33,7 @@ import {
   setClientBusinessSetting,
 } from '@/renderer/services/clientBusinessSettings';
 import classNames from 'classnames';
+import { getProductDocumentationUrl } from '@/renderer/services/runtime/productBrandRuntime';
 import { useSettingsTabNavigate, useSettingsViewMode } from '../settingsViewContext';
 
 type MessageInstance = ReturnType<typeof Message.useMessage>[0];
@@ -267,6 +268,9 @@ const ModalMcpManagementSection: React.FC<{
 };
 
 const ToolsModalContent: React.FC = () => {
+  const imageGenerationGuideUrl = getProductDocumentationUrl(
+    'https://github.com/iOfficeAI/AionUi/wiki/AionUi-Image-Generation-Tool-Model-Configuration-Guide'
+  );
   const { t } = useTranslation();
   const [rawMcpMessage, mcpMessageContext] = Message.useMessage({ maxCount: 10 });
   // ELECTRON-1A1: guard message calls so async MCP callbacks that resolve after this
@@ -588,7 +592,7 @@ const ToolsModalContent: React.FC = () => {
                         <div>
                           {t('settings.needHelpTooltip')}
                           <a
-                            href='https://github.com/iOfficeAI/AionUi/wiki/AionUi-Image-Generation-Tool-Model-Configuration-Guide'
+                            href={imageGenerationGuideUrl}
                             target='_blank'
                             rel='noopener noreferrer'
                             className='text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] underline ml-4px'
@@ -600,7 +604,7 @@ const ToolsModalContent: React.FC = () => {
                       }
                     >
                       <a
-                        href='https://github.com/iOfficeAI/AionUi/wiki/AionUi-Image-Generation-Tool-Model-Configuration-Guide'
+                        href={imageGenerationGuideUrl}
                         target='_blank'
                         rel='noopener noreferrer'
                         className='ml-8px text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] cursor-pointer'

@@ -12,6 +12,7 @@ import { AionSearchInput } from '@/renderer/components/base';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useManagedAgents } from '@/renderer/hooks/agent/useManagedAgents';
 import { openExternalUrl } from '@/renderer/utils/platform';
+import { getProductDocumentationUrl } from '@/renderer/services/runtime/productBrandRuntime';
 import { Button, Message, Typography } from '@arco-design/web-react';
 import TalkToButlerButton from '@/renderer/components/base/TalkToButlerButton';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -32,6 +33,7 @@ const LOCAL_AGENT_SETUP_GUIDE_URL = 'https://github.com/iOfficeAI/AionUi/wiki/AC
 
 const LocalAgents: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const localAgentSetupGuideUrl = getProductDocumentationUrl(LOCAL_AGENT_SETUP_GUIDE_URL);
   const navigate = useNavigate();
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
@@ -221,7 +223,7 @@ const LocalAgents: React.FC = () => {
               size='mini'
               className='!h-auto !p-0 !align-baseline !text-13px !font-normal !text-primary-6 hover:!text-primary-7 hover:!underline underline-offset-2'
               onClick={() => {
-                void openExternalUrl(LOCAL_AGENT_SETUP_GUIDE_URL).catch(console.error);
+                void openExternalUrl(localAgentSetupGuideUrl).catch(console.error);
               }}
             >
               {t('settings.agentManagement.localAgentsSetupLink')}

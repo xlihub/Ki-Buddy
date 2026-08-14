@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KI_BUDDY_LOGIN_ERROR_KEYS, normalizeKiBuddyLoginErrorCode } from '@/renderer/pages/ki-buddy/loginErrors';
+import { KI_BUDDY_LOGIN_ERROR_KEYS, normalizeKiBuddyLoginErrorCode } from '@/renderer/pages/ki-buddy/Login/loginErrors';
 
 describe('Ki-Buddy login error normalization', () => {
   it.each(['contractError', 'invalidCredentials', 'networkError', 'serverError'])(

@@ -14,6 +14,7 @@ import { createKiBuddyAccountSwitchBarrier } from '@/renderer/pages/ki-buddy/Aut
 import { configService } from '@/common/config/configService';
 import { httpRequest, setHttpRequestTransport } from '@/common/adapter/httpBridge';
 import { installKiBuddyRendererCoreTransport } from '@/renderer/pages/ki-buddy/Auth/coreTransport';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 const getSessionMock = vi.fn();
 const loginMock = vi.fn();
@@ -78,6 +79,7 @@ describe('Ki-Buddy product authentication context', () => {
         onSessionInvalidated: onSessionInvalidatedMock,
       },
     };
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
     configService.reset();
     setHttpRequestTransport(null);
   });
@@ -307,6 +309,7 @@ describe('Ki-Buddy product authentication context', () => {
 
   it('preserves ordinary AionUi desktop authentication when the product capability is absent', async () => {
     window.electronAPI = { ...window.electronAPI, kiBuddyAuth: undefined };
+    window.__kiBuddyProductPresentation = null;
     const fetchMock = vi.fn<typeof fetch>();
     vi.stubGlobal('fetch', fetchMock);
     configService.setLocal('language', 'en-US');

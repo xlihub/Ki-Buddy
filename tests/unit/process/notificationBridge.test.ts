@@ -4,10 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'path';
 
 let notificationEnabled: boolean | undefined = true;
 const clickedEmit = vi.fn();
 const platformSend = vi.fn();
+const fsFixture = vi.hoisted(() => ({ iconExists: false }));
 
 // Defined via vi.hoisted so the hoisted vi.mock factory can reference the class
 // at evaluation time without a temporal-dead-zone error.
@@ -51,9 +53,16 @@ vi.mock('@/common/electronSafe', () => ({
   electronNotification: FakeElectronNotification,
 }));
 
-vi.mock('fs', () => ({ default: { existsSync: () => false }, existsSync: () => false }));
+vi.mock('fs', () => ({
+  default: { existsSync: () => fsFixture.iconExists },
+  existsSync: () => fsFixture.iconExists,
+}));
 
-import { showNotification, setNotificationMainWindow } from '@/process/bridge/notificationBridge';
+import {
+  configureNotificationBrandIcon,
+  showNotification,
+  setNotificationMainWindow,
+} from '@/process/bridge/notificationBridge';
 
 const makeWindow = (focused: boolean) => ({
   isDestroyed: () => false,
@@ -69,6 +78,8 @@ beforeEach(() => {
   clickedEmit.mockClear();
   platformSend.mockClear();
   FakeElectronNotification.instances.length = 0;
+  fsFixture.iconExists = false;
+  configureNotificationBrandIcon('app.png');
 });
 
 describe('showNotification', () => {
@@ -83,6 +94,18 @@ describe('showNotification', () => {
     setNotificationMainWindow(makeWindow(true) as never);
     await showNotification({ title: 'AionUi', body: 'done', conversation_id: 'c1' });
     expect(FakeElectronNotification.instances).toHaveLength(0);
+  });
+
+  it('uses the configured product icon for a native notification', async () => {
+    fsFixture.iconExists = true;
+    configureNotificationBrandIcon('ki-buddy/app.png');
+    setNotificationMainWindow(makeWindow(false) as never);
+
+    await showNotification({ title: 'Ki-Buddy', body: 'done', conversation_id: 'c1' });
+
+    expect(FakeElectronNotification.instances[0].options.icon).toBe(
+      path.join(process.cwd(), 'resources', 'ki-buddy', 'app.png')
+    );
   });
 
   it('does not notify when the setting is disabled', async () => {

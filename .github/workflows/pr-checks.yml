@@ -446,6 +446,18 @@ jobs:
               ;;
           esac
 
+      - name: Verify Ki-Buddy unpacked product identity
+        shell: bash
+        run: |
+          case "${{ matrix.platform }}" in
+            macos-*) PRODUCT_PLATFORM=darwin ;;
+            windows-*) PRODUCT_PLATFORM=win32 ;;
+            linux-*) PRODUCT_PLATFORM=linux ;;
+          esac
+          node packages/shared-scripts/src/kiBuddyUnpacked.js \
+            --platform "$PRODUCT_PLATFORM" \
+            --path "out/${{ matrix.unpacked_dir }}"
+
       - name: Silent install smoke test (Windows x64)
         if: matrix.platform == 'windows-x64'
         shell: pwsh

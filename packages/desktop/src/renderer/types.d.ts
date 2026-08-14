@@ -13,6 +13,11 @@ declare module '*.png' {
   export default content;
 }
 
+declare module '*.png?inline' {
+  const content: string;
+  export default content;
+}
+
 declare module '*?raw' {
   const content: string;
   export default content;

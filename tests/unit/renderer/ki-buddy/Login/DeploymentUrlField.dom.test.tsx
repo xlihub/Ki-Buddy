@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import React, { useState } from 'react';
 import { describe, expect, it } from 'vitest';
-import DeploymentUrlField from '@/renderer/pages/ki-buddy/DeploymentUrlField';
+import DeploymentUrlField from '@/renderer/pages/ki-buddy/Login/DeploymentUrlField';
 
 const history = {
   lastSuccessful: 'https://agents-two.example.com',
@@ -27,6 +27,9 @@ describe('DeploymentUrlField', () => {
   it('clears a populated deployment URL from the trailing control', () => {
     render(<TestField />);
 
+    expect(screen.getByLabelText('Deployment URL').closest('.arco-input-inner-wrapper')).toHaveClass(
+      'arco-input-inner-wrapper-large'
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Clear deployment URL' }));
     expect(screen.getByLabelText('Deployment URL')).toHaveValue('');
     expect(screen.queryByRole('button', { name: 'Clear deployment URL' })).not.toBeInTheDocument();

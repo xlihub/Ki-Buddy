@@ -21,6 +21,12 @@ import fs from 'fs';
 
 // Main window reference, used to gate on focus and to focus + navigate on click.
 let mainWindowRef: BrowserWindow | null = null;
+let notificationBrandIconPath = 'app.png';
+
+/** Selects the packaged icon used by system notifications for the active product. */
+export function configureNotificationBrandIcon(iconPath: string): void {
+  notificationBrandIconPath = iconPath;
+}
 
 export const setNotificationMainWindow = (win: BrowserWindow): void => {
   mainWindowRef = win;
@@ -34,7 +40,7 @@ const getNotificationIcon = (): string | undefined => {
     const resourcesPath = getPlatformServices().paths.isPackaged()
       ? process.resourcesPath
       : path.join(process.cwd(), 'resources');
-    const iconPath = path.join(resourcesPath, 'app.png');
+    const iconPath = path.join(resourcesPath, notificationBrandIconPath);
     if (fs.existsSync(iconPath)) {
       return iconPath;
     }

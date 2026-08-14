@@ -217,6 +217,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
               <div
                 data-settings-id={item.id}
                 data-settings-path={item.path}
+                data-selected={isSelected ? 'true' : 'false'}
                 className={classNames(
                   'settings-sider__item h-34px rd-8px flex items-center gap-8px group cursor-pointer relative overflow-hidden shrink-0 conversation-item [&.conversation-item+&.conversation-item]:mt-2px transition-colors',
                   collapsed ? 'w-full justify-center px-0' : 'justify-start px-10px',
@@ -232,7 +233,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
                 }}
               >
                 {/* Leading icon — 22px slot to align with main sider rows */}
-                <span className='size-22px flex items-center justify-center shrink-0 line-height-0'>
+                <span className='settings-sider__item-icon size-22px flex items-center justify-center shrink-0 line-height-0'>
                   {item.isImageIcon ? (
                     <span className='w-16px h-16px flex items-center justify-center'>{item.icon}</span>
                   ) : (

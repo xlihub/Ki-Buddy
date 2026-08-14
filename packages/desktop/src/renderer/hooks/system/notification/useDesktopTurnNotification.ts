@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { getRendererBrand } from '@/renderer/services/runtime/productBrandRuntime';
 import { createBrowserNotificationController } from './browserNotificationCore';
 
 /**
@@ -26,6 +27,7 @@ import { createBrowserNotificationController } from './browserNotificationCore';
  */
 export const useDesktopTurnNotification = (): void => {
   const { t } = useTranslation();
+  const { productName } = getRendererBrand();
 
   useEffect(() => {
     if (!isElectronDesktop()) return;
@@ -44,7 +46,7 @@ export const useDesktopTurnNotification = (): void => {
       show: ({ body, conversationId, kind }) => {
         // This issue scopes desktop notifications to turn completion only.
         if (kind !== 'turnCompleted') return;
-        void ipcBridge.notification.show.invoke({ title: 'AionUi', body, conversation_id: conversationId });
+        void ipcBridge.notification.show.invoke({ title: productName, body, conversation_id: conversationId });
       },
     });
 
@@ -52,5 +54,5 @@ export const useDesktopTurnNotification = (): void => {
     return () => {
       disposeStream();
     };
-  }, [t]);
+  }, [productName, t]);
 };

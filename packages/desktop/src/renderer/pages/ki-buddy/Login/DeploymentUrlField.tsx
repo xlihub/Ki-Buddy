@@ -40,6 +40,7 @@ const DeploymentUrlField: React.FC<DeploymentUrlFieldProps> = ({
       id,
       'aria-label': inputLabel,
       autoComplete: 'url',
+      size: 'large',
       suffix:
         value && !disabled ? (
           <Button

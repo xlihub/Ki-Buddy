@@ -1,0 +1,518 @@
+.shell {
+  min-height: 100vh;
+  width: 100vw;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 560px);
+  overflow: hidden;
+  color: var(--ki-color-text-primary);
+  background: var(--ki-component-login-canvas-bg);
+}
+
+.brandStage {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: clamp(40px, 4.5vw, 76px);
+  color: var(--ki-component-login-brand-fg);
+  background: var(--ki-component-login-brand-bg);
+  box-shadow: var(--ki-component-login-brand-shadow);
+}
+
+.brandStage::before,
+.brandStage::after,
+.orbitLarge,
+.orbitSmall {
+  position: absolute;
+  z-index: -1;
+  border: 1px solid var(--ki-component-login-brand-line);
+  border-radius: 50%;
+  content: '';
+  pointer-events: none;
+}
+
+.brandStage::before {
+  width: min(60vw, 720px);
+  aspect-ratio: 1;
+  inset: -36% auto auto -42%;
+  transform-origin: 70% 70%;
+  animation: brand-arc-diffuse 19s ease-in-out -3s infinite;
+}
+
+.brandStage::after {
+  width: min(42vw, 520px);
+  aspect-ratio: 1;
+  inset: auto -34% -28% auto;
+  background: var(--ki-component-login-brand-soft);
+  transform-origin: 32% 30%;
+  animation: brand-arc-collision 17s ease-in-out -7s infinite;
+}
+
+.orbitLarge {
+  width: clamp(280px, 34vw, 520px);
+  aspect-ratio: 1;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -58%);
+  animation: orbit-collision-large 13s ease-in-out -2s infinite;
+}
+
+.orbitSmall {
+  width: clamp(200px, 25vw, 380px);
+  aspect-ratio: 1;
+  inset: 50% auto auto 50%;
+  border-color: var(--ki-component-login-brand-line-strong);
+  transform: translate(-50%, -62%);
+  animation: orbit-collision-small 11s ease-in-out -5s infinite;
+}
+
+.brandContent {
+  width: min(470px, 100%);
+  display: grid;
+  justify-items: start;
+  gap: clamp(22px, 4vh, 36px);
+  animation: brand-enter 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.mascotFrame {
+  width: clamp(160px, 18vw, 230px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ki-component-login-brand-line-strong);
+  border-radius: 50%;
+  background: var(--ki-component-login-brand-soft);
+  box-shadow: var(--ki-component-login-mascot-shadow);
+}
+
+.mascot {
+  width: 92%;
+  height: 92%;
+  display: block;
+  object-fit: contain;
+  animation: mascot-enter 0.8s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.brandCopy {
+  position: relative;
+  max-width: 420px;
+  padding-left: 18px;
+}
+
+.brandCopy::before {
+  position: absolute;
+  width: 4px;
+  inset: 4px auto 4px 0;
+  border-radius: 999px;
+  background: var(--ki-component-login-brand-marker);
+  content: '';
+}
+
+.brandTitle {
+  margin: 0 0 14px !important;
+  color: inherit !important;
+  font-size: clamp(40px, 4vw, 58px) !important;
+  font-weight: 760 !important;
+  letter-spacing: -0.055em;
+  line-height: 0.95 !important;
+}
+
+.brandTagline {
+  max-width: 390px;
+  margin: 0 0 12px !important;
+  color: inherit !important;
+  font-size: clamp(18px, 1.7vw, 24px) !important;
+  line-height: 1.3 !important;
+}
+
+.brandDescription {
+  max-width: 400px;
+  margin: 0 !important;
+  color: var(--ki-component-login-brand-muted-fg) !important;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.wordmark {
+  position: absolute;
+  inset: auto auto -0.15em -0.04em;
+  color: var(--ki-component-login-brand-wordmark);
+  font-size: clamp(72px, 11vw, 160px);
+  font-weight: 800;
+  letter-spacing: -0.08em;
+  line-height: 0.8;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+.formStage {
+  --login-card-offset-y: -56px;
+
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: clamp(48px, 8vw, 112px);
+  background: var(--ki-component-login-panel-bg);
+}
+
+.formFrame {
+  box-sizing: border-box;
+  width: min(480px, 100%);
+  padding: 40px;
+  border: 1px solid var(--ki-component-login-card-border);
+  border-radius: 22px;
+  background: var(--ki-component-login-card-bg);
+  box-shadow: var(--ki-component-login-card-shadow);
+  translate: 0 var(--login-card-offset-y);
+  animation: form-enter 0.65s 0.16s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.logo {
+  width: 52px;
+  height: 52px;
+  display: block;
+  margin-bottom: 32px;
+  border-radius: 14px;
+  box-shadow: var(--ki-component-login-logo-shadow);
+}
+
+.formTitle {
+  margin: 0 0 36px !important;
+  color: var(--ki-color-text-primary) !important;
+  font-size: clamp(28px, 3vw, 38px) !important;
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+}
+
+.form :global(.arco-form-label-item) {
+  color: var(--ki-color-text-primary);
+  font-weight: 600;
+}
+
+.form :global(.arco-input-wrapper),
+.form :global(.arco-input-inner-wrapper) {
+  min-height: 48px;
+  border-radius: 12px;
+  background: var(--ki-component-login-field-bg);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.form :global(.arco-input-wrapper-focus),
+.form :global(.arco-input-inner-wrapper-focus) {
+  border-color: var(--ki-color-focus-ring);
+  background: var(--ki-component-login-field-focus-bg);
+  box-shadow: 0 0 0 3px var(--ki-component-login-focus-shadow);
+}
+
+.form :global(.arco-form-item) {
+  margin-bottom: 22px;
+}
+
+.submit {
+  min-height: 48px;
+  margin-top: 4px;
+  border-radius: 12px;
+  font-weight: 650;
+  box-shadow: var(--ki-component-login-submit-shadow);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.submit:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--ki-component-login-submit-shadow-hover);
+}
+
+@keyframes brand-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mascot-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.92) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes form-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes brand-arc-diffuse {
+  0%,
+  100% {
+    translate: -3% -2%;
+    scale: 0.96;
+  }
+  26% {
+    translate: 5% 4%;
+    scale: 1.04;
+  }
+  29% {
+    translate: 3% 2%;
+    scale: 1.01;
+  }
+  57% {
+    translate: -1% 7%;
+    scale: 1.06;
+  }
+  76% {
+    translate: 6% -1%;
+    scale: 0.99;
+  }
+}
+
+@keyframes brand-arc-collision {
+  0%,
+  100% {
+    translate: 4% 2%;
+    scale: 1.03;
+  }
+  22% {
+    translate: -5% -4%;
+    scale: 0.97;
+  }
+  25% {
+    translate: -2% -1%;
+    scale: 1;
+  }
+  54% {
+    translate: 3% -7%;
+    scale: 1.05;
+  }
+  78% {
+    translate: -6% 3%;
+    scale: 0.98;
+  }
+}
+
+@keyframes orbit-collision-large {
+  0%,
+  100% {
+    translate: -18px -10px;
+    scale: 0.97;
+  }
+  24% {
+    translate: 30px -22px;
+    scale: 1.03;
+  }
+  27% {
+    translate: 22px -15px;
+    scale: 1;
+  }
+  51% {
+    translate: -26px 28px;
+    scale: 0.98;
+  }
+  55% {
+    translate: -18px 20px;
+    scale: 1.01;
+  }
+  79% {
+    translate: 24px 16px;
+    scale: 1.04;
+  }
+}
+
+@keyframes orbit-collision-small {
+  0%,
+  100% {
+    translate: 16px 12px;
+    scale: 1.04;
+  }
+  19% {
+    translate: -24px 18px;
+    scale: 0.98;
+  }
+  23% {
+    translate: -17px 12px;
+    scale: 1.01;
+  }
+  48% {
+    translate: 22px -26px;
+    scale: 0.96;
+  }
+  52% {
+    translate: 15px -18px;
+    scale: 1;
+  }
+  73% {
+    translate: -12px -20px;
+    scale: 1.05;
+  }
+}
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 230px;
+    overflow: auto;
+  }
+
+  .brandStage,
+  .formStage {
+    min-height: auto;
+  }
+
+  .brandStage {
+    padding: 32px 48px;
+  }
+
+  .brandContent {
+    grid-template-columns: 124px minmax(0, 1fr);
+    align-items: center;
+    gap: 26px;
+  }
+
+  .mascotFrame {
+    width: 124px;
+  }
+
+  .brandTitle {
+    font-size: clamp(36px, 7vw, 52px) !important;
+  }
+
+  .brandDescription {
+    display: none;
+  }
+
+  .wordmark {
+    inset: auto -0.02em -0.16em auto;
+    font-size: 18vw;
+  }
+
+  .formStage {
+    --login-card-offset-y: 0;
+
+    padding: 56px 40px 72px;
+  }
+}
+
+@media (max-width: 580px) {
+  .shell {
+    grid-template-rows: auto 220px;
+  }
+
+  .brandStage {
+    padding: 32px;
+  }
+
+  .brandContent {
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 22px;
+  }
+
+  .mascotFrame {
+    width: 104px;
+  }
+
+  .brandCopy {
+    padding-left: 14px;
+  }
+
+  .brandTitle {
+    margin-bottom: 8px !important;
+    font-size: 36px !important;
+  }
+
+  .brandTagline {
+    margin: 0 !important;
+    font-size: 16px !important;
+  }
+
+  .formStage {
+    padding: 42px 28px 56px;
+  }
+
+  .formFrame {
+    padding: 30px 28px;
+  }
+
+  .logo {
+    margin-bottom: 24px;
+  }
+}
+
+@media (min-width: 901px) and (max-height: 760px) {
+  .formStage {
+    --login-card-offset-y: -24px;
+
+    padding-top: 42px;
+    padding-bottom: 42px;
+  }
+
+  .formFrame {
+    padding: 28px 32px;
+  }
+
+  .brandStage {
+    padding: 36px 28px;
+  }
+
+  .brandContent {
+    grid-template-columns: 118px minmax(0, 1fr);
+    align-items: center;
+    gap: 18px;
+  }
+
+  .mascotFrame {
+    width: 118px;
+  }
+
+  .brandTitle {
+    font-size: 34px !important;
+  }
+
+  .brandTagline {
+    font-size: 16px !important;
+  }
+
+  .brandDescription {
+    display: none;
+  }
+
+  .form :global(.arco-form-item) {
+    margin-bottom: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brandStage::before,
+  .brandStage::after,
+  .brandContent,
+  .mascot,
+  .formFrame,
+  .orbitLarge,
+  .orbitSmall {
+    animation: none;
+  }
+
+  .submit {
+    transition: none;
+  }
+}

@@ -18,7 +18,6 @@
  * {@link resolveAgentLogo}; non-React utilities receive the map as an argument.
  */
 
-import { ipcBridge } from '@/common';
 import type { AssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
 import {
   isBackendRelativeAssetPath,
@@ -27,6 +26,7 @@ import {
 } from '@/renderer/utils/model/assistantAvatar';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import { resolveBackendAssetUrl } from '@/renderer/utils/platform';
+import { fetchProductManagedAgents } from '@/renderer/services/runtime/productBrandRuntime';
 import useSWR from 'swr';
 
 /** Map of lowercased backend id -> logo URL. */
@@ -45,10 +45,10 @@ function collectManagedAgentLogoKeys(agent: ManagedAgent): string[] {
 /** Shared fetcher for the backend management catalog, keyed into a backend->url map. */
 export async function fetchAgentLogos(): Promise<AgentLogoMap> {
   try {
-    const agents = await ipcBridge.acpConversation.getManagedAgents.invoke();
+    const agents = await fetchProductManagedAgents();
     if (Array.isArray(agents)) {
       const map: AgentLogoMap = {};
-      for (const agent of agents as ManagedAgent[]) {
+      for (const agent of agents) {
         const logo = agent.avatar || agent.icon;
         if (!logo) continue;
 

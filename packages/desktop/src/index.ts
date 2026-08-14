@@ -31,6 +31,8 @@ import { registerWindowMaximizeListeners } from '@process/bridge';
 import { BackendLifecycleManager } from '@aionui/web-host';
 import { resolveBinaryPath } from '@process/backend';
 import './process/bridge/feedbackBridge';
+import { configureNotificationBrandIcon } from '@process/bridge/notificationBridge';
+import { configureUpdateBridge } from '@process/bridge/updateBridge';
 import { wasLaunchedAtLogin } from '@process/bridge/applicationBridge';
 import { onLanguageChanged } from './process/bridge/systemSettingsBridge';
 import { setInitialLanguage } from '@process/services/i18n';
@@ -46,11 +48,13 @@ import {
   resolveInitialBounds,
 } from './process/utils/windowBounds';
 import {
+  AION_UI_PROTOCOL_SCHEME,
   clearPendingDeepLinkUrl,
+  configureDeepLinkProtocol,
+  findDeepLinkUrl,
   getPendingDeepLinkUrl,
   handleDeepLinkUrl,
-  PROTOCOL_SCHEME,
-} from './process/utils/deepLink';
+} from '@process/utils/deepLink';
 import {
   bindMainWindowReferences,
   showAndFocusMainWindow,
@@ -64,6 +68,7 @@ import {
 } from './process/utils/webuiConfig';
 import {
   createOrUpdateTray,
+  configureTrayBrand,
   destroyTray,
   getCloseToTrayEnabled,
   getIsQuitting,
@@ -72,7 +77,7 @@ import {
   setIsQuitting,
 } from './process/utils/tray';
 import { readCloseToTraySetting } from './process/utils/closeToTraySetting';
-import { createKiBuddyRuntime, shouldEnsureDefaultCoreUser } from './process/ki-buddy';
+import { createKiBuddyRuntime, resolveKiBuddyProtocolScheme, shouldEnsureDefaultCoreUser } from '@process/ki-buddy';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
 
@@ -82,7 +87,10 @@ import electronSquirrelStartup from 'electron-squirrel-startup';
 // to the first instance via second-instance event, then quits.
 const isE2ETestMode = process.env.AIONUI_E2E_TEST === '1';
 const skipSingleInstanceLock = isE2ETestMode || process.env.AIONUI_MULTI_INSTANCE === '1';
-const deepLinkFromArgv = process.argv.find((arg) => arg.startsWith(`${PROTOCOL_SCHEME}://`));
+const protocolScheme = configureDeepLinkProtocol(
+  resolveKiBuddyProtocolScheme(app.getAppPath()) ?? AION_UI_PROTOCOL_SCHEME
+);
+const deepLinkFromArgv = findDeepLinkUrl(process.argv);
 const gotTheLock = skipSingleInstanceLock ? true : app.requestSingleInstanceLock({ deepLinkUrl: deepLinkFromArgv });
 if (!gotTheLock) {
   console.warn('[AionUi] Another instance is already running; current process will exit.');
@@ -90,9 +98,7 @@ if (!gotTheLock) {
 } else {
   app.on('second-instance', (_event, argv, _workingDirectory, additionalData) => {
     // Prefer additionalData (reliable on all platforms), fallback to argv scan
-    const deepLinkUrl =
-      (additionalData as { deepLinkUrl?: string })?.deepLinkUrl ||
-      argv.find((arg) => arg.startsWith(`${PROTOCOL_SCHEME}://`));
+    const deepLinkUrl = (additionalData as { deepLinkUrl?: string })?.deepLinkUrl || findDeepLinkUrl(argv);
     if (deepLinkUrl) {
       handleDeepLinkUrl(deepLinkUrl);
     }
@@ -187,6 +193,11 @@ const kiBuddyRuntime = createKiBuddyRuntime({
   resetPassword: isResetPasswordMode,
   webUi: isWebUIMode,
 });
+configureUpdateBridge(kiBuddyRuntime?.updateBridge);
+if (kiBuddyRuntime) {
+  configureTrayBrand(kiBuddyRuntime.brand);
+  configureNotificationBrandIcon(kiBuddyRuntime.brand.iconPath);
+}
 const kiBuddyCoreAuthOptions = kiBuddyRuntime?.coreAuthOptions ?? null;
 const ensureDefaultCoreUser = shouldEnsureDefaultCoreUser(Boolean(kiBuddyRuntime));
 const resolveBackendDataPath = (dataPath: string): string => kiBuddyRuntime?.resolveDataPath(dataPath) ?? dataPath;
@@ -552,11 +563,11 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   const disableAutoUpdater =
     process.env.AIONUI_DISABLE_AUTO_UPDATE === '1' || process.env.AIONUI_E2E_TEST === '1' || isCiRuntime;
   if (!disableAutoUpdater) {
-    Promise.all([import('./process/services/autoUpdaterService'), import('./process/bridge/updateBridge')])
+    Promise.all([import('@process/services/autoUpdaterService'), import('@process/bridge/updateBridge')])
       .then(([{ autoUpdaterService }, { createAutoUpdateStatusBroadcast }]) => {
         // Create status broadcast callback that emits via ipcBridge (pure emitter, no window binding)
         const statusBroadcast = createAutoUpdateStatusBroadcast();
-        autoUpdaterService.initialize(statusBroadcast);
+        autoUpdaterService.initialize(statusBroadcast, kiBuddyRuntime?.updateFeed);
         autoUpdaterService.setBeforeQuitAndInstall(async () => {
           await backendManager.stop();
         });
@@ -1035,15 +1046,15 @@ const handleAppReady = async (): Promise<void> => {
 };
 
 // ============ Protocol Registration ============
-// Register aionui:// as the default protocol client
+// Register the selected desktop product protocol.
 if (process.defaultApp) {
   // Dev mode: need to pass execPath explicitly
-  app.setAsDefaultProtocolClient(PROTOCOL_SCHEME, process.execPath, [path.resolve(process.argv[1])]);
+  app.setAsDefaultProtocolClient(protocolScheme, process.execPath, [path.resolve(process.argv[1])]);
 } else {
-  app.setAsDefaultProtocolClient(PROTOCOL_SCHEME);
+  app.setAsDefaultProtocolClient(protocolScheme);
 }
 
-// macOS: handle aionui:// URLs via the open-url event
+// macOS delivers desktop protocol URLs through the open-url event.
 app.on('open-url', (event, url) => {
   event.preventDefault();
   handleDeepLinkUrl(url);

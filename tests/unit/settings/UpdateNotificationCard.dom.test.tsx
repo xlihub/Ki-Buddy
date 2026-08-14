@@ -87,10 +87,13 @@ vi.mock('@/common', () => ({
 }));
 
 import UpdateNotificationCard from '@/renderer/components/settings/UpdateNotificationCard';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 describe('UpdateNotificationCard', () => {
   beforeEach(() => {
     vi.stubGlobal('__APP_VERSION__', '2.1.15');
+    vi.stubGlobal('__KI_BUDDY_VERSION__', '0.1.1');
+    window.__kiBuddyProductPresentation = null;
     mocks.manualProgressHandler = null;
     mocks.autoStatusHandler = null;
     mocks.updateOpenHandler = null;
@@ -169,6 +172,19 @@ describe('UpdateNotificationCard', () => {
     expect(screen.queryByText('notes')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('update.releaseLog'));
     expect(await screen.findByText('notes')).toBeInTheDocument();
+  });
+
+  it('uses the Ki-Buddy product version when auto-update omits the current version', async () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    mocks.updateCheckMock.mockImplementation(() => new Promise(() => {}));
+    render(<UpdateNotificationCard />);
+    await waitFor(() => expect(mocks.autoStatusHandler).toBeTruthy());
+
+    await act(async () => {
+      mocks.autoStatusHandler?.({ status: 'available', version: '0.1.2', releaseNotes: 'notes' });
+    });
+
+    expect(await screen.findByText('0.1.1 → 0.1.2')).toBeInTheDocument();
   });
 
   it('restores a cached completed auto-update on mount', async () => {

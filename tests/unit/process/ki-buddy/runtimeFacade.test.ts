@@ -21,6 +21,8 @@ vi.mock('electron', () => ({
 }));
 
 const { createKiBuddyRuntime } = await import('@/process/ki-buddy');
+const { KI_BUDDY_PRODUCT_CONFIG } = await import('@/common/platform/ki-buddy');
+const { KiBuddyGitHubProvider } = await import('@/process/ki-buddy/update/githubUpdateProvider');
 
 function createAppPath(productRuntime?: string): string {
   const appPath = mkdtempSync(join(tmpdir(), 'ki-buddy-runtime-'));
@@ -48,8 +50,31 @@ describe('Ki-Buddy main-process runtime facade', () => {
     const appPath = createAppPath('ki-buddy');
     appPaths.push(appPath);
 
-    expect(createKiBuddyRuntime({ appPath, resetPassword: false, webUi: false })).toMatchObject({
+    const runtime = createKiBuddyRuntime({ appPath, resetPassword: false, webUi: false });
+    expect(runtime).toMatchObject({
+      brand: {
+        productName: 'Ki-Buddy',
+      },
       productIdentity: 'ki-buddy',
+    });
+    expect(runtime?.brand.iconPath).toBe(KI_BUDDY_PRODUCT_CONFIG.assets.packaged.icon);
+    expect(runtime?.updateBridge).toEqual({
+      allowRepositoryOverride: false,
+      repository: 'xlihub/Ki-Buddy',
+      source: 'github',
+      tagPrefix: 'ki-buddy-v',
+      userAgent: 'Ki-Buddy',
+    });
+    expect(runtime?.updateFeed).toEqual({
+      feedOptions: {
+        owner: 'xlihub',
+        provider: 'custom',
+        repo: 'Ki-Buddy',
+        tagPrefix: 'ki-buddy-v',
+        updateProvider: KiBuddyGitHubProvider,
+      },
+      label: 'Ki-Buddy GitHub provider',
+      updaterCacheDirName: 'com.xlihub.ki-buddy',
     });
     expect(installTransportMock).toHaveBeenCalledOnce();
   });

@@ -1,4 +1,5 @@
 import type { KiBuddyAuthApi } from './kiBuddyAuth';
+import type { KiBuddyProductCapability } from './kiBuddyProduct';
 
 // WebUI 状态接口 / WebUI status interface
 export interface WebUIStatus {
@@ -83,6 +84,9 @@ export interface BackendStartupFailureInfo {
 declare global {
   interface Window {
     electronAPI?: ElectronBridgeAPI;
+    __getKiBuddyProductPresentation?: () => KiBuddyProductCapability | null;
+    __kiBuddyProductBootstrapError?: string | null;
+    __kiBuddyProductPresentation?: KiBuddyProductCapability | null;
     __initialLanguage?: string | null;
     __aionuiE2ETest?: boolean;
     __backendStartupFailed?: boolean;

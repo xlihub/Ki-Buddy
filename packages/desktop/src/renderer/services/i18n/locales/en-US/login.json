@@ -16,9 +16,10 @@
   "footerPrimary": "Transform your command-line AI",
   "footerSecondary": "Modern & Efficient",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy - Sign in to Agents",
+    "pageTitle": "{{productName}} - Sign in to Agents",
     "brand": "Ki-Buddy",
     "subtitle": "Sign in with your existing Agents account",
+    "welcome": "Welcome back",
     "agentsDeployment": "Agents deployment URL",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "Clear deployment URL",

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { load as loadYaml } from 'js-yaml';
 
 const {
   createEffectivePackageJson,
@@ -14,6 +15,12 @@ const {
 } = require('../../../packages/shared-scripts/src/kiBuddyRelease');
 
 const projectRoot = resolve(__dirname, '../../..');
+
+function readPngDimensions(relativePath: string): { height: number; width: number } {
+  const data = readFileSync(join(projectRoot, relativePath));
+  expect(data.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+  return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
+}
 
 describe('Ki-Buddy product release identity', () => {
   it('validates the current product mapping without requiring repository history', () => {
@@ -48,9 +55,32 @@ describe('Ki-Buddy product release identity', () => {
   });
 
   it('keeps the Ki-Buddy defaults in the product configuration', () => {
-    expect(readProductConfig(projectRoot).defaults).toEqual({
+    const config = readProductConfig(projectRoot);
+    expect(config.defaults).toEqual({
       agentsBaseUrl: 'https://ksapi.kingsware.cn',
       language: 'zh-CN',
+    });
+    expect(config.brand.cliName).toBe('Ki CLI');
+    expect(config.locale).toEqual({ namespace: 'kiBuddy' });
+    expect(config.themes).toEqual({ light: 'ki-buddy-light', dark: 'ki-buddy-dark' });
+  });
+
+  it('declares existing independent platform and renderer brand resources', () => {
+    const config = readProductConfig(projectRoot);
+    for (const relativePath of Object.values(config.assets.platform)) {
+      expect(existsSync(join(projectRoot, relativePath))).toBe(true);
+    }
+    expect(config.assets.renderer).toEqual({ logo: 'ki-buddy-app', mascot: 'ki-buddy-mascot' });
+    expect(readPngDimensions(config.assets.platform.png)).toEqual({ width: 1024, height: 1024 });
+    expect(readFileSync(join(projectRoot, config.assets.platform.ico)).subarray(0, 4).toString('hex')).toBe('00000100');
+    expect(readFileSync(join(projectRoot, config.assets.platform.icns)).subarray(0, 4).toString('ascii')).toBe('icns');
+    expect(readPngDimensions('packages/desktop/src/renderer/assets/ki-buddy/app.png')).toEqual({
+      width: 128,
+      height: 128,
+    });
+    expect(readPngDimensions('packages/desktop/src/renderer/assets/ki-buddy/mascot.png')).toEqual({
+      width: 256,
+      height: 256,
     });
   });
 
@@ -66,6 +96,57 @@ describe('Ki-Buddy product release identity', () => {
       (config: typeof source) => {
         config.defaults.language = '';
       },
+      (config: typeof source) => {
+        config.locale.namespace = '';
+      },
+      (config: typeof source) => {
+        config.themes.dark = '';
+      },
+      (config: typeof source) => {
+        config.electronBuilder.protocols[0].schemes.push('unexpected');
+      },
+      (config: typeof source) => {
+        config.electronBuilder.protocols[0].unexpected = true;
+      },
+      (config: typeof source) => {
+        delete config.electronBuilder.protocols[0].name;
+      },
+      (config: typeof source) => {
+        config.electronBuilder.publish.unexpected = true;
+      },
+      (config: typeof source) => {
+        delete config.electronBuilder.publish.owner;
+      },
+      (config: typeof source) => {
+        config.electronBuilder.linux.unexpected = true;
+      },
+      (config: typeof source) => {
+        delete config.electronBuilder.linux.maintainer;
+      },
+      (config: typeof source) => {
+        config.electronBuilder.linux.desktop.unexpected = true;
+      },
+      (config: typeof source) => {
+        config.electronBuilder.linux.desktop.entry.unexpected = true;
+      },
+      (config: typeof source) => {
+        delete config.electronBuilder.linux.desktop.entry.Name;
+      },
+      (config: typeof source) => {
+        config.brand.productName = 'Wrong Product';
+      },
+      (config: typeof source) => {
+        config.packageMetadata.author = null;
+      },
+      (config: typeof source) => {
+        config.packageMetadata.repository.url = 'ftp://github.com/xlihub/Ki-Buddy.git';
+      },
+      (config: typeof source) => {
+        config.packageMetadata.homepage = '/readme';
+      },
+      (config: typeof source) => {
+        config.packageMetadata.bugs = null;
+      },
     ]) {
       const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-product-config-'));
       try {
@@ -76,6 +157,18 @@ describe('Ki-Buddy product release identity', () => {
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
+    }
+  });
+
+  it('rejects unknown product configuration fields at the build boundary', () => {
+    const source = JSON.parse(readFileSync(join(projectRoot, 'ki-buddy-product.json'), 'utf8'));
+    const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-product-config-'));
+    try {
+      source.unexpected = true;
+      writeFileSync(join(tempDir, 'ki-buddy-product.json'), JSON.stringify(source));
+      expect(() => readProductConfig(tempDir)).toThrow('unexpected or missing fields');
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
     }
   });
 
@@ -125,12 +218,25 @@ describe('Ki-Buddy product release identity', () => {
       const productVersion = readProductVersion(projectRoot);
       expect(config).toMatchObject({
         ...productConfig.electronBuilder,
+        win: { icon: 'resources/ki-buddy/app.ico', target: ['nsis'] },
+        mac: { icon: 'resources/ki-buddy/app.icns', target: ['dmg', 'zip'] },
+        linux: { ...productConfig.electronBuilder.linux, icon: 'resources/ki-buddy/app.png' },
         extraMetadata: {
           ...productConfig.packageMetadata,
           productRuntime: 'ki-buddy',
           version: productVersion,
         },
       });
+      expect(config).not.toHaveProperty('extends');
+      expect(config.protocols).toEqual(productConfig.electronBuilder.protocols);
+      const upstreamBuilder = loadYaml(
+        readFileSync(join(projectRoot, 'packages/desktop/electron-builder.yml'), 'utf8')
+      ) as { extraResources: Array<{ from: string; to: string }> };
+      const expectedResources = upstreamBuilder.extraResources.map((resource) =>
+        resource.to === 'app.png' ? Object.assign({}, resource, { from: productConfig.assets.platform.png }) : resource
+      );
+      expectedResources.push({ from: productConfig.assets.platform.png, to: productConfig.assets.packaged.icon });
+      expect(config.extraResources).toEqual(expectedResources);
       expect(JSON.parse(readFileSync(outputPath, 'utf8'))).toEqual(config);
       expect(readFileSync(join(projectRoot, 'package.json'), 'utf8')).toBe(originalPackage);
     } finally {

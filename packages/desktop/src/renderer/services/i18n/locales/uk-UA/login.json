@@ -16,9 +16,10 @@
   "footerPrimary": "Трансформуйте свій ШІ у командному рядку",
   "footerSecondary": "Сучасно та ефективно",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy — Вхід до Agents",
+    "pageTitle": "{{productName}} — Вхід до Agents",
     "brand": "Ki-Buddy",
     "subtitle": "Увійдіть за допомогою наявного облікового запису Agents",
+    "welcome": "З поверненням",
     "agentsDeployment": "URL розгортання Agents",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "Очистити URL розгортання",

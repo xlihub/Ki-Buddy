@@ -9,6 +9,7 @@ import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 const getSessionMock = vi.fn();
 const loginMock = vi.fn();
@@ -114,6 +115,7 @@ describe('Ki-Buddy Agents authentication gate', () => {
       login: loginMock,
       logout: logoutMock,
     };
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
   });
 
   it('shows the static Ki-Buddy introduction before the Agents login on a clean desktop launch', async () => {
@@ -170,6 +172,61 @@ describe('Ki-Buddy Agents authentication gate', () => {
     );
 
     expect(await screen.findByLabelText('login.kiBuddy.agentsDeployment')).toHaveValue('https://ksapi.kingsware.cn');
+  });
+
+  it('uses the same wrapped input treatment for all login fields', async () => {
+    render(
+      <AuthProvider>
+        <PanelRoute layout={<TestLayout />} />
+      </AuthProvider>
+    );
+
+    expect(
+      (await screen.findByLabelText('login.kiBuddy.agentsDeployment')).closest('.arco-input-inner-wrapper')
+    ).not.toBeNull();
+    expect(screen.getByLabelText('login.kiBuddy.accountOrEmail').closest('.arco-input-inner-wrapper')).not.toBeNull();
+    expect(screen.getByLabelText('login.password').closest('.arco-input-inner-wrapper')).not.toBeNull();
+  });
+
+  it('renders the login brand from the product capability', async () => {
+    window.__kiBuddyProductPresentation = {
+      ...KI_BUDDY_PRODUCT_CAPABILITY,
+      brand: { ...KI_BUDDY_PRODUCT_CAPABILITY.brand, productName: 'Manifest Buddy' },
+    };
+
+    render(
+      <AuthProvider>
+        <PanelRoute layout={<TestLayout />} />
+      </AuthProvider>
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Manifest Buddy' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Manifest Buddy' })).toBeInTheDocument();
+    expect(screen.getByTestId('ki-buddy-login-mascot')).toHaveAttribute('src', expect.stringContaining('mascot'));
+  });
+
+  it('keeps the login form heading concise', async () => {
+    render(
+      <AuthProvider>
+        <PanelRoute layout={<TestLayout />} />
+      </AuthProvider>
+    );
+
+    expect(await screen.findByRole('heading', { name: 'login.kiBuddy.welcome' })).toBeInTheDocument();
+    expect(screen.queryByText('login.kiBuddy.subtitle')).not.toBeInTheDocument();
+  });
+
+  it('places the login form before the supporting brand content in reading order', async () => {
+    render(
+      <AuthProvider>
+        <PanelRoute layout={<TestLayout />} />
+      </AuthProvider>
+    );
+
+    const formRegion = (await screen.findByRole('heading', { name: 'login.kiBuddy.welcome' })).closest('section');
+    const brandRegion = screen.getByRole('region', { name: 'Ki-Buddy' });
+
+    expect(formRegion?.compareDocumentPosition(brandRegion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('prefills the last successful deployment from history', async () => {

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Robot } from '@icon-park/react';
 import { assistantRuntimeKey, type Assistant } from '@/common/types/agent/assistantTypes';
 import { resolveAgentLogo, useAgentLogos } from '@/renderer/utils/model/agentLogo';
+import { adaptProductAgentLogo } from '@/renderer/services/runtime/productBrandRuntime';
 
 /**
  * Shows which runtime engine (CLI) drives an assistant. Frameless by default
@@ -25,7 +26,7 @@ const RuntimeBadge: React.FC<{
   const { t } = useTranslation();
   const logos = useAgentLogos();
   const backend = assistantRuntimeKey(assistant);
-  const logo = resolveAgentLogo(logos, { backend });
+  const logo = adaptProductAgentLogo(assistant.agent, resolveAgentLogo(logos, { backend }));
 
   return (
     <span

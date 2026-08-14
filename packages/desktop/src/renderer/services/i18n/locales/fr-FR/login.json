@@ -16,9 +16,10 @@
   "footerPrimary": "Transformez votre IA en ligne de commande",
   "footerSecondary": "Moderne et efficace",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy - Connexion à Agents",
+    "pageTitle": "{{productName}} - Connexion à Agents",
     "brand": "Ki-Buddy",
     "subtitle": "Connectez-vous avec votre compte Agents existant",
+    "welcome": "Bon retour",
     "agentsDeployment": "URL du déploiement Agents",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "Effacer l’URL de déploiement",

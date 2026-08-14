@@ -16,9 +16,10 @@
   "footerPrimary": "Transforma tu IA de línea de comandos",
   "footerSecondary": "Moderno y eficiente",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy - Iniciar sesión en Agents",
+    "pageTitle": "{{productName}} - Iniciar sesión en Agents",
     "brand": "Ki-Buddy",
     "subtitle": "Inicia sesión con tu cuenta de Agents existente",
+    "welcome": "Te damos la bienvenida",
     "agentsDeployment": "URL de despliegue de Agents",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "Borrar URL de despliegue",

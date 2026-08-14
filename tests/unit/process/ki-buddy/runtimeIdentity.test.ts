@@ -5,11 +5,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import {
   KI_BUDDY_PRODUCT_RUNTIME,
   readKiBuddyRuntimeIdentity,
+  resolveKiBuddyProtocolScheme,
   resolveKiBuddyRuntimeIdentity,
   shouldEnableKiBuddyRuntime,
   shouldEnsureDefaultCoreUser,
@@ -31,6 +33,22 @@ describe('Ki-Buddy product runtime identity', () => {
     expect(resolveKiBuddyRuntimeIdentity(packageJson)).toBe(false);
     expect(readKiBuddyRuntimeIdentity(projectRoot)).toBe(false);
     expect(readKiBuddyRuntimeIdentity(resolve(projectRoot, 'missing-directory'))).toBe(false);
+  });
+
+  it('selects the configured protocol only for the explicit product package', () => {
+    const productAppPath = mkdtempSync(join(tmpdir(), 'ki-buddy-runtime-'));
+    try {
+      writeFileSync(
+        join(productAppPath, 'package.json'),
+        JSON.stringify({ productRuntime: KI_BUDDY_PRODUCT_RUNTIME }),
+        'utf8'
+      );
+
+      expect(resolveKiBuddyProtocolScheme(productAppPath)).toBe('ki-buddy');
+      expect(resolveKiBuddyProtocolScheme(resolve(productAppPath, 'missing'))).toBeNull();
+    } finally {
+      rmSync(productAppPath, { recursive: true });
+    }
   });
 
   it('disables product capabilities outside the Ki-Buddy desktop runtime', () => {

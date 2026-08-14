@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { readDeploymentHistory, recordSuccessfulDeployment } from '@/renderer/pages/ki-buddy/deploymentHistory';
+import { readDeploymentHistory, recordSuccessfulDeployment } from '@/renderer/pages/ki-buddy/Login/deploymentHistory';
 
 const STORAGE_KEY = 'ki-buddy.login.successfulDeployments_v1';
 

@@ -1,4 +1,25 @@
 {
+  "channelConflict": {
+    "title": "{{platformName}} Channel Conflict Detected",
+    "handling": "OpenClaw is handling {{platformName}} messages, not {{productName}}.",
+    "credentialsIntro": "Your {{platformName}} bot credentials are also configured in OpenClaw. This means:",
+    "switchingNoEffect": "✗ Switching agents in {{productName}} will have no effect",
+    "messagesProcessed": "✗ Messages are processed by OpenClaw's agent",
+    "messagesStillWork": "✓ Messages still work (via OpenClaw)",
+    "useChannels": "To use {{productName}} Channels and switch agents:",
+    "optionDisable": "Option 1: Disable OpenClaw {{platformName}} (Recommended)",
+    "edit": "Edit:",
+    "set": "Set:",
+    "restart": "Then restart OpenClaw and {{productName}}.",
+    "optionDifferentBot": "Option 2: Use a different bot",
+    "createDifferentBot": "Create a new {{platformName}} bot with different credentials for {{productName}}.",
+    "optionKeepOpenClaw": "Option 3: Keep using OpenClaw",
+    "disableChannels": "Disable {{platformName}} in {{productName}} Channels and continue using OpenClaw's integration.",
+    "helpDisable": "Help me disable OpenClaw {{platformName}}",
+    "ignore": "Ignore (I know what I'm doing)",
+    "banner": "⚠️ OpenClaw {{platformName}} conflict detected - Agent switching won't work.",
+    "learnMore": "Learn more"
+  },
   "health": {
     "detectedError": "Fehler beim aktuellen Agenten ({{agent}}) erkannt",
     "autoSwitching": ". Das System versucht automatisch zu wechseln.",

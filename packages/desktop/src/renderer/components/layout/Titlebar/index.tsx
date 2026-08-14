@@ -18,6 +18,7 @@ import { resolveFeedbackModule } from '@/renderer/services/feedback/resolveFeedb
 import { isElectronDesktop, isMacOS } from '@/renderer/utils/platform';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import MigrationInviteCapsule from './MigrationInviteCapsule';
+import { getRendererBrand } from '@/renderer/services/runtime/productBrandRuntime';
 import './titlebar.css';
 
 interface TitlebarProps {
@@ -98,7 +99,7 @@ const SidebarIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({ size =
 
 const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const { t } = useTranslation();
-  const appTitle = useMemo(() => 'AionUi', []);
+  const appTitle = getRendererBrand().productName;
   const [workspaceCollapsed, setWorkspaceCollapsed] = useState(true);
   const [mobileCenterTitle, setMobileCenterTitle] = useState(appTitle);
   const [mobileCenterOffset, setMobileCenterOffset] = useState(0);

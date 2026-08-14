@@ -148,6 +148,19 @@ html body .arco-popconfirm-arrow.arco-trigger-arrow {
   border-color: var(--aou-2) !important;
 }
 
+/* Ki-Buddy's lighter dark-mode accent pairs with a dark on-accent foreground. */
+html[data-product='ki-buddy'][data-product-theme='ki-buddy-dark'] body .arco-btn-primary:not(.arco-btn-disabled) {
+  color: var(--ki-color-on-accent);
+}
+
+/* Keep the upstream neutral selection; reserve the product accent for the leading icon. */
+html[data-product='ki-buddy'] .settings-sider__item[data-selected='true'] .settings-sider__item-icon,
+html[data-product='ki-buddy'] .settings-sider__item[data-selected='true'] .settings-sider__item-icon .i-icon,
+html[data-product='ki-buddy'] .settings-sider__item[data-selected='true'] .settings-sider__item-icon svg,
+html[data-product='ki-buddy'] [data-sider-nav-selected='true'] .sider-nav__icon {
+  color: var(--ki-component-nav-item-selected-icon-fg) !important;
+}
+
 .arco-collapse {
   border: none;
   border-radius: 8px;

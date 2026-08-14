@@ -6,6 +6,7 @@
 
 import { waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 const configFixture = vi.hoisted(() => ({
   ready: Promise.resolve(),
@@ -62,6 +63,7 @@ describe('Ki-Buddy startup language', () => {
         logout: vi.fn().mockResolvedValue({ status: 'unauthenticated', user: null }),
       },
     };
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
   });
 
   it('initializes login and onboarding in Chinese without switching to English after config is ready', async () => {
@@ -146,6 +148,7 @@ describe('Ki-Buddy startup language', () => {
   it('preserves upstream AionUi startup behavior when the Ki-Buddy capability is absent', async () => {
     Object.defineProperty(navigator, 'language', { configurable: true, value: 'ja-JP' });
     window.electronAPI = { ...window.electronAPI, kiBuddyAuth: undefined };
+    window.__kiBuddyProductPresentation = null;
 
     const { default: i18n } = await import('@/renderer/services/i18n');
 

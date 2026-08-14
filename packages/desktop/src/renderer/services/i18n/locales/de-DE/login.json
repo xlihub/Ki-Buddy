@@ -16,9 +16,10 @@
   "footerPrimary": "Verwandle deine Kommandozeilen-KI",
   "footerSecondary": "Modern & Effizient",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy - Bei Agents anmelden",
+    "pageTitle": "{{productName}} - Bei Agents anmelden",
     "brand": "Ki-Buddy",
     "subtitle": "Mit einem vorhandenen Agents-Konto anmelden",
+    "welcome": "Willkommen zurück",
     "agentsDeployment": "Agents-Bereitstellungs-URL",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "Bereitstellungs-URL löschen",

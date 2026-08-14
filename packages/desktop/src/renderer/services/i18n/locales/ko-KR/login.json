@@ -16,9 +16,10 @@
   "footerPrimary": "명령줄 AI의 혁신",
   "footerSecondary": "현대적이고 효율적인",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy - Agents 로그인",
+    "pageTitle": "{{productName}} - Agents 로그인",
     "brand": "Ki-Buddy",
     "subtitle": "기존 Agents 계정으로 로그인하세요",
+    "welcome": "다시 오신 것을 환영합니다",
     "agentsDeployment": "Agents 배포 URL",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "배포 URL 지우기",

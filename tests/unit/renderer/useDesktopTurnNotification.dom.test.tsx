@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 const streamHandlers: Array<(e: unknown) => void> = [];
 const showInvoke = vi.fn();
@@ -39,6 +40,7 @@ beforeEach(() => {
   showInvoke.mockClear();
   isDesktop = true;
   settingEnabled = true;
+  window.__kiBuddyProductPresentation = null;
 });
 
 describe('useDesktopTurnNotification', () => {
@@ -57,6 +59,15 @@ describe('useDesktopTurnNotification', () => {
     renderHook(() => useDesktopTurnNotification());
     emitStream({ type: 'acp_permission', conversation_id: 's1' });
     expect(showInvoke).not.toHaveBeenCalled();
+  });
+
+  it('uses the selected product name for a Ki-Buddy desktop notification', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+
+    renderHook(() => useDesktopTurnNotification());
+    emitStream({ type: 'finish', conversation_id: 's1', turn_id: 't1' });
+
+    expect(showInvoke).toHaveBeenCalledWith(expect.objectContaining({ title: 'Ki-Buddy' }));
   });
 
   it('does not notify when the notification setting is disabled', () => {

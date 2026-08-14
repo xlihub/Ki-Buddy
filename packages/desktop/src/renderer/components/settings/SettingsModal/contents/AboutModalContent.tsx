@@ -23,12 +23,11 @@ import {
   subscribeUpdateReadyState,
   type UpdateReadyState,
 } from '@/renderer/components/settings/updateReadyState';
-
-// __APP_VERSION__ is injected by electron.vite.config.ts `define:` from the
-// repo-root package.json. The previous `import packageJson from
-// '../../../../../../package.json'` resolved to packages/desktop/package.json
-// which is a workspace placeholder permanently pinned at "0.0.0".
-declare const __APP_VERSION__: string;
+import {
+  getProductContactUrl,
+  getRendererAppVersion,
+  getRendererBrand,
+} from '@/renderer/services/runtime/productBrandRuntime';
 
 type LinkItem =
   | { title: string; url: string; icon: React.ReactNode; onClick?: never }
@@ -39,6 +38,8 @@ const AboutModalContent: React.FC = () => {
   const viewMode = useSettingsViewMode();
   const isPageMode = viewMode === 'page';
   const isElectron = isElectronDesktop();
+  const brand = getRendererBrand();
+  const appVersion = getRendererAppVersion();
 
   const [includePrerelease, setIncludePrerelease] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -92,7 +93,7 @@ const AboutModalContent: React.FC = () => {
     try {
       const outcome = await runUpdateCheck({
         includePrerelease: getIncludePrerelease(),
-        fallbackVersion: __APP_VERSION__,
+        fallbackVersion: appVersion,
         checkFailedLabel: t('update.checkFailed'),
       });
       if (outcome.kind === 'available') {
@@ -112,12 +113,12 @@ const AboutModalContent: React.FC = () => {
   const linkItems: LinkItem[] = [
     {
       title: t('settings.helpDocumentation'),
-      url: 'https://github.com/iOfficeAI/AionUi/wiki',
+      url: brand.links.support,
       icon: <Right theme='outline' size='16' />,
     },
     {
       title: t('settings.updateLog'),
-      url: 'https://github.com/iOfficeAI/AionUi/releases',
+      url: brand.links.releases,
       icon: <Right theme='outline' size='16' />,
     },
     {
@@ -127,12 +128,12 @@ const AboutModalContent: React.FC = () => {
     },
     {
       title: t('settings.contactMe'),
-      url: 'https://x.com/WailiVery',
+      url: getProductContactUrl(),
       icon: <Right theme='outline' size='16' />,
     },
     {
       title: t('settings.officialWebsite'),
-      url: 'https://www.aionui.com',
+      url: brand.links.homepage,
       icon: <Right theme='outline' size='16' />,
     },
   ];
@@ -150,21 +151,17 @@ const AboutModalContent: React.FC = () => {
           {/* App Info Section */}
           <div className='flex flex-col items-center pb-24px'>
             <Typography.Title heading={3} className='text-24px font-bold text-t-primary mb-8px'>
-              AionUi
+              {brand.productName}
             </Typography.Title>
             <Typography.Text className='text-14px text-t-secondary mb-12px text-center'>
               {t('settings.appDescription')}
             </Typography.Text>
             <div className='flex items-center justify-center gap-8px mb-16px'>
-              <span className='px-10px py-4px rd-6px text-13px bg-fill-2 text-t-primary font-500'>
-                v{__APP_VERSION__}
-              </span>
+              <span className='px-10px py-4px rd-6px text-13px bg-fill-2 text-t-primary font-500'>v{appVersion}</span>
               <div
                 className='text-t-primary cursor-pointer hover:text-t-secondary transition-colors p-4px'
                 onClick={() =>
-                  openLink('https://github.com/iOfficeAI/AionUi').catch((error) =>
-                    console.error('Failed to open link:', error)
-                  )
+                  openLink(brand.links.repository).catch((error) => console.error('Failed to open link:', error))
                 }
               >
                 <Github theme='outline' size='20' />

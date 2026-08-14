@@ -1,16 +1,50 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "runtimeIdentity": "ki-buddy",
   "defaults": {
     "agentsBaseUrl": "https://ksapi.kingsware.cn",
     "language": "zh-CN"
   },
+  "locale": {
+    "namespace": "kiBuddy"
+  },
+  "themes": {
+    "light": "ki-buddy-light",
+    "dark": "ki-buddy-dark"
+  },
   "runtimeDependencies": {
     "keytar": "^7.9.0"
   },
+  "brand": {
+    "productName": "Ki-Buddy",
+    "shortName": "Ki-Buddy",
+    "cliName": "Ki CLI",
+    "description": "Ki-Buddy is an AI agent desktop workspace.",
+    "links": {
+      "homepage": "https://github.com/xlihub/Ki-Buddy",
+      "repository": "https://github.com/xlihub/Ki-Buddy",
+      "releases": "https://github.com/xlihub/Ki-Buddy/releases",
+      "support": "https://github.com/xlihub/Ki-Buddy/issues",
+      "feedback": "https://github.com/xlihub/Ki-Buddy/issues/new"
+    }
+  },
+  "assets": {
+    "platform": {
+      "png": "resources/ki-buddy/app.png",
+      "ico": "resources/ki-buddy/app.ico",
+      "icns": "resources/ki-buddy/app.icns"
+    },
+    "packaged": {
+      "icon": "ki-buddy/app.png"
+    },
+    "renderer": {
+      "logo": "ki-buddy-app",
+      "mascot": "ki-buddy-mascot"
+    }
+  },
   "packageMetadata": {
     "name": "ki-buddy",
-    "description": "Ki-Buddy is an AI agent desktop workspace based on AionUi.",
+    "description": "Ki-Buddy is an AI agent desktop workspace.",
     "author": {
       "name": "xlihub"
     },

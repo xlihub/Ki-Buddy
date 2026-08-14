@@ -1,0 +1,41 @@
+{
+  "de-DE": {
+    "settings": { "talkToButler": { "enabledToast": "Butler für dich aktiviert" } }
+  },
+  "en-US": {
+    "settings": { "talkToButler": { "enabledToast": "Enabled the Butler for you" } }
+  },
+  "es-ES": {
+    "settings": { "talkToButler": { "enabledToast": "Mayordomo activado para ti" } }
+  },
+  "fa-IR": {
+    "settings": { "talkToButler": { "enabledToast": "Butler برای شما فعال شد" } }
+  },
+  "fr-FR": {
+    "settings": { "talkToButler": { "enabledToast": "Majordome activé pour vous" } }
+  },
+  "ja-JP": {
+    "settings": { "talkToButler": { "enabledToast": "執事を有効にしました" } }
+  },
+  "ko-KR": {
+    "settings": { "talkToButler": { "enabledToast": "집사를 활성화했습니다" } }
+  },
+  "pt-BR": {
+    "settings": { "talkToButler": { "enabledToast": "Mordomo ativado para você" } }
+  },
+  "ru-RU": {
+    "settings": { "talkToButler": { "enabledToast": "Дворецкий включён для вас" } }
+  },
+  "tr-TR": {
+    "settings": { "talkToButler": { "enabledToast": "Kâhya sizin için etkinleştirildi" } }
+  },
+  "uk-UA": {
+    "settings": { "talkToButler": { "enabledToast": "Дворецького увімкнено для вас" } }
+  },
+  "zh-CN": {
+    "settings": { "talkToButler": { "enabledToast": "已为你启用管家" } }
+  },
+  "zh-TW": {
+    "settings": { "talkToButler": { "enabledToast": "已為你啟用管家" } }
+  }
+}

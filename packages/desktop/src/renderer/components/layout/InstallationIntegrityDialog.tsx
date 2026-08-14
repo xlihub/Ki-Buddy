@@ -3,8 +3,8 @@ import type { TFunction } from 'i18next';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type FeedbackEventTags, submitFeedbackReport } from '@/renderer/services/feedback/submitFeedbackReport';
+import { getProductDownloadUrl } from '@/renderer/services/runtime/productBrandRuntime';
 
-const AIONUI_DOWNLOAD_URL = 'https://www.aionui.com/';
 const INSTALLATION_INTEGRITY_REPORT_FLUSH_TIMEOUT_MS = 2000;
 
 type InstallationIntegrityDialogKind =
@@ -34,7 +34,7 @@ export type InstallationIntegrityDiagnostics = {
 };
 
 export function openDownloadLatest(): void {
-  window.open(AIONUI_DOWNLOAD_URL, '_blank', 'noopener,noreferrer');
+  window.open(getProductDownloadUrl(), '_blank', 'noopener,noreferrer');
 }
 
 export function getInstallationIntegrityTitle(

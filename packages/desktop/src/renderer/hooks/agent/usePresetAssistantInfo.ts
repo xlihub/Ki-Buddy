@@ -10,6 +10,7 @@ import type { TChatConversation } from '@/common/config/storage';
 import { ipcBridge } from '@/common';
 import { assistantRuntimeKey, type Assistant } from '@/common/types/agent/assistantTypes';
 import { resolveLocaleKey } from '@/common/utils';
+import { adaptProductConversationAssistantIdentity } from '@/renderer/services/runtime/productBrandRuntime';
 import type { AgentLogoMap } from '@/renderer/utils/model/agentLogo';
 import { resolveAgentLogo, useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import { isLikelyLocalFilePath, resolveAssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
@@ -229,14 +230,15 @@ function buildPresetInfoFromAssistant(assistant: Assistant, locale: string): Pre
 function buildPresetInfoFromConversationAssistant(
   assistant: NonNullable<TChatConversation['assistant']>
 ): PresetAssistantInfo {
-  const normalized = normalizeAvatar(assistant.avatar);
+  const productAssistant = adaptProductConversationAssistantIdentity(assistant);
+  const normalized = normalizeAvatar(productAssistant.avatar);
   return {
-    name: assistant.name,
+    name: productAssistant.name,
     logo: normalized.logo,
     isEmoji: normalized.isEmoji,
     isFallback: normalized.isFallback,
-    backend: assistant.backend,
-    assistantId: assistant.id,
+    backend: productAssistant.backend,
+    assistantId: productAssistant.id,
   };
 }
 

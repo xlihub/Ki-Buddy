@@ -16,9 +16,10 @@
   "footerPrimary": "命令列 AI 的現代化體驗",
   "footerSecondary": "高效且優雅",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy - 登入 Agents",
+    "pageTitle": "{{productName}} - 登入 Agents",
     "brand": "Ki-Buddy",
     "subtitle": "使用現有 Agents 平台帳戶登入",
+    "welcome": "歡迎回來",
     "agentsDeployment": "Agents 部署位址",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "清除部署位址",
