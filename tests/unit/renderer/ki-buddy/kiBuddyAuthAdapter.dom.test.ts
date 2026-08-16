@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createKiBuddyAuthAdapter } from '@/renderer/pages/ki-buddy/Auth';
 import { configService } from '@/common/config/configService';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 const getSessionMock = vi.fn();
 const loginMock = vi.fn();
@@ -44,6 +45,7 @@ describe('Ki-Buddy renderer authentication handlers', () => {
         logout: logoutMock,
       },
     };
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
   });
 
   it('reports a rejected login dependency as a network error without activating a user', async () => {
@@ -215,6 +217,7 @@ describe('Ki-Buddy renderer authentication handlers', () => {
 
   it('does not create product handlers when the Ki-Buddy capability is absent', () => {
     window.electronAPI = { ...window.electronAPI, kiBuddyAuth: undefined };
+    window.__kiBuddyProductPresentation = null;
 
     expect(
       createKiBuddyAuthAdapter({ setProfile: setProfileMock }).handlerFactory({

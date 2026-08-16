@@ -9,6 +9,7 @@ import { Earth } from '@icon-park/react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { getRendererBrand } from '@/renderer/services/runtime/productBrandRuntime';
 import styles from '../index.module.css';
 
 type QuickActionButtonsProps = {
@@ -34,6 +35,7 @@ const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const repositoryUrl = getRendererBrand().links.repository;
   const [hoveredQuickAction, setHoveredQuickAction] = useState<'bugReport' | 'repo' | 'webui' | null>(null);
   const [webuiQuickStatus, setWebuiQuickStatus] = useState<WebuiQuickStatus>('checking');
 
@@ -146,7 +148,7 @@ const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
           style={quickActionStyle(hoveredQuickAction === 'repo')}
           onMouseEnter={() => setHoveredQuickAction('repo')}
           onMouseLeave={() => setHoveredQuickAction(null)}
-          onClick={() => onOpenLink('https://github.com/iOfficeAI/AionUi')}
+          onClick={() => onOpenLink(repositoryUrl)}
         >
           <svg
             className='flex-shrink-0 text-[var(--color-text-3)] group-hover:text-[#FE9900] transition-colors duration-300'

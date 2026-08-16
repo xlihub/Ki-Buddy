@@ -13,6 +13,7 @@ import {
   isDefaultModel,
   getModelDisplayLabel,
 } from '@/renderer/utils/model/agentLogo';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 const bridgeMocks = vi.hoisted(() => ({
   getManagedAgents: vi.fn(),
@@ -56,6 +57,7 @@ describe('agentLogo', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     if (originalDocument) {
       global.document = originalDocument as any;
     }
@@ -141,6 +143,27 @@ describe('agentLogo', () => {
         claude: '/api/assets/logos/ai-major/claude.svg',
       });
       expect(bridgeMocks.getManagedAgents).toHaveBeenCalledTimes(1);
+    });
+
+    it('stores the product logo for the internal CLI at the shared cache boundary', async () => {
+      vi.stubGlobal('window', { __kiBuddyProductPresentation: KI_BUDDY_PRODUCT_CAPABILITY });
+      bridgeMocks.getManagedAgents.mockResolvedValue([
+        {
+          id: 'aionrs',
+          name: 'Aion CLI',
+          agent_type: 'aionrs',
+          agent_source: 'internal',
+          backend: 'aionrs',
+          enabled: true,
+          available: true,
+          icon: '/api/assets/logos/aionui.svg',
+        },
+      ]);
+
+      const logos = await fetchAgentLogos();
+
+      expect(logos.aionrs).toMatch(/^data:image\/png;base64,/);
+      expect(logos.aionrs).not.toContain('aionui.svg');
     });
   });
 

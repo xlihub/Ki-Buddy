@@ -1,0 +1,287 @@
+/*
+ * Ki-Buddy product color overlay.
+ *
+ * Values come from ki-buddy-pro global.css. The renderer keeps AionUi's
+ * typography, spacing, radius, shadow, motion and component structure.
+ */
+
+/* Layer 1: product primitives. Components must not consume these directly. */
+[data-product='ki-buddy'] {
+  --ki-ref-color-red-50: #fff1f0;
+  --ki-ref-color-red-100: #fee4e2;
+  --ki-ref-color-red-200: #fecaca;
+  --ki-ref-color-red-300: #d1a3a0;
+  --ki-ref-color-red-400: #dd6f68;
+  --ki-ref-color-red-500: #d8403a;
+  --ki-ref-color-red-600: #b42318;
+  --ki-ref-color-red-700: #991b1b;
+  --ki-ref-color-red-800: #7f1d1d;
+  --ki-ref-color-red-900: #7a271a;
+  --ki-ref-color-red-50-rgb: 255, 241, 240;
+  --ki-ref-color-red-100-rgb: 254, 228, 226;
+  --ki-ref-color-red-200-rgb: 254, 202, 202;
+  --ki-ref-color-red-300-rgb: 209, 163, 160;
+  --ki-ref-color-red-400-rgb: 221, 111, 104;
+  --ki-ref-color-red-500-rgb: 216, 64, 58;
+  --ki-ref-color-red-600-rgb: 180, 35, 24;
+  --ki-ref-color-red-700-rgb: 153, 27, 27;
+  --ki-ref-color-red-800-rgb: 127, 29, 29;
+  --ki-ref-color-red-900-rgb: 122, 39, 26;
+
+  --ki-ref-color-canvas-warm: #fffbfa;
+  --ki-ref-color-surface-default: #ffffff;
+  --ki-ref-color-surface-subtle: #f9fafb;
+  --ki-ref-color-surface-muted: #f3f0ee;
+
+  --ki-ref-color-fg-primary: #111827;
+  --ki-ref-color-fg-strong: #1f2937;
+  --ki-ref-color-fg-default: #374151;
+  --ki-ref-color-fg-muted: #7a5a58;
+  --ki-ref-color-fg-subtle: #9a6b67;
+  --ki-ref-color-fg-disabled: #b49995;
+
+  --ki-ref-color-border-default: #e5e7eb;
+  --ki-ref-color-border-warm: #ede6e3;
+}
+
+/* Layer 2: product semantics. Layer 3 below adapts them to AionUi and Arco. */
+[data-product='ki-buddy'][data-product-theme='ki-buddy-light'] {
+  color-scheme: light;
+
+  --ki-color-accent-fg: var(--ki-ref-color-red-600);
+  --ki-color-accent-bg: var(--ki-ref-color-red-600);
+  --ki-color-on-accent: var(--ki-ref-color-surface-default);
+  --ki-color-accent-bg-hover: var(--ki-ref-color-red-700);
+  --ki-color-accent-bg-pressed: var(--ki-ref-color-red-800);
+  --ki-color-accent-container: var(--ki-ref-color-red-50);
+  --ki-color-accent-container-subtle: var(--ki-ref-color-red-50);
+  --ki-color-on-accent-container: var(--ki-ref-color-red-700);
+  --ki-color-selection-bg: var(--ki-ref-color-red-100);
+  --ki-color-selection-indicator: var(--ki-ref-color-red-600);
+  --ki-color-focus-ring: var(--ki-ref-color-red-600);
+  --ki-component-nav-item-selected-icon-fg: var(--ki-color-accent-fg);
+  --ki-color-accent-rgb: var(--ki-ref-color-red-600-rgb);
+  --ki-color-accent-hover-rgb: var(--ki-ref-color-red-700-rgb);
+  --ki-color-accent-pressed-rgb: var(--ki-ref-color-red-800-rgb);
+
+  --ki-color-accent-scale-1: var(--ki-ref-color-red-50);
+  --ki-color-accent-scale-2: var(--ki-ref-color-red-100);
+  --ki-color-accent-scale-3: var(--ki-ref-color-red-200);
+  --ki-color-accent-scale-4: var(--ki-ref-color-red-300);
+  --ki-color-accent-scale-5: var(--ki-ref-color-red-400);
+  --ki-color-accent-scale-6: var(--ki-ref-color-red-500);
+  --ki-color-accent-scale-7: var(--ki-ref-color-red-600);
+  --ki-color-accent-scale-8: var(--ki-ref-color-red-700);
+  --ki-color-accent-scale-9: var(--ki-ref-color-red-800);
+  --ki-color-accent-scale-10: var(--ki-ref-color-red-900);
+  --ki-color-accent-scale-1-rgb: var(--ki-ref-color-red-50-rgb);
+  --ki-color-accent-scale-2-rgb: var(--ki-ref-color-red-100-rgb);
+  --ki-color-accent-scale-3-rgb: var(--ki-ref-color-red-200-rgb);
+  --ki-color-accent-scale-4-rgb: var(--ki-ref-color-red-300-rgb);
+  --ki-color-accent-scale-8-rgb: var(--ki-ref-color-red-700-rgb);
+  --ki-color-accent-scale-9-rgb: var(--ki-ref-color-red-800-rgb);
+  --ki-color-accent-scale-10-rgb: var(--ki-ref-color-red-900-rgb);
+
+  /* Product-owned login composition. */
+  --ki-component-login-canvas-bg: var(--ki-color-surface-canvas);
+  --ki-component-login-panel-bg: var(--ki-color-surface-default);
+  --ki-component-login-card-bg: linear-gradient(
+    145deg,
+    var(--ki-color-surface-default) 0%,
+    var(--ki-color-surface-default) 36%,
+    var(--ki-color-accent-container-subtle) 115%
+  );
+  --ki-component-login-card-border: var(--ki-color-selection-bg);
+  --ki-component-login-card-shadow: 0 30px 74px rgba(var(--ki-color-accent-rgb), 0.22);
+  --ki-component-login-field-bg: var(--ki-color-surface-subtle);
+  --ki-component-login-field-focus-bg: var(--ki-color-surface-default);
+  --ki-component-login-brand-bg: var(--ki-ref-color-red-900);
+  --ki-component-login-brand-fg: var(--ki-ref-color-surface-default);
+  --ki-component-login-brand-muted-fg: var(--ki-ref-color-red-100);
+  --ki-component-login-brand-line: rgba(var(--ki-ref-color-red-100-rgb), 0.16);
+  --ki-component-login-brand-line-strong: rgba(var(--ki-ref-color-red-100-rgb), 0.3);
+  --ki-component-login-brand-soft: rgba(var(--ki-ref-color-red-50-rgb), 0.08);
+  --ki-component-login-brand-marker: var(--ki-ref-color-red-300);
+  --ki-component-login-brand-wordmark: rgba(var(--ki-ref-color-red-50-rgb), 0.07);
+  --ki-component-login-focus-shadow: rgba(var(--ki-color-accent-rgb), 0.16);
+  --ki-component-login-brand-shadow: -24px 0 72px rgba(var(--ki-ref-color-red-900-rgb), 0.2);
+  --ki-component-login-mascot-shadow: 0 28px 72px rgba(var(--ki-ref-color-red-900-rgb), 0.32);
+  --ki-component-login-logo-shadow: 0 12px 30px rgba(var(--ki-ref-color-red-900-rgb), 0.16);
+  --ki-component-login-submit-shadow: 0 10px 24px rgba(var(--ki-color-accent-rgb), 0.2);
+  --ki-component-login-submit-shadow-hover: 0 14px 30px rgba(var(--ki-color-accent-rgb), 0.28);
+
+  /* Product surfaces intentionally inherit AionUi's neutral design system. */
+  --ki-color-surface-canvas: var(--bg-base);
+  --ki-color-surface-default: var(--bg-1);
+  --ki-color-surface-subtle: var(--bg-2);
+  --ki-color-surface-muted: var(--bg-3);
+  --ki-color-surface-raised: var(--dialog-fill-0);
+  --ki-color-border-default: var(--border-base);
+  --ki-color-border-subtle: var(--border-light);
+  --ki-color-text-primary: var(--text-primary);
+  --ki-color-text-secondary: var(--text-secondary);
+  --ki-color-text-disabled: var(--text-disabled);
+
+  /* AionUi / Arco adapter. */
+  --color-primary: var(--ki-color-accent-bg);
+  --primary: var(--ki-color-accent-bg);
+  --color-primary-dark-1: var(--ki-color-accent-bg-hover);
+  --primary-rgb: var(--ki-color-accent-rgb);
+
+  --brand: var(--ki-color-accent-fg);
+  --brand-hover: var(--ki-color-accent-bg-hover);
+  --color-brand-fill: var(--ki-color-accent-bg);
+}
+
+/* Keep subtle Arco surfaces upstream and own only the primary action steps. */
+[data-product='ki-buddy'][data-product-theme='ki-buddy-light'] body {
+  --arcoblue-5: var(--ki-color-accent-hover-rgb) !important;
+  --arcoblue-6: var(--ki-color-accent-rgb) !important;
+  --arcoblue-7: var(--ki-color-accent-pressed-rgb) !important;
+}
+
+[data-product='ki-buddy'][data-product-theme='ki-buddy-dark'] {
+  color-scheme: dark;
+
+  --ki-color-accent-fg: var(--ki-ref-color-red-400);
+  --ki-color-accent-bg: var(--ki-ref-color-red-400);
+  --ki-color-on-accent: var(--ki-ref-color-fg-primary);
+  --ki-color-accent-bg-hover: var(--ki-ref-color-red-300);
+  --ki-color-accent-bg-pressed: var(--ki-ref-color-red-200);
+  --ki-color-accent-container: var(--ki-ref-color-red-900);
+  --ki-color-accent-container-subtle: rgba(var(--ki-ref-color-red-400-rgb), 0.1);
+  --ki-color-on-accent-container: var(--ki-ref-color-red-200);
+  --ki-color-selection-bg: var(--ki-ref-color-red-900);
+  --ki-color-selection-indicator: var(--ki-ref-color-red-400);
+  --ki-color-focus-ring: var(--ki-ref-color-red-400);
+  --ki-component-nav-item-selected-icon-fg: var(--ki-color-accent-fg);
+  --ki-color-accent-rgb: var(--ki-ref-color-red-400-rgb);
+  --ki-color-accent-hover-rgb: var(--ki-ref-color-red-300-rgb);
+  --ki-color-accent-pressed-rgb: var(--ki-ref-color-red-200-rgb);
+
+  --ki-color-accent-scale-1: var(--ki-ref-color-red-900);
+  --ki-color-accent-scale-2: var(--ki-ref-color-red-800);
+  --ki-color-accent-scale-3: var(--ki-ref-color-red-700);
+  --ki-color-accent-scale-4: var(--ki-ref-color-red-600);
+  --ki-color-accent-scale-5: var(--ki-ref-color-red-500);
+  --ki-color-accent-scale-6: var(--ki-ref-color-red-400);
+  --ki-color-accent-scale-7: var(--ki-ref-color-red-300);
+  --ki-color-accent-scale-8: var(--ki-ref-color-red-200);
+  --ki-color-accent-scale-9: var(--ki-ref-color-red-100);
+  --ki-color-accent-scale-10: var(--ki-ref-color-red-50);
+  --ki-color-accent-scale-1-rgb: var(--ki-ref-color-red-900-rgb);
+  --ki-color-accent-scale-2-rgb: var(--ki-ref-color-red-800-rgb);
+  --ki-color-accent-scale-3-rgb: var(--ki-ref-color-red-700-rgb);
+  --ki-color-accent-scale-4-rgb: var(--ki-ref-color-red-600-rgb);
+  --ki-color-accent-scale-8-rgb: var(--ki-ref-color-red-200-rgb);
+  --ki-color-accent-scale-9-rgb: var(--ki-ref-color-red-100-rgb);
+  --ki-color-accent-scale-10-rgb: var(--ki-ref-color-red-50-rgb);
+
+  /* Product-owned login composition. */
+  --ki-component-login-canvas-bg: var(--ki-color-surface-canvas);
+  --ki-component-login-panel-bg: var(--ki-color-surface-default);
+  --ki-component-login-card-bg: linear-gradient(
+    145deg,
+    var(--ki-color-surface-default) 0%,
+    var(--ki-color-surface-default) 36%,
+    var(--ki-color-accent-container-subtle) 115%
+  );
+  --ki-component-login-card-border: var(--ki-color-selection-bg);
+  --ki-component-login-card-shadow: 0 30px 74px rgba(var(--ki-color-accent-rgb), 0.28);
+  --ki-component-login-field-bg: var(--ki-color-surface-subtle);
+  --ki-component-login-field-focus-bg: var(--ki-color-surface-default);
+  --ki-component-login-brand-bg: var(--ki-ref-color-red-900);
+  --ki-component-login-brand-fg: var(--ki-ref-color-surface-default);
+  --ki-component-login-brand-muted-fg: var(--ki-ref-color-red-100);
+  --ki-component-login-brand-line: rgba(var(--ki-ref-color-red-100-rgb), 0.16);
+  --ki-component-login-brand-line-strong: rgba(var(--ki-ref-color-red-100-rgb), 0.3);
+  --ki-component-login-brand-soft: rgba(var(--ki-ref-color-red-50-rgb), 0.08);
+  --ki-component-login-brand-marker: var(--ki-ref-color-red-300);
+  --ki-component-login-brand-wordmark: rgba(var(--ki-ref-color-red-50-rgb), 0.07);
+  --ki-component-login-focus-shadow: rgba(var(--ki-color-accent-rgb), 0.22);
+  --ki-component-login-brand-shadow: -24px 0 72px rgba(var(--ki-ref-color-red-900-rgb), 0.36);
+  --ki-component-login-mascot-shadow: 0 28px 72px rgba(var(--ki-ref-color-red-900-rgb), 0.48);
+  --ki-component-login-logo-shadow: 0 12px 30px rgba(var(--ki-ref-color-red-900-rgb), 0.28);
+  --ki-component-login-submit-shadow: 0 10px 24px rgba(var(--ki-color-accent-rgb), 0.18);
+  --ki-component-login-submit-shadow-hover: 0 14px 30px rgba(var(--ki-color-accent-rgb), 0.24);
+
+  /* Dark neutral surfaces and status colors continue to come from AionUi. */
+  --ki-color-surface-canvas: var(--bg-base);
+  --ki-color-surface-default: var(--bg-1);
+  --ki-color-surface-subtle: var(--bg-2);
+  --ki-color-surface-muted: var(--bg-3);
+  --ki-color-surface-raised: var(--dialog-fill-0);
+  --ki-color-border-default: var(--border-base);
+  --ki-color-border-subtle: var(--border-light);
+  --ki-color-text-primary: var(--text-primary);
+  --ki-color-text-secondary: var(--text-secondary);
+  --ki-color-text-disabled: var(--text-disabled);
+
+  /* AionUi / Arco adapter. */
+  --color-primary: var(--ki-color-accent-bg);
+  --primary: var(--ki-color-accent-bg);
+  --color-primary-dark-1: var(--ki-color-accent-scale-5);
+  --primary-rgb: var(--ki-color-accent-rgb);
+
+  --brand: var(--ki-color-accent-fg);
+  --brand-hover: var(--ki-color-accent-bg-hover);
+  --color-brand-fill: var(--ki-color-accent-bg);
+}
+
+[data-product='ki-buddy'][data-product-theme='ki-buddy-dark'] body {
+  --arcoblue-5: var(--ki-color-accent-hover-rgb) !important;
+  --arcoblue-6: var(--ki-color-accent-rgb) !important;
+  --arcoblue-7: var(--ki-color-accent-pressed-rgb) !important;
+}
+
+@media (prefers-contrast: more) {
+  [data-product='ki-buddy'][data-product-theme='ki-buddy-light'] {
+    --ki-color-selection-bg: var(--ki-ref-color-red-200);
+    --ki-color-selection-indicator: var(--ki-ref-color-red-700);
+    --ki-color-focus-ring: var(--ki-ref-color-red-700);
+    --ki-color-border-default: var(--ki-ref-color-fg-muted);
+  }
+
+  [data-product='ki-buddy'][data-product-theme='ki-buddy-dark'] {
+    --ki-color-selection-bg: var(--ki-ref-color-red-800);
+    --ki-color-selection-indicator: var(--ki-ref-color-red-300);
+    --ki-color-focus-ring: var(--ki-ref-color-red-300);
+  }
+}
+
+@media (forced-colors: active) {
+  [data-product='ki-buddy'] {
+    --ki-color-accent-fg: LinkText;
+    --ki-color-accent-bg: Highlight;
+    --ki-color-on-accent: HighlightText;
+    --ki-color-accent-bg-hover: Highlight;
+    --ki-color-accent-bg-pressed: Highlight;
+    --ki-color-accent-container: Canvas;
+    --ki-color-accent-container-subtle: Canvas;
+    --ki-color-on-accent-container: CanvasText;
+    --ki-color-selection-bg: Canvas;
+    --ki-color-selection-indicator: Highlight;
+    --ki-color-focus-ring: Highlight;
+    --ki-component-login-brand-bg: Canvas;
+    --ki-component-login-card-bg: Canvas;
+    --ki-component-login-card-border: CanvasText;
+    --ki-component-login-card-shadow: none;
+    --ki-component-login-brand-fg: CanvasText;
+    --ki-component-login-brand-muted-fg: CanvasText;
+    --ki-component-login-brand-line: CanvasText;
+    --ki-component-login-brand-line-strong: Highlight;
+    --ki-component-login-brand-soft: Canvas;
+    --ki-component-login-brand-marker: Highlight;
+    --ki-component-login-brand-wordmark: CanvasText;
+    --ki-component-login-focus-shadow: transparent;
+    --ki-component-login-brand-shadow: none;
+    --ki-component-login-mascot-shadow: none;
+    --ki-component-login-logo-shadow: none;
+    --ki-component-login-submit-shadow: none;
+    --ki-component-login-submit-shadow-hover: none;
+  }
+
+  [data-product='ki-buddy'] :focus-visible {
+    outline-color: Highlight !important;
+  }
+}

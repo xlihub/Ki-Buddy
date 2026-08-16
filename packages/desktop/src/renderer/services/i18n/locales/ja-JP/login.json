@@ -16,9 +16,10 @@
   "footerPrimary": "コマンドラインAIをモダンに変革",
   "footerSecondary": "効率的でエレガント",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy - Agents にログイン",
+    "pageTitle": "{{productName}} - Agents にログイン",
     "brand": "Ki-Buddy",
     "subtitle": "既存の Agents アカウントでログインしてください",
+    "welcome": "おかえりなさい",
     "agentsDeployment": "Agents デプロイ URL",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "デプロイ URL をクリア",

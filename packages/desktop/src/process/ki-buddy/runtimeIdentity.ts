@@ -6,7 +6,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolveKiBuddyRuntimeIdentity } from '@/common/platform/ki-buddy';
+import { KI_BUDDY_PRODUCT_CONFIG, resolveKiBuddyRuntimeIdentity } from '@/common/platform/ki-buddy';
 
 export { KI_BUDDY_PRODUCT_RUNTIME, resolveKiBuddyRuntimeIdentity } from '@/common/platform/ki-buddy';
 
@@ -17,6 +17,11 @@ export function readKiBuddyRuntimeIdentity(appPath: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Resolves the packaged product protocol without enabling any product runtime side effects. */
+export function resolveKiBuddyProtocolScheme(appPath: string): string | null {
+  return readKiBuddyRuntimeIdentity(appPath) ? KI_BUDDY_PRODUCT_CONFIG.electronBuilder.protocolScheme : null;
 }
 
 /** Selects the Ki-Buddy desktop runtime without conflating it with other Electron modes. */

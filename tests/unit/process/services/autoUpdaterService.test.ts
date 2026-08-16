@@ -8,7 +8,6 @@ import path from 'path';
 import { rmSync } from 'fs';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import productConfig from '../../../../ki-buddy-product.json';
 
 const autoUpdaterMock = vi.hoisted(() => ({
   logger: null as unknown,
@@ -130,25 +129,51 @@ describe('AutoUpdaterService', () => {
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled();
   });
 
-  it('configures electron-updater from the Ki-Buddy product repository', async () => {
+  it('configures electron-updater from the AionUi CDN by default', async () => {
     const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
 
-    autoUpdaterService.resetForTest();
-
-    const [owner, repo] = productConfig.updates.repository.split('/');
+    autoUpdaterService.initialize();
 
     expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith({
-      provider: 'github',
-      owner,
-      repo,
-      tagNamePrefix: productConfig.updates.tagPrefix,
+      provider: 'custom',
+      url: 'https://static.aionui.com/releases',
+      updateProvider: expect.any(Function),
     });
+  });
+
+  it('accepts a product-owned update feed at the runtime seam', async () => {
+    const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
+
+    autoUpdaterService.initialize(undefined, {
+      feedOptions: {
+        provider: 'custom',
+        owner: 'xlihub',
+        repo: 'Ki-Buddy',
+        tagPrefix: 'ki-buddy-v',
+        updateProvider: class ProductUpdateProvider {
+          readonly product = 'ki-buddy';
+        },
+      },
+      label: 'Ki-Buddy GitHub provider',
+      updaterCacheDirName: 'com.xlihub.ki-buddy',
+    });
+
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'custom',
+        owner: 'xlihub',
+        repo: 'Ki-Buddy',
+        tagPrefix: 'ki-buddy-v',
+        updateProvider: expect.any(Function),
+      })
+    );
   });
 
   it('enables forced updater checks in unpacked dev builds when requested', async () => {
     process.env.AIONUI_FORCE_DEV_AUTO_UPDATE = '1';
 
-    await import('@/process/services/autoUpdaterService');
+    const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
+    autoUpdaterService.initialize();
 
     expect(autoUpdaterMock.forceDevUpdateConfig).toBe(true);
   });
@@ -157,7 +182,8 @@ describe('AutoUpdaterService', () => {
     process.env.AIONUI_FORCE_DEV_AUTO_UPDATE = '1';
     process.env.AIONUI_DEBUG_AUTO_UPDATE_CURRENT_VERSION = '2.1.12';
 
-    await import('@/process/services/autoUpdaterService');
+    const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
+    autoUpdaterService.initialize();
 
     expect(autoUpdaterMock.currentVersion.version).toBe('2.1.12');
   });
@@ -167,7 +193,8 @@ describe('AutoUpdaterService', () => {
     process.env.AIONUI_FORCE_DEV_AUTO_UPDATE = '1';
     process.env.AIONUI_DEBUG_AUTO_UPDATE_CURRENT_VERSION = '2.1.12';
 
-    await import('@/process/services/autoUpdaterService');
+    const { autoUpdaterService } = await import('@/process/services/autoUpdaterService');
+    autoUpdaterService.initialize();
 
     expect(autoUpdaterMock.forceDevUpdateConfig).toBe(false);
     expect(autoUpdaterMock.currentVersion.version).toBe('2.1.13');

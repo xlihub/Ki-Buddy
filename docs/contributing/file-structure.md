@@ -188,7 +188,7 @@ A single directory must not contain more than **10** direct children (files + su
 
 - **Prefer UnoCSS utility classes**: Use atomic classes for simple styles (`flex items-center gap-8px`).
 - **Complex/reusable styles**: Must use **CSS Modules** (`ComponentName.module.css`). Plain `.css` files are not allowed for component styles.
-- **Semantic color tokens only**: Use colors from `uno.config.ts` (e.g., `text-t-primary`, `bg-base`, `border-b-base`) or CSS variables. **Hardcoded color values are forbidden** (e.g., `#86909C`, `rgb(0,0,0)`). Exception: theme preset files under `src/renderer/pages/settings/CssThemeSettings/presets/` may use hardcoded values since they define the theme tokens themselves.
+- **Semantic color tokens only**: Use colors from `uno.config.ts` (e.g., `text-t-primary`, `bg-base`, `border-b-base`) or CSS variables. **Hardcoded color values are forbidden** (e.g., `#86909C`, `rgb(0,0,0)`). Exception: dedicated token-source files under `src/renderer/styles/themes/` and theme preset files under `src/renderer/pages/settings/CssThemeSettings/presets/` may use hardcoded values because they define the theme tokens themselves; components must consume their semantic variables instead of these literals.
 - **No inline styles**: Do not use `style={{}}` except for dynamically computed values (e.g., calculated widths, positions).
 - **Arco style overrides**: Co-locate in the component's CSS Module using `:global(.arco-xxx)`. Do not use a global override file.
 - **Global styles**: Only allowed in `src/renderer/styles/` (themes, reset, layout base). No CSS files directly in `src/renderer/` root.

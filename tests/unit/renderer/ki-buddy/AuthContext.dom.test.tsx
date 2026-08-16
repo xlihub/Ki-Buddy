@@ -8,6 +8,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { KiBuddyAuthProvider, useKiBuddyAuth } from '@/renderer/pages/ki-buddy/Auth';
 
@@ -74,6 +75,7 @@ describe('Ki-Buddy AuthProvider session restoration', () => {
       login: loginMock,
       logout: logoutMock,
     };
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
   });
 
   it('clears runtime state without deleting client storage when the credential is invalidated', async () => {

@@ -64,10 +64,13 @@ vi.mock('@/renderer/components/settings/SettingsModal/contents/FeedbackReportMod
 
 import AboutModalContent from '@/renderer/components/settings/SettingsModal/contents/AboutModalContent';
 import { setUpdateReadyState } from '@/renderer/components/settings/updateReadyState';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 describe('AboutModalContent update ready state', () => {
   beforeEach(() => {
     vi.stubGlobal('__APP_VERSION__', '2.1.13');
+    vi.stubGlobal('__KI_BUDDY_VERSION__', '0.1.1');
+    window.__kiBuddyProductPresentation = null;
     mocks.quitAndInstallMock.mockResolvedValue(undefined);
     mocks.autoUpdateCheckMock.mockResolvedValue({ success: true });
     mocks.updateCheckMock.mockResolvedValue({
@@ -102,6 +105,15 @@ describe('AboutModalContent update ready state', () => {
     fireEvent.click(await screen.findByRole('button', { name: '2.1.14 已就绪, 立即安装' }));
 
     expect(mocks.quitAndInstallMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the Ki-Buddy product version when its capability is active', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+
+    render(<AboutModalContent />);
+
+    expect(screen.getByText('v0.1.1')).toBeInTheDocument();
+    expect(screen.queryByText('v2.1.13')).not.toBeInTheDocument();
   });
 
   it('shows preparing loading state for ready auto-update install from About', async () => {

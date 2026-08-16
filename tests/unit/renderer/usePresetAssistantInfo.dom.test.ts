@@ -7,6 +7,7 @@
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { TChatConversation } from '@/common/config/storage';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 import { resolveAssistantConfigId, usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
 
 const useSWRMock = vi.fn();
@@ -21,6 +22,9 @@ const TEST_LOGOS: Record<string, string> = {
   'openclaw-gateway': '/api/assets/logos/tools/openclaw.svg',
 };
 const getAgentLogo = (backend: string): string | null => TEST_LOGOS[backend.toLowerCase()] ?? null;
+
+vi.mock('@/renderer/assets/ki-buddy/app.png', () => ({ default: '/assets/ki-buddy/app.png' }));
+vi.mock('@/renderer/assets/ki-buddy/mascot.png', () => ({ default: '/assets/ki-buddy/mascot.png' }));
 
 vi.mock('@/renderer/utils/model/agentLogo', () => ({
   useAgentLogos: () => TEST_LOGOS,
@@ -65,6 +69,7 @@ describe('usePresetAssistantInfo', () => {
   beforeEach(() => {
     useSWRMock.mockReset();
     currentLanguage = 'en-US';
+    window.__kiBuddyProductPresentation = null;
   });
 
   it('prefers preset assistant avatar over custom runtime metadata when both identities exist', () => {
@@ -173,6 +178,36 @@ describe('usePresetAssistantInfo', () => {
       isEmoji: false,
       backend: 'gemini',
       assistantId: 'assistant-social',
+    });
+  });
+
+  it('uses the Ki CLI identity for built-in CLI snapshots in existing conversations', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockImplementation((key: unknown) => {
+      if (key === 'assistants.list') return { data: [], isLoading: false };
+      if (key === 'extensions.acpAdapters') return { data: [], isLoading: false };
+      return { data: undefined, isLoading: false };
+    });
+
+    const conversation = {
+      ...makeConversation({ backend: 'aionrs' }),
+      assistant: {
+        id: 'bare-aionrs',
+        source: 'generated',
+        name: 'Aion CLI',
+        avatar: '/api/assets/logos/aionui.svg',
+        backend: 'aionrs',
+      },
+    } as TChatConversation;
+
+    const { result } = renderHook(() => usePresetAssistantInfo(conversation));
+
+    expect(result.current.info).toMatchObject({
+      name: 'Ki CLI',
+      logo: expect.stringMatching(/^data:image\/png;base64,/),
+      isEmoji: false,
+      backend: 'aionrs',
+      assistantId: 'bare-aionrs',
     });
   });
 

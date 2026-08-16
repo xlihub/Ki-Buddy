@@ -32,13 +32,16 @@ const emitStream = (message: unknown) => streamHandlers.forEach((h) => h(message
 
 class FakeNotification {
   static permission = 'granted';
-  onclick: (() => void) | null = null;
+  clickListener: (() => void) | null = null;
   close = vi.fn();
   constructor(
     public title: string,
     public options: { body: string }
   ) {
     FakeNotification.instances.push(this);
+  }
+  addEventListener(type: string, listener: () => void): void {
+    if (type === 'click') this.clickListener = listener;
   }
   static instances: FakeNotification[] = [];
 }
@@ -70,7 +73,7 @@ describe('useBrowserNotification', () => {
     emitStream({ type: 'finish', conversation_id: 's1', turn_id: 't1' });
     expect(FakeNotification.instances).toHaveLength(1);
     expect(FakeNotification.instances[0].options.body).toBe('settings.browserNotification.bodyTurnCompleted');
-    FakeNotification.instances[0].onclick?.();
+    FakeNotification.instances[0].clickListener?.();
     expect(navigate).toHaveBeenCalledWith('/conversation/s1');
   });
 

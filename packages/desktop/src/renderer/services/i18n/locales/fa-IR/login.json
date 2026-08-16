@@ -16,9 +16,10 @@
   "footerPrimary": "هوش مصنوعی خط فرمان خود را متحول کنید",
   "footerSecondary": "مدرن و کارآمد",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy - ورود به Agents",
+    "pageTitle": "{{productName}} - ورود به Agents",
     "brand": "Ki-Buddy",
     "subtitle": "با حساب موجود Agents وارد شوید",
+    "welcome": "خوش آمدید",
     "agentsDeployment": "نشانی استقرار Agents",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "پاک کردن نشانی استقرار",

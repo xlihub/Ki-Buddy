@@ -16,9 +16,10 @@
   "footerPrimary": "Преобразуйте свой ИИ командной строки",
   "footerSecondary": "Современно и эффективно",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy — Вход в Agents",
+    "pageTitle": "{{productName}} — Вход в Agents",
     "brand": "Ki-Buddy",
     "subtitle": "Войдите с существующей учётной записью Agents",
+    "welcome": "С возвращением",
     "agentsDeployment": "URL развёртывания Agents",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "Очистить URL развёртывания",

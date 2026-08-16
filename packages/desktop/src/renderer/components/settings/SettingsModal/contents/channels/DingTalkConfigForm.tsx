@@ -10,6 +10,7 @@ import { isAionrsAssistant, type Assistant } from '@/common/types/agent/assistan
 import { resolveLocaleKey } from '@/common/utils';
 import { openExternalUrl } from '@/renderer/utils/platform';
 import { resolveAssistantName } from '@/renderer/utils/model/assistantDisplay';
+import { getProductDocumentationUrl } from '@/renderer/services/runtime/productBrandRuntime';
 import GoogleModelSelector from '@/renderer/pages/conversation/platforms/gemini/GoogleModelSelector';
 import type { GoogleModelSelection } from '@/renderer/pages/conversation/platforms/gemini/useGoogleModelSelection';
 import { Button, Dropdown, Empty, Input, Menu, Message, Spin, Tooltip } from '@arco-design/web-react';
@@ -68,6 +69,7 @@ const DINGTALK_DEV_DOCS_URL = 'https://github.com/iOfficeAI/AionUi/wiki/DingTalk
 const DingTalkConfigForm: React.FC<DingTalkConfigFormProps> = ({ pluginStatus, modelSelection, onStatusChange }) => {
   const { t, i18n } = useTranslation();
   const localeKey = resolveLocaleKey(i18n?.language ?? 'en-US');
+  const dingTalkDocsUrl = getProductDocumentationUrl(DINGTALK_DEV_DOCS_URL);
 
   // DingTalk credentials
   const [clientId, setClientId] = useState('');
@@ -325,10 +327,10 @@ const DingTalkConfigForm: React.FC<DingTalkConfigFormProps> = ({ pluginStatus, m
           <span>
             <a
               className='text-primary hover:underline cursor-pointer text-12px'
-              href={DINGTALK_DEV_DOCS_URL}
+              href={dingTalkDocsUrl}
               onClick={(e) => {
                 e.preventDefault();
-                openExternalUrl(DINGTALK_DEV_DOCS_URL).catch(console.error);
+                openExternalUrl(dingTalkDocsUrl).catch(console.error);
               }}
             >
               {t('settings.dingtalk.devConsoleLink', 'DingTalk Open Platform')}
@@ -383,10 +385,10 @@ const DingTalkConfigForm: React.FC<DingTalkConfigFormProps> = ({ pluginStatus, m
           <span>
             <a
               className='text-primary hover:underline cursor-pointer text-12px'
-              href={DINGTALK_DEV_DOCS_URL}
+              href={dingTalkDocsUrl}
               onClick={(e) => {
                 e.preventDefault();
-                openExternalUrl(DINGTALK_DEV_DOCS_URL).catch(console.error);
+                openExternalUrl(dingTalkDocsUrl).catch(console.error);
               }}
             >
               {t('settings.dingtalk.devConsoleLink', 'DingTalk Open Platform')}

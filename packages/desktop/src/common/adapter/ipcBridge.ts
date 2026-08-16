@@ -159,11 +159,33 @@ export const shell = {
 // Assistants — routed to /api/assistants/*
 // ---------------------------------------------------------------------------
 
+type AssistantPresentationMapper = {
+  detail: (detail: AssistantDetail) => AssistantDetail;
+  list: (assistants: Assistant[]) => Assistant[];
+};
+
+const IDENTITY_ASSISTANT_PRESENTATION_MAPPER: AssistantPresentationMapper = {
+  detail: (detail) => detail,
+  list: (assistantList) => assistantList,
+};
+
+let assistantPresentationMapper = IDENTITY_ASSISTANT_PRESENTATION_MAPPER;
+
+/** Registers one renderer-owned presentation mapper at the assistant API boundary. */
+export function configureAssistantPresentationMapper(mapper?: AssistantPresentationMapper): void {
+  assistantPresentationMapper = mapper ?? IDENTITY_ASSISTANT_PRESENTATION_MAPPER;
+}
+
 export const assistants = {
-  list: httpGet<Assistant[], void>('/api/assistants'),
-  get: httpGet<AssistantDetail, { id: string; locale?: string }>(
-    ({ id, locale }) =>
-      `/api/assistants/${encodeURIComponent(id)}${locale ? `?locale=${encodeURIComponent(locale)}` : ''}`
+  list: withResponseMap(httpGet<Assistant[], void>('/api/assistants'), (assistantList) =>
+    assistantPresentationMapper.list(assistantList)
+  ),
+  get: withResponseMap(
+    httpGet<AssistantDetail, { id: string; locale?: string }>(
+      ({ id, locale }) =>
+        `/api/assistants/${encodeURIComponent(id)}${locale ? `?locale=${encodeURIComponent(locale)}` : ''}`
+    ),
+    (detail) => assistantPresentationMapper.detail(detail)
   ),
   create: httpPost<Assistant, CreateAssistantRequest>('/api/assistants'),
   update: httpPut<Assistant, UpdateAssistantRequest>((p) => `/api/assistants/${p.id}`),

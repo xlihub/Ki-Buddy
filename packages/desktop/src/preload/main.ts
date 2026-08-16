@@ -11,7 +11,11 @@
 import '@sentry/electron/preload';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { ADAPTER_BRIDGE_EVENT_KEY } from '../common/adapter/constant';
-import { KI_BUDDY_CORE_TRANSPORT_CHANNEL, KI_BUDDY_PRODUCT_RUNTIME } from '@/common/platform/ki-buddy';
+import {
+  KI_BUDDY_CORE_TRANSPORT_CHANNEL,
+  KI_BUDDY_PRODUCT_CAPABILITY,
+  KI_BUDDY_PRODUCT_RUNTIME,
+} from '@/common/platform/ki-buddy';
 import { KI_BUDDY_AUTH_CHANNELS } from '@/common/platform/kiBuddyAuth';
 import type { KiBuddyAuthApi } from '@/common/types/platform/kiBuddyAuth';
 
@@ -37,6 +41,10 @@ const kiBuddyAuthCapability =
         ...(coreCsrfToken ? { kiBuddyCoreTransport: { csrfToken: coreCsrfToken } } : {}),
       }
     : {};
+const productPresentationCapability =
+  productRuntimeIdentity === KI_BUDDY_PRODUCT_RUNTIME ? KI_BUDDY_PRODUCT_CAPABILITY : null;
+
+contextBridge.exposeInMainWorld('__getKiBuddyProductPresentation', () => productPresentationCapability);
 
 /**
  * @description 注入到renderer进程中, 用于与main进程通信

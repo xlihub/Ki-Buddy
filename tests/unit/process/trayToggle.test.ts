@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { shouldShowFromTray } from '@/process/utils/tray';
+import { formatTrayBrandText, shouldShowFromTray } from '@/process/utils/tray';
 
 describe('shouldShowFromTray', () => {
   it('shows when window is not visible', () => {
@@ -18,5 +18,12 @@ describe('shouldShowFromTray', () => {
 
   it('hides when window is visible and not minimized', () => {
     expect(shouldShowFromTray(true, false)).toBe(false);
+  });
+});
+
+describe('tray brand text', () => {
+  it('uses the configured product name without changing unrelated translated text', () => {
+    expect(formatTrayBrandText('Show AionUi', 'Ki-Buddy')).toBe('Show Ki-Buddy');
+    expect(formatTrayBrandText('Recent conversations', 'Ki-Buddy')).toBe('Recent conversations');
   });
 });

@@ -24,8 +24,7 @@ import {
   recordAutoUpdateQuitAndInstall,
   recordAutoUpdateStatus,
 } from './autoUpdateDiagnostics';
-import { buildProductFeedOptions } from './updateFeed';
-import productConfig from '../../../../../ki-buddy-product.json';
+import { createAionUiUpdateFeedConfiguration, type UpdateFeedConfiguration } from './updateFeed';
 
 const FORCE_DEV_AUTO_UPDATE_ENV = 'AIONUI_FORCE_DEV_AUTO_UPDATE';
 const DEBUG_AUTO_UPDATE_CURRENT_VERSION_ENV = 'AIONUI_DEBUG_AUTO_UPDATE_CURRENT_VERSION';
@@ -131,29 +130,26 @@ class AutoUpdaterService extends EventEmitter {
     // Disable auto-download for manual control
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
-    this.configureDevAutoUpdateDebug();
-    const productFeedOptions = buildProductFeedOptions();
+  }
 
-    // Set the correct update channel based on platform and architecture before
-    // any update checks are performed
+  private configureUpdateFeed(configuration: UpdateFeedConfiguration): void {
+    this.configureDevAutoUpdateDebug(configuration);
     const channel = getUpdateChannel();
     if (channel !== undefined) {
       autoUpdater.channel = channel;
       log.info(`Update channel set to: ${channel}`);
     }
-    autoUpdater.setFeedURL(productFeedOptions);
-    log.info('Update feed set to Ki-Buddy GitHub provider');
-    log.debug('[auto-update] product feed configured', {
-      provider: productFeedOptions.provider,
-      repository: `${productFeedOptions.owner}/${productFeedOptions.repo}`,
-      tagNamePrefix: productFeedOptions.tagNamePrefix,
+    autoUpdater.setFeedURL(configuration.feedOptions);
+    log.info(`Update feed set to ${configuration.label}`);
+    log.debug('[auto-update] feed configured', {
       channel: channel ?? 'latest',
+      label: configuration.label,
       platform: process.platform,
       arch: process.arch,
     });
   }
 
-  private configureDevAutoUpdateDebug(): void {
+  private configureDevAutoUpdateDebug(configuration: UpdateFeedConfiguration): void {
     if (app.isPackaged || process.env[FORCE_DEV_AUTO_UPDATE_ENV] !== '1') {
       return;
     }
@@ -167,7 +163,7 @@ class AutoUpdaterService extends EventEmitter {
     // setFeedURL(), so this file only needs to satisfy the cache-dir lookup. Write a
     // minimal config to a temp path and point the updater at it. Must run before
     // setFeedURL() — the updateConfigPath setter clears the injected provider.
-    this.ensureDevUpdateConfig();
+    this.ensureDevUpdateConfig(configuration);
 
     const debugCurrentVersion = process.env[DEBUG_AUTO_UPDATE_CURRENT_VERSION_ENV];
     if (!debugCurrentVersion) {
@@ -194,15 +190,14 @@ class AutoUpdaterService extends EventEmitter {
    * setFeedURL() — but `updaterCacheDirName` must match the packaged value
    * (electron-builder defaults it to the appId) to reuse the same cache dir.
    */
-  private ensureDevUpdateConfig(): void {
+  private ensureDevUpdateConfig(configuration: UpdateFeedConfiguration): void {
     try {
-      const productFeedOptions = buildProductFeedOptions();
+      const feedEntries = Object.entries(configuration.feedOptions).filter(
+        ([, value]) => typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+      );
       const devConfig = [
-        `provider: ${productFeedOptions.provider}`,
-        `owner: ${productFeedOptions.owner}`,
-        `repo: ${productFeedOptions.repo}`,
-        `tagNamePrefix: ${productFeedOptions.tagNamePrefix}`,
-        `updaterCacheDirName: ${productConfig.electronBuilder.appId}`,
+        ...feedEntries.map(([key, value]) => `${key}: ${String(value)}`),
+        `updaterCacheDirName: ${configuration.updaterCacheDirName}`,
         '',
       ].join('\n');
       const configPath = path.join(app.getPath('userData'), 'dev-app-update.yml');
@@ -234,8 +229,12 @@ class AutoUpdaterService extends EventEmitter {
    * Initialize the service with an optional status broadcast callback.
    * This decouples the service from any specific window implementation.
    */
-  initialize(statusBroadcastCallback?: StatusBroadcastCallback): void {
+  initialize(
+    statusBroadcastCallback?: StatusBroadcastCallback,
+    updateFeedConfiguration: UpdateFeedConfiguration = createAionUiUpdateFeedConfiguration()
+  ): void {
     this._statusBroadcastCallback = statusBroadcastCallback ?? null;
+    this.configureUpdateFeed(updateFeedConfiguration);
     this._isInitialized = true;
 
     // Setup event handlers only once

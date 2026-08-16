@@ -93,6 +93,10 @@ describe('recover corrupted database preload bridge', () => {
     expect(invalidated).toHaveBeenCalledOnce();
     expect(off).toHaveBeenCalledWith('ki-buddy-auth:session-invalidated', subscription?.[1]);
     expect(electronApi?.kiBuddyCoreTransport).toEqual({ csrfToken: 'core-csrf-token' });
+    const productPresentationCall = exposeInMainWorld.mock.calls.find(
+      ([key]) => key === '__getKiBuddyProductPresentation'
+    );
+    expect(productPresentationCall?.[1]()).toMatchObject({ id: 'ki-buddy', schemaVersion: 2 });
   });
 
   it('does not expose Ki-Buddy authentication in the ordinary AionUi desktop runtime', async () => {
@@ -103,6 +107,10 @@ describe('recover corrupted database preload bridge', () => {
 
     expect(electronApi?.kiBuddyAuth).toBeUndefined();
     expect(electronApi?.kiBuddyCoreTransport).toBeUndefined();
+    const productPresentationCall = exposeInMainWorld.mock.calls.find(
+      ([key]) => key === '__getKiBuddyProductPresentation'
+    );
+    expect(productPresentationCall?.[1]()).toBeNull();
     expect(sendSync).not.toHaveBeenCalledWith('ki-buddy:core-transport:get-csrf-token');
   });
 });

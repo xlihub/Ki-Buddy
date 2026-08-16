@@ -14,12 +14,56 @@
     <link rel="apple-touch-icon" href="./pwa/icon-180.png" />
     <title>AionUi</title>
     <script>
-      // Synchronously restore theme appearance from localStorage to prevent theme flash
+      // Restore appearance and explicit product presentation before the first business frame.
       (function () {
         try {
           var theme = localStorage.getItem('__aionui_theme');
           if (theme) document.documentElement.setAttribute('data-theme', theme);
         } catch (e) {}
+        try {
+          window.__kiBuddyProductPresentation = null;
+          window.__kiBuddyProductBootstrapError = null;
+          var candidate =
+            typeof window.__getKiBuddyProductPresentation === 'function'
+              ? window.__getKiBuddyProductPresentation()
+              : null;
+          var product =
+            candidate &&
+            candidate.id === 'ki-buddy' &&
+            candidate.schemaVersion === 2 &&
+            candidate.brand &&
+            typeof candidate.brand.productName === 'string' &&
+            candidate.assets &&
+            typeof candidate.assets.logo === 'string' &&
+            candidate.assets.logo.length > 0 &&
+            typeof candidate.assets.mascot === 'string' &&
+            candidate.assets.mascot.length > 0 &&
+            candidate.locale &&
+            typeof candidate.locale.namespace === 'string' &&
+            candidate.themes &&
+            typeof candidate.themes.light === 'string' &&
+            candidate.themes.light.length > 0 &&
+            typeof candidate.themes.dark === 'string' &&
+            candidate.themes.dark.length > 0
+              ? candidate
+              : null;
+          if (candidate && !product) throw new Error('Invalid Ki-Buddy product presentation capability');
+          window.__kiBuddyProductPresentation = product;
+          if (!product) return;
+          var root = document.documentElement;
+          root.setAttribute('data-product', product.id);
+          var appearance = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+          var productTheme = product.themes && product.themes[appearance];
+          if (productTheme) root.setAttribute('data-product-theme', productTheme);
+          document.title = product.brand.productName;
+          var applicationName = document.querySelector('meta[name="application-name"]');
+          var mobileTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+          if (applicationName) applicationName.setAttribute('content', product.brand.productName);
+          if (mobileTitle) mobileTitle.setAttribute('content', product.brand.productName);
+        } catch (e) {
+          window.__kiBuddyProductBootstrapError = e instanceof Error ? e.message : String(e);
+          console.error('[Ki-Buddy product bootstrap] Failed to apply product presentation', e);
+        }
       })();
     </script>
     <style>

@@ -52,7 +52,8 @@ import type { TFunction } from 'i18next';
 // Context providers
 import { AuthProvider } from './hooks/context/AuthContext';
 import { installKiBuddyRendererCoreTransport, KiBuddyAuthProvider } from './pages/ki-buddy/Auth';
-import { getKiBuddyRendererRuntime } from './services/runtime/kiBuddyRuntime';
+import { getKiBuddyProductRuntime, getKiBuddyRendererRuntime } from './services/runtime/kiBuddyRuntime';
+import { initializeRendererBrand, installProductAssistantCatalogAdapter } from './services/runtime/productBrandRuntime';
 import { FeedbackProvider } from './hooks/context/FeedbackContext';
 import { ThemeProvider } from './hooks/context/ThemeContext';
 import { PreviewProvider } from './pages/conversation/Preview/context/PreviewContext';
@@ -80,7 +81,10 @@ import './styles/markdown.css';
 // authoritative settings from the backend instead of the empty cache.
 import { configService } from '@/common/config/configService';
 const kiBuddyRuntime = getKiBuddyRendererRuntime();
+const kiBuddyProductRuntime = getKiBuddyProductRuntime();
 if (kiBuddyRuntime) installKiBuddyRendererCoreTransport();
+installProductAssistantCatalogAdapter();
+initializeRendererBrand();
 configService.initialize().catch((err) => {
   console.error('Failed to initialize config:', err);
 });
@@ -308,8 +312,11 @@ const Config: React.FC<PropsWithChildren> = ({ children }) => {
     i18n: { language },
   } = useTranslation();
   const arcoLocale = arcoLocales[language] ?? enUS;
+  const primaryColor = kiBuddyProductRuntime
+    ? getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()
+    : '#4E5969';
 
-  return React.createElement(ConfigProvider, { theme: { primaryColor: '#4E5969' }, locale: arcoLocale }, children);
+  return React.createElement(ConfigProvider, { theme: { primaryColor }, locale: arcoLocale }, children);
 };
 
 const Main = () => {

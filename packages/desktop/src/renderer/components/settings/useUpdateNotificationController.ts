@@ -22,13 +22,11 @@ import { getIncludePrerelease, runUpdateCheck, type CheckUpdateOutcome } from '.
 import { setUpdateReadyState } from './updateReadyState';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import { OPEN_MIGRATION_DIALOG_EVENT } from './UpdateMigrationDialog';
-import productConfig from '../../../../../../ki-buddy-product.json';
+import { getRendererAppVersion, getRendererBrand } from '@/renderer/services/runtime/productBrandRuntime';
 
 type AvailableOutcome = Extract<CheckUpdateOutcome, { kind: 'available' }>;
 
 export const UPDATE_AVAILABLE_EVENT = 'aionui-update-available';
-
-declare const __APP_VERSION__: string;
 
 const formatSpeed = (bytesPerSecond: number) => {
   if (bytesPerSecond > 1024 * 1024) {
@@ -63,15 +61,13 @@ const toManualProgress = (evt: UpdateDownloadProgressEvent): UpdateNotificationP
 
 const createInitialState = (): UpdateNotificationState => ({
   ...initialUpdateNotificationState,
-  currentVersion: __APP_VERSION__,
+  currentVersion: getRendererAppVersion(),
 });
 
 const reduceNotificationState = (
   current: UpdateNotificationState,
   event: UpdateNotificationEvent
 ): UpdateNotificationState => updateNotificationReducer(current, event).state;
-
-const RELEASES_PAGE_URL = productConfig.updates.releasePageUrl;
 
 const getVersionLabelFromState = (state: UpdateNotificationState): string =>
   state.updateInfo?.version || state.autoUpdateInfo?.version || '';
@@ -107,7 +103,7 @@ export const useUpdateNotificationController = () => {
       console.warn('Manual release info check error:', error);
       dispatch({
         type: 'manualReleaseInfoFailed',
-        releasePageUrl: stateRef.current.releasePageUrl || RELEASES_PAGE_URL,
+        releasePageUrl: stateRef.current.releasePageUrl || getRendererBrand().links.releases,
       });
     }
   }, []);
@@ -117,7 +113,7 @@ export const useUpdateNotificationController = () => {
       dispatch({
         type: 'autoStatusAvailable',
         version: evt.version || '',
-        currentVersion: evt.currentVersion || __APP_VERSION__,
+        currentVersion: evt.currentVersion || getRendererAppVersion(),
         releaseNotes: evt.releaseNotes,
       });
       void loadManualReleaseInfoForDisplay();
@@ -130,7 +126,7 @@ export const useUpdateNotificationController = () => {
 
     const outcome = await runUpdateCheck({
       includePrerelease: getIncludePrerelease(),
-      fallbackVersion: __APP_VERSION__,
+      fallbackVersion: getRendererAppVersion(),
       checkFailedLabel: t('update.checkFailed'),
     });
 
@@ -194,7 +190,7 @@ export const useUpdateNotificationController = () => {
       dispatch({
         type: 'autoDownloadedRestored',
         version: res.data.version,
-        currentVersion: res.data.currentVersion || __APP_VERSION__,
+        currentVersion: res.data.currentVersion || getRendererAppVersion(),
         releaseNotes: res.data.releaseNotes,
         size: res.data.size,
       });

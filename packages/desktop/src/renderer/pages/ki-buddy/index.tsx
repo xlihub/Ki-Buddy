@@ -1,5 +1,5 @@
 /** Loads the Ki-Buddy login page without evaluating it in other product runtimes. */
-export const loadKiBuddyLoginPage = () => import('./KiBuddyLoginPage');
+export const loadKiBuddyLoginPage = () => import('./Login');
 
 /** Loads the Ki-Buddy account page without evaluating it in other product runtimes. */
 export const loadKiBuddyAccountSettings = () => import('./Account');

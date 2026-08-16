@@ -16,9 +16,10 @@
   "footerPrimary": "Komut satırı AI'nızı dönüştürün",
   "footerSecondary": "Modern ve Verimli",
   "kiBuddy": {
-    "pageTitle": "Ki-Buddy - Agents oturumu aç",
+    "pageTitle": "{{productName}} - Agents oturumu aç",
     "brand": "Ki-Buddy",
     "subtitle": "Mevcut Agents hesabınızla oturum açın",
+    "welcome": "Tekrar hoş geldiniz",
     "agentsDeployment": "Agents dağıtım URL'si",
     "baseUrlPlaceholder": "https://agents.example.com",
     "clearDeployment": "Dağıtım URL'sini temizle",

@@ -4,8 +4,8 @@ import { initReactI18next } from 'react-i18next';
 import { configService } from '@/common/config/configService';
 import { ipcBridge } from '@/common';
 import i18nConfig from '@/common/config/i18n-config.json';
-import { resolveLanguagePreference } from '@/common/platform/ki-buddy';
-import { getKiBuddyRendererRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { applyKiBuddyLocaleOverlay, resolveLanguagePreference } from '@/common/platform/ki-buddy';
+import { getKiBuddyProductRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
 import {
   DEFAULT_LANGUAGE,
   normalizeLanguageCode,
@@ -54,20 +54,30 @@ const localeData: LocaleData = {
   'fa-IR': faIR,
 };
 
-const fallbackLocale = localeData[DEFAULT_LANGUAGE] ?? {};
+const upstreamFallbackLocale = localeData[DEFAULT_LANGUAGE] ?? {};
+
+function getLocaleModules(locale: string): Record<string, unknown> {
+  const normalized = normalizeLanguageCode(locale);
+  const modules = localeData[normalized] ?? upstreamFallbackLocale;
+  const withFallback = normalized === DEFAULT_LANGUAGE ? modules : mergeWithFallback(upstreamFallbackLocale, modules);
+  const runtime = getKiBuddyProductRuntime();
+  return runtime
+    ? applyKiBuddyLocaleOverlay(withFallback, {
+        namespace: runtime.localeNamespace,
+        productName: runtime.brand.productName,
+        cliName: runtime.brand.cliName,
+        language: normalized,
+      })
+    : withFallback;
+}
+
+const fallbackLocale = getLocaleModules(DEFAULT_LANGUAGE);
 
 // Cache for loaded translations
 const loadedTranslations = new Map<string, Record<string, unknown>>();
 
 // Pre-populate cache with the synchronously loaded fallback locale
-loadedTranslations.set(DEFAULT_LANGUAGE, fallbackLocale as Record<string, unknown>);
-
-function getLocaleModules(locale: string): Record<string, unknown> {
-  const normalized = normalizeLanguageCode(locale);
-  const modules = localeData[normalized] ?? fallbackLocale;
-  if (normalized === DEFAULT_LANGUAGE) return modules;
-  return mergeWithFallback(fallbackLocale, modules);
-}
+loadedTranslations.set(DEFAULT_LANGUAGE, fallbackLocale);
 
 function getLocalStorageLanguageHint(): string | null {
   return getLanguageHint();
@@ -85,7 +95,7 @@ function getElectronSystemLanguageHint(): string | null {
 }
 
 function getKiBuddyDefaultLanguageHint(): string | null {
-  return getKiBuddyRendererRuntime()?.defaultLanguage ?? null;
+  return getKiBuddyProductRuntime()?.defaultLanguage ?? null;
 }
 
 function getInitialLanguage(): SupportedLanguage {

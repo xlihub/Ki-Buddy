@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { isDeepStrictEqual } = require('node:util');
+const yaml = require('js-yaml');
 const { readKiCorePin } = require('./kiCoreRelease');
 
 const KI_BUDDY_PRODUCT = 'Ki-Buddy';
@@ -34,6 +35,19 @@ function readJson(filePath, label) {
   }
 }
 
+function requirePackageMetadataUrl(value, label, allowGitPrefix = false) {
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${label} must be a non-empty URL`);
+  }
+  const urlValue = allowGitPrefix && value.startsWith('git+') ? value.slice(4) : value;
+  try {
+    const url = new URL(urlValue);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+  } catch {
+    throw new Error(`${label} must be an absolute HTTP(S) URL`);
+  }
+}
+
 function readProductVersion(projectRoot) {
   const version = fs.readFileSync(path.join(projectRoot, 'ki-buddy-version.txt'), 'utf8').trim();
   if (!SEMVER_PATTERN.test(version)) {
@@ -50,7 +64,11 @@ function readProductConfig(projectRoot) {
       'schemaVersion',
       'runtimeIdentity',
       'defaults',
+      'locale',
+      'themes',
       'runtimeDependencies',
+      'brand',
+      'assets',
       'packageMetadata',
       'electronBuilder',
       'webCli',
@@ -59,7 +77,7 @@ function readProductConfig(projectRoot) {
     ],
     'Ki-Buddy product configuration'
   );
-  if (config.schemaVersion !== 1) throw new Error('Unsupported Ki-Buddy product configuration schema');
+  if (config.schemaVersion !== 2) throw new Error('Unsupported Ki-Buddy product configuration schema');
   if (typeof config.runtimeIdentity !== 'string' || config.runtimeIdentity.trim() === '') {
     throw new Error('Ki-Buddy runtime identity must be a non-empty string');
   }
@@ -76,6 +94,16 @@ function readProductConfig(projectRoot) {
   if (typeof config.defaults.language !== 'string' || config.defaults.language.trim() === '') {
     throw new Error('Ki-Buddy default language must be a non-empty string');
   }
+  requireExactKeys(config.locale, ['namespace'], 'Ki-Buddy locale');
+  if (typeof config.locale.namespace !== 'string' || config.locale.namespace.trim() === '') {
+    throw new Error('Ki-Buddy locale namespace must be a non-empty string');
+  }
+  requireExactKeys(config.themes, ['light', 'dark'], 'Ki-Buddy themes');
+  for (const [appearance, resourceId] of Object.entries(config.themes)) {
+    if (typeof resourceId !== 'string' || resourceId.trim() === '') {
+      throw new Error(`Ki-Buddy ${appearance} theme must be a non-empty resource id`);
+    }
+  }
   if (
     !config.runtimeDependencies ||
     typeof config.runtimeDependencies !== 'object' ||
@@ -89,6 +117,45 @@ function readProductConfig(projectRoot) {
       throw new Error('Ki-Buddy runtime dependencies must use non-empty names and versions');
     }
   }
+  requireExactKeys(config.brand, ['productName', 'shortName', 'cliName', 'description', 'links'], 'Ki-Buddy brand');
+  for (const [brandField, value] of Object.entries(config.brand).filter(([field]) => field !== 'links')) {
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new Error(`Ki-Buddy brand ${brandField} must be a non-empty string`);
+    }
+  }
+  if (config.brand.productName !== KI_BUDDY_PRODUCT) {
+    throw new Error('Ki-Buddy brand product name is invalid');
+  }
+  requireExactKeys(
+    config.brand.links,
+    ['homepage', 'repository', 'releases', 'support', 'feedback'],
+    'Ki-Buddy brand links'
+  );
+  for (const [name, value] of Object.entries(config.brand.links)) {
+    try {
+      const url = new URL(value);
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+    } catch {
+      throw new Error(`Ki-Buddy brand link ${name} must be an absolute HTTP(S) URL`);
+    }
+  }
+  requireExactKeys(config.assets, ['platform', 'packaged', 'renderer'], 'Ki-Buddy assets');
+  requireExactKeys(config.assets.platform, ['png', 'ico', 'icns'], 'Ki-Buddy platform assets');
+  requireExactKeys(config.assets.packaged, ['icon'], 'Ki-Buddy packaged assets');
+  requireExactKeys(config.assets.renderer, ['logo', 'mascot'], 'Ki-Buddy renderer assets');
+  for (const [name, value] of Object.entries(config.assets.platform)) {
+    if (typeof value !== 'string' || !value.startsWith('resources/ki-buddy/')) {
+      throw new Error(`Ki-Buddy platform asset ${name} must be product-owned`);
+    }
+  }
+  for (const [name, value] of Object.entries(config.assets.renderer)) {
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new Error(`Ki-Buddy renderer asset ${name} must be a non-empty resource id`);
+    }
+  }
+  if (typeof config.assets.packaged.icon !== 'string' || config.assets.packaged.icon.trim() === '') {
+    throw new Error('Ki-Buddy packaged icon must be a non-empty string');
+  }
   requireExactKeys(
     config.packageMetadata,
     ['name', 'description', 'author', 'repository', 'homepage', 'bugs', 'productName'],
@@ -97,6 +164,21 @@ function readProductConfig(projectRoot) {
   if (config.packageMetadata.name !== 'ki-buddy' || config.packageMetadata.productName !== KI_BUDDY_PRODUCT) {
     throw new Error('Ki-Buddy package metadata identity is invalid');
   }
+  if (config.packageMetadata.description !== config.brand.description) {
+    throw new Error('Ki-Buddy package metadata description must match the product brand');
+  }
+  requireExactKeys(config.packageMetadata.author, ['name'], 'Ki-Buddy package author');
+  if (typeof config.packageMetadata.author.name !== 'string' || config.packageMetadata.author.name.trim() === '') {
+    throw new Error('Ki-Buddy package author name must be a non-empty string');
+  }
+  requireExactKeys(config.packageMetadata.repository, ['type', 'url'], 'Ki-Buddy package repository');
+  if (config.packageMetadata.repository.type !== 'git') {
+    throw new Error('Ki-Buddy package repository type must be git');
+  }
+  requirePackageMetadataUrl(config.packageMetadata.repository.url, 'Ki-Buddy package repository URL', true);
+  requirePackageMetadataUrl(config.packageMetadata.homepage, 'Ki-Buddy package homepage');
+  requireExactKeys(config.packageMetadata.bugs, ['url'], 'Ki-Buddy package bugs');
+  requirePackageMetadataUrl(config.packageMetadata.bugs.url, 'Ki-Buddy package bugs URL');
   if (config.runtimeIdentity !== config.packageMetadata.name) {
     throw new Error('Ki-Buddy runtime identity must match package metadata name');
   }
@@ -112,16 +194,48 @@ function readProductConfig(projectRoot) {
   ) {
     throw new Error('Ki-Buddy desktop application identity is invalid');
   }
-  const schemes = config.electronBuilder.protocols?.flatMap((protocol) => protocol?.schemes || []);
-  if (!Array.isArray(schemes) || !schemes.includes('ki-buddy') || schemes.includes('aionui')) {
+  if (!Array.isArray(config.electronBuilder.protocols) || config.electronBuilder.protocols.length !== 1) {
+    throw new Error('Ki-Buddy protocol configuration must contain exactly one protocol');
+  }
+  const [protocol] = config.electronBuilder.protocols;
+  requireExactKeys(protocol, ['name', 'schemes'], 'Ki-Buddy protocol configuration');
+  if (protocol.name !== 'Ki-Buddy Protocol' || !Array.isArray(protocol.schemes)) {
+    throw new Error('Ki-Buddy protocol configuration identity is invalid');
+  }
+  const schemes = config.electronBuilder.protocols?.flatMap((protocolEntry) => protocolEntry?.schemes || []);
+  if (!Array.isArray(schemes) || JSON.stringify(schemes) !== JSON.stringify(['ki-buddy'])) {
     throw new Error('Ki-Buddy protocol configuration must contain only the independent product protocol');
   }
+  requireExactKeys(
+    config.electronBuilder.publish,
+    ['provider', 'owner', 'repo', 'tagNamePrefix'],
+    'Ki-Buddy electron-builder publish configuration'
+  );
   if (
     config.electronBuilder.publish?.provider !== 'github' ||
     `${config.electronBuilder.publish?.owner}/${config.electronBuilder.publish?.repo}` !== KI_BUDDY_REPOSITORY ||
     config.electronBuilder.publish?.tagNamePrefix !== 'ki-buddy-v'
   ) {
     throw new Error('Ki-Buddy electron-builder publish identity is invalid');
+  }
+  requireExactKeys(config.electronBuilder.linux, ['maintainer', 'vendor', 'desktop'], 'Ki-Buddy Linux configuration');
+  requireExactKeys(config.electronBuilder.linux.desktop, ['entry'], 'Ki-Buddy Linux desktop configuration');
+  requireExactKeys(
+    config.electronBuilder.linux.desktop.entry,
+    ['Name', 'Comment', 'Icon', 'Categories', 'MimeType'],
+    'Ki-Buddy Linux desktop entry'
+  );
+  const linuxEntry = config.electronBuilder.linux.desktop.entry;
+  if (
+    config.electronBuilder.linux.maintainer !== 'xlihub' ||
+    config.electronBuilder.linux.vendor !== 'xlihub' ||
+    linuxEntry.Name !== KI_BUDDY_PRODUCT ||
+    linuxEntry.Comment !== '${description}' ||
+    linuxEntry.Icon !== KI_BUDDY_PRODUCT ||
+    linuxEntry.Categories !== 'Office;Utility;' ||
+    linuxEntry.MimeType !== 'x-scheme-handler/ki-buddy;'
+  ) {
+    throw new Error('Ki-Buddy Linux desktop identity is invalid');
   }
   requireExactKeys(
     config.webCli,
@@ -162,10 +276,42 @@ function createEffectivePackageJson(projectRoot, options = {}) {
 
 function createElectronBuilderConfig(projectRoot, outputPath, options = {}) {
   const productConfig = readProductConfig(projectRoot);
+  for (const [kind, relativePath] of Object.entries(productConfig.assets.platform)) {
+    if (!fs.existsSync(path.join(projectRoot, relativePath))) {
+      throw new Error(`Ki-Buddy platform asset ${kind} does not exist: ${relativePath}`);
+    }
+  }
   const effectivePackage = createEffectivePackageJson(projectRoot, options);
+  const upstreamBuilderPath = path.join(projectRoot, 'packages/desktop/electron-builder.yml');
+  const upstreamBuilderConfig = yaml.load(fs.readFileSync(upstreamBuilderPath, 'utf8'));
+  if (!upstreamBuilderConfig || typeof upstreamBuilderConfig !== 'object' || Array.isArray(upstreamBuilderConfig)) {
+    throw new Error('Upstream electron-builder configuration must be an object');
+  }
+  const upstreamExtraResources = Array.isArray(upstreamBuilderConfig.extraResources)
+    ? upstreamBuilderConfig.extraResources
+    : [];
+  const productExtraResources = upstreamExtraResources.map((resource) =>
+    resource && typeof resource === 'object' && resource.to === 'app.png'
+      ? Object.assign({}, resource, { from: productConfig.assets.platform.png })
+      : resource
+  );
+  if (productConfig.assets.packaged.icon !== 'app.png') {
+    productExtraResources.push({
+      from: productConfig.assets.platform.png,
+      to: productConfig.assets.packaged.icon,
+    });
+  }
   const config = {
-    extends: path.join(projectRoot, 'packages/desktop/electron-builder.yml'),
+    ...upstreamBuilderConfig,
     ...productConfig.electronBuilder,
+    win: { ...upstreamBuilderConfig.win, icon: productConfig.assets.platform.ico },
+    mac: { ...upstreamBuilderConfig.mac, icon: productConfig.assets.platform.icns },
+    linux: {
+      ...upstreamBuilderConfig.linux,
+      ...productConfig.electronBuilder.linux,
+      icon: productConfig.assets.platform.png,
+    },
+    extraResources: productExtraResources,
     extraMetadata: Object.fromEntries(
       [
         'name',

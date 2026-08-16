@@ -3,26 +3,168 @@ import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/common/config/i18
 import { normalizeAgentsBaseUrl } from './deploymentUrl';
 
 export type KiBuddyProductConfig = {
+  assets: {
+    packaged: {
+      icon: string;
+    };
+    platform: {
+      icns: string;
+      ico: string;
+      png: string;
+    };
+    renderer: {
+      logo: string;
+      mascot: string;
+    };
+  };
+  brand: {
+    cliName: string;
+    description: string;
+    links: {
+      feedback: string;
+      homepage: string;
+      releases: string;
+      repository: string;
+      support: string;
+    };
+    productName: string;
+    shortName: string;
+  };
   defaults: {
     agentsBaseUrl: string;
     language: SupportedLanguage;
   };
+  electronBuilder: {
+    appId: string;
+    protocolScheme: string;
+  };
+  locale: {
+    namespace: string;
+  };
   runtimeIdentity: string;
-  schemaVersion: 1;
+  schemaVersion: 2;
+  themes: {
+    dark: string;
+    light: string;
+  };
+  updates: {
+    provider: string;
+    releasePageUrl: string;
+    repository: string;
+    tagPrefix: string;
+  };
 };
+
+const PRODUCT_CONFIG_TOP_LEVEL_KEYS = [
+  'schemaVersion',
+  'runtimeIdentity',
+  'defaults',
+  'locale',
+  'themes',
+  'runtimeDependencies',
+  'brand',
+  'assets',
+  'packageMetadata',
+  'electronBuilder',
+  'webCli',
+  'updates',
+  'kiCore',
+] as const;
+
+function requireRecord(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function requireKeys(
+  value: Record<string, unknown>,
+  requiredKeys: readonly string[],
+  allowedKeys: readonly string[],
+  label: string
+): void {
+  const missing = requiredKeys.filter((key) => !(key in value));
+  const unexpected = Object.keys(value).filter((key) => !allowedKeys.includes(key));
+  if (missing.length > 0 || unexpected.length > 0) {
+    const details = [
+      missing.length > 0 ? `missing ${missing.join(', ')}` : '',
+      unexpected.length > 0 ? `unexpected ${unexpected.join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join('; ');
+    throw new Error(`${label} has invalid fields: ${details}`);
+  }
+}
+
+function requireExactKeys(value: Record<string, unknown>, keys: readonly string[], label: string): void {
+  requireKeys(value, keys, keys, label);
+}
+
+function requireString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label} must be a non-empty string`);
+  return value;
+}
+
+function requireSupportedString(value: unknown, expected: string, label: string): string {
+  const result = requireString(value, label);
+  if (result !== expected) throw new Error(`${label} must be ${expected}`);
+  return result;
+}
+
+function requireProtocolScheme(value: unknown): string {
+  if (!Array.isArray(value) || value.length !== 1) {
+    throw new Error('Ki-Buddy electron-builder protocols must contain exactly one protocol');
+  }
+  const protocol = requireRecord(value[0], 'Ki-Buddy electron-builder protocol');
+  requireExactKeys(protocol, ['name', 'schemes'], 'Ki-Buddy electron-builder protocol');
+  requireString(protocol.name, 'Ki-Buddy electron-builder protocol name');
+  if (!Array.isArray(protocol.schemes) || protocol.schemes.length !== 1) {
+    throw new Error('Ki-Buddy electron-builder protocol schemes must contain exactly one scheme');
+  }
+  const scheme = requireString(protocol.schemes[0], 'Ki-Buddy electron-builder protocol scheme');
+  if (!/^[a-z][a-z0-9+.-]*$/i.test(scheme)) {
+    throw new Error('Ki-Buddy electron-builder protocol scheme must be a valid URL scheme');
+  }
+  return scheme;
+}
+
+function requireHttpUrl(value: unknown, label: string): string {
+  const raw = requireString(value, label);
+  try {
+    const url = new URL(raw);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('unsupported protocol');
+    return url.toString();
+  } catch {
+    throw new Error(`${label} must be an absolute HTTP(S) URL`);
+  }
+}
 
 /** Validates the runtime-owned subset of Ki-Buddy product configuration. */
 export function parseKiBuddyProductConfig(value: unknown): KiBuddyProductConfig {
-  if (typeof value !== 'object' || value === null) throw new Error('Ki-Buddy product configuration must be an object');
-  const config = value as { defaults?: unknown; runtimeIdentity?: unknown; schemaVersion?: unknown };
-  if (config.schemaVersion !== 1) throw new Error('Unsupported Ki-Buddy product configuration schema');
+  const config = requireRecord(value, 'Ki-Buddy product configuration');
+  requireKeys(
+    config,
+    [
+      'schemaVersion',
+      'runtimeIdentity',
+      'defaults',
+      'locale',
+      'themes',
+      'brand',
+      'assets',
+      'electronBuilder',
+      'updates',
+    ],
+    PRODUCT_CONFIG_TOP_LEVEL_KEYS,
+    'Ki-Buddy product configuration'
+  );
+  if (config.schemaVersion !== 2) throw new Error('Unsupported Ki-Buddy product configuration schema');
   if (typeof config.runtimeIdentity !== 'string' || config.runtimeIdentity.trim() === '') {
     throw new Error('Ki-Buddy runtime identity must be a non-empty string');
   }
-  if (typeof config.defaults !== 'object' || config.defaults === null) {
-    throw new Error('Ki-Buddy product defaults must be an object');
-  }
-  const defaults = config.defaults as { agentsBaseUrl?: unknown; language?: unknown };
+  const defaults = requireRecord(config.defaults, 'Ki-Buddy product defaults');
+  requireExactKeys(defaults, ['agentsBaseUrl', 'language'], 'Ki-Buddy product defaults');
   if (typeof defaults.agentsBaseUrl !== 'string' || defaults.agentsBaseUrl.trim() === '') {
     throw new Error('Ki-Buddy default Agents base URL must be a non-empty string');
   }
@@ -31,12 +173,92 @@ export function parseKiBuddyProductConfig(value: unknown): KiBuddyProductConfig 
   if (typeof defaults.language !== 'string' || !SUPPORTED_LANGUAGES.includes(defaults.language as SupportedLanguage)) {
     throw new Error('Ki-Buddy default language must be supported');
   }
+  const brand = requireRecord(config.brand, 'Ki-Buddy brand');
+  requireExactKeys(brand, ['productName', 'shortName', 'cliName', 'description', 'links'], 'Ki-Buddy brand');
+  const links = requireRecord(brand.links, 'Ki-Buddy brand links');
+  requireExactKeys(links, ['homepage', 'repository', 'releases', 'support', 'feedback'], 'Ki-Buddy brand links');
+  const assets = requireRecord(config.assets, 'Ki-Buddy assets');
+  requireExactKeys(assets, ['platform', 'packaged', 'renderer'], 'Ki-Buddy assets');
+  const platformAssets = requireRecord(assets.platform, 'Ki-Buddy platform assets');
+  requireExactKeys(platformAssets, ['png', 'ico', 'icns'], 'Ki-Buddy platform assets');
+  const packagedAssets = requireRecord(assets.packaged, 'Ki-Buddy packaged assets');
+  requireExactKeys(packagedAssets, ['icon'], 'Ki-Buddy packaged assets');
+  const rendererAssets = requireRecord(assets.renderer, 'Ki-Buddy renderer assets');
+  requireExactKeys(rendererAssets, ['logo', 'mascot'], 'Ki-Buddy renderer assets');
+  const locale = requireRecord(config.locale, 'Ki-Buddy locale');
+  requireExactKeys(locale, ['namespace'], 'Ki-Buddy locale');
+  const themes = requireRecord(config.themes, 'Ki-Buddy themes');
+  requireExactKeys(themes, ['light', 'dark'], 'Ki-Buddy themes');
+  const electronBuilder = requireRecord(config.electronBuilder, 'Ki-Buddy electron-builder configuration');
+  requireKeys(
+    electronBuilder,
+    ['appId', 'protocols'],
+    ['appId', 'productName', 'executableName', 'copyright', 'protocols', 'publish', 'linux'],
+    'Ki-Buddy electron-builder configuration'
+  );
+  const updates = requireRecord(config.updates, 'Ki-Buddy updates');
+  requireExactKeys(updates, ['provider', 'repository', 'tagPrefix', 'releasePageUrl'], 'Ki-Buddy updates');
+  const updateProvider = requireString(updates.provider, 'Ki-Buddy update provider');
+  const updateRepository = requireString(updates.repository, 'Ki-Buddy update repository');
+  const updateTagPrefix = requireString(updates.tagPrefix, 'Ki-Buddy update tag prefix');
+  const updateReleasePageUrl = requireHttpUrl(updates.releasePageUrl, 'Ki-Buddy update release page');
+  const protocolScheme = requireProtocolScheme(electronBuilder.protocols);
+  const brandRepositoryPath = new URL(requireHttpUrl(links.repository, 'Ki-Buddy brand link repository')).pathname
+    .replace(/^\//, '')
+    .replace(/\.git$/, '');
+  if (updateProvider !== 'github' || updateRepository !== brandRepositoryPath) {
+    throw new Error('Ki-Buddy update source must match the configured GitHub repository');
+  }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runtimeIdentity: config.runtimeIdentity,
+    brand: {
+      cliName: requireString(brand.cliName, 'Ki-Buddy CLI name'),
+      productName: requireString(brand.productName, 'Ki-Buddy product name'),
+      shortName: requireString(brand.shortName, 'Ki-Buddy short name'),
+      description: requireString(brand.description, 'Ki-Buddy product description'),
+      links: {
+        homepage: requireHttpUrl(links.homepage, 'Ki-Buddy brand link homepage'),
+        repository: requireHttpUrl(links.repository, 'Ki-Buddy brand link repository'),
+        releases: requireHttpUrl(links.releases, 'Ki-Buddy brand link releases'),
+        support: requireHttpUrl(links.support, 'Ki-Buddy brand link support'),
+        feedback: requireHttpUrl(links.feedback, 'Ki-Buddy brand link feedback'),
+      },
+    },
+    assets: {
+      packaged: {
+        icon: requireString(packagedAssets.icon, 'Ki-Buddy packaged icon'),
+      },
+      platform: {
+        png: requireString(platformAssets.png, 'Ki-Buddy PNG asset'),
+        ico: requireString(platformAssets.ico, 'Ki-Buddy ICO asset'),
+        icns: requireString(platformAssets.icns, 'Ki-Buddy ICNS asset'),
+      },
+      renderer: {
+        logo: requireSupportedString(rendererAssets.logo, 'ki-buddy-app', 'Ki-Buddy renderer logo asset'),
+        mascot: requireSupportedString(rendererAssets.mascot, 'ki-buddy-mascot', 'Ki-Buddy renderer mascot asset'),
+      },
+    },
     defaults: {
       agentsBaseUrl,
       language: defaults.language as SupportedLanguage,
+    },
+    electronBuilder: {
+      appId: requireString(electronBuilder.appId, 'Ki-Buddy electron-builder app id'),
+      protocolScheme,
+    },
+    locale: {
+      namespace: requireString(locale.namespace, 'Ki-Buddy locale namespace'),
+    },
+    themes: {
+      light: requireSupportedString(themes.light, 'ki-buddy-light', 'Ki-Buddy light theme'),
+      dark: requireSupportedString(themes.dark, 'ki-buddy-dark', 'Ki-Buddy dark theme'),
+    },
+    updates: {
+      provider: updateProvider,
+      repository: updateRepository,
+      tagPrefix: updateTagPrefix,
+      releasePageUrl: updateReleasePageUrl,
     },
   };
 }

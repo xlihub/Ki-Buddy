@@ -6,7 +6,8 @@
 
 import { ipcBridge } from '@/common';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
-import { MANAGED_AGENTS_SWR_KEY, fetchManagedAgents } from '@/renderer/utils/model/agentTypes';
+import { MANAGED_AGENTS_SWR_KEY } from '@/renderer/utils/model/agentTypes';
+import { fetchProductManagedAgents } from '@/renderer/services/runtime/productBrandRuntime';
 import useSWR, { mutate } from 'swr';
 
 export type UseManagedAgentsResult = {
@@ -41,7 +42,10 @@ export async function refreshManagedAgentCatalogAndAssistants(): Promise<Managed
  * Do not use this anywhere other than `AgentSettings`.
  */
 export const useManagedAgents = (): UseManagedAgentsResult => {
-  const { data, isLoading, isValidating, error } = useSWR<ManagedAgent[]>(MANAGED_AGENTS_SWR_KEY, fetchManagedAgents);
+  const { data, isLoading, isValidating, error } = useSWR<ManagedAgent[]>(
+    MANAGED_AGENTS_SWR_KEY,
+    fetchProductManagedAgents
+  );
 
   const revalidateManaged = () => mutate<ManagedAgent[]>(MANAGED_AGENTS_SWR_KEY);
 
@@ -65,7 +69,7 @@ export const useManagedAgents = (): UseManagedAgentsResult => {
  * backed by `agent_metadata`, where ACP catalog snapshots are persisted.
  */
 export const useManagedAgentRuntimeCatalog = (): ManagedAgent[] => {
-  const { data } = useSWR<ManagedAgent[]>(MANAGED_AGENTS_SWR_KEY, fetchManagedAgents);
+  const { data } = useSWR<ManagedAgent[]>(MANAGED_AGENTS_SWR_KEY, fetchProductManagedAgents);
   return data ?? [];
 };
 
@@ -77,7 +81,7 @@ export const useManagedAgentRuntimeCatalog = (): ManagedAgent[] => {
  * cache separately.
  */
 export async function getManagedAgents(): Promise<ManagedAgent[]> {
-  const data = await fetchManagedAgents();
+  const data = await fetchProductManagedAgents();
   await mutate(MANAGED_AGENTS_SWR_KEY, data, { revalidate: false });
   return data;
 }

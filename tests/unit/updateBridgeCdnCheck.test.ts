@@ -5,6 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { UpdateBridgeConfiguration } from '@process/bridge/updateBridge';
 
 vi.mock('@/common/platform/bridge', () => ({
   bridge: {
@@ -109,10 +110,11 @@ const GITHUB_RELEASES = [
   },
 ];
 
-const getCheckHandler = async () => {
+const getCheckHandler = async (configuration?: UpdateBridgeConfiguration) => {
   vi.resetModules();
-  const { initUpdateBridge } = await import('@process/bridge/updateBridge');
+  const { configureUpdateBridge, initUpdateBridge } = await import('@process/bridge/updateBridge');
   const { ipcBridge } = await import('@/common');
+  configureUpdateBridge(configuration);
   initUpdateBridge();
   const provider = vi.mocked(ipcBridge.update.check.provider);
   const lastCall = provider.mock.calls.at(-1);
@@ -166,6 +168,40 @@ describe('update.check CDN-first', () => {
     expect(res.data?.latest?.recommendedAsset?.url).toBe(
       'https://static.aionui.com/releases/2.1.45/AionUi-2.1.45-mac-arm64.dmg'
     );
+  });
+
+  it('ignores renderer and environment repository overrides for a product-owned update source', async () => {
+    process.env.AIONUI_GITHUB_REPO = 'iOfficeAI/AionUi';
+    const fetchMock = stubFetch({
+      github: () =>
+        jsonResponse([
+          {
+            ...GITHUB_RELEASES[0],
+            tag_name: 'ki-buddy-v2.1.45',
+            html_url: 'https://github.com/xlihub/Ki-Buddy/releases/tag/ki-buddy-v2.1.45',
+          },
+        ]),
+    });
+    const handler = await getCheckHandler({
+      allowRepositoryOverride: false,
+      repository: 'xlihub/Ki-Buddy',
+      source: 'github',
+      tagPrefix: 'ki-buddy-v',
+      userAgent: 'Ki-Buddy',
+    });
+
+    try {
+      const res = await handler({ repo: 'iOfficeAI/AionUi' });
+
+      expect(res.success).toBe(true);
+      expect(res.data?.latest?.htmlUrl).toContain('/xlihub/Ki-Buddy/');
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/repos/xlihub/Ki-Buddy/releases'),
+        expect.any(Object)
+      );
+    } finally {
+      delete process.env.AIONUI_GITHUB_REPO;
+    }
   });
 
   it('succeeds without notes when GitHub is unreachable', async () => {
@@ -239,12 +275,63 @@ describe('update.check Ki-Buddy GitHub releases', () => {
       ],
     };
     const fetchMock = stubFetch({ github: () => jsonResponse([release]) });
-    const handler = await getCheckHandler();
+    const handler = await getCheckHandler({
+      allowRepositoryOverride: false,
+      repository: 'xlihub/Ki-Buddy',
+      source: 'github',
+      tagPrefix: 'ki-buddy-v',
+      userAgent: 'Ki-Buddy',
+    });
     const res = await handler({});
 
     expect(res.success).toBe(true);
     expect(res.data?.latest?.tagName).toBe(release.tag_name);
     expect(res.data?.latest?.recommendedAsset?.url).toBe(release.assets[0].browser_download_url);
+    expect(fetchMock).toHaveBeenCalledWith('https://api.github.com/repos/xlihub/Ki-Buddy/releases', expect.any(Object));
+  });
+
+  it('ignores releases that do not use the product tag prefix', async () => {
+    const fetchMock = stubFetch({
+      github: () =>
+        jsonResponse([
+          {
+            tag_name: 'v99.0.0',
+            name: 'Unrelated release',
+            html_url: 'https://github.com/xlihub/Ki-Buddy/releases/tag/v99.0.0',
+            prerelease: false,
+            draft: false,
+            assets: [],
+          },
+          {
+            tag_name: '99.0.0',
+            name: 'Unprefixed release',
+            html_url: 'https://github.com/xlihub/Ki-Buddy/releases/tag/99.0.0',
+            prerelease: false,
+            draft: false,
+            assets: [],
+          },
+          {
+            tag_name: 'ki-buddy-v9.9.9',
+            name: 'Ki-Buddy release',
+            html_url: 'https://github.com/xlihub/Ki-Buddy/releases/tag/ki-buddy-v9.9.9',
+            prerelease: false,
+            draft: false,
+            assets: [],
+          },
+        ]),
+    });
+    const handler = await getCheckHandler({
+      allowRepositoryOverride: false,
+      repository: 'xlihub/Ki-Buddy',
+      source: 'github',
+      tagPrefix: 'ki-buddy-v',
+      userAgent: 'Ki-Buddy',
+    });
+
+    const res = await handler({});
+
+    expect(res.success).toBe(true);
+    expect(res.data?.latest?.tagName).toBe('ki-buddy-v9.9.9');
     expect(fetchMock).toHaveBeenCalledWith('https://api.github.com/repos/xlihub/Ki-Buddy/releases', expect.any(Object));
   });
 });

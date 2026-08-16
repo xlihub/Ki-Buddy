@@ -9,8 +9,6 @@ import type { UpdateInfo } from 'electron-updater';
 import type { AppUpdater } from 'electron-updater/out/AppUpdater';
 import type { ProviderRuntimeOptions } from 'electron-updater/out/providers/Provider';
 import { CdnGenericProvider } from '@/process/services/cdnGenericProvider';
-import { buildProductFeedOptions } from '@/process/services/updateFeed';
-import productConfig from '../../../../ki-buddy-product.json';
 
 const makeRuntimeOptions = (): ProviderRuntimeOptions => ({
   isUseMultipleRangeRequest: true,
@@ -18,20 +16,6 @@ const makeRuntimeOptions = (): ProviderRuntimeOptions => ({
   executor: {
     request: vi.fn(),
   } as unknown as ProviderRuntimeOptions['executor'],
-});
-
-describe('Ki-Buddy update feed options', () => {
-  it('builds a GitHub provider from the current product configuration', () => {
-    const options = buildProductFeedOptions();
-    const [owner, repo] = productConfig.updates.repository.split('/');
-
-    expect(options).toEqual({
-      provider: 'github',
-      owner,
-      repo,
-      tagNamePrefix: productConfig.updates.tagPrefix,
-    });
-  });
 });
 
 describe('CdnGenericProvider', () => {

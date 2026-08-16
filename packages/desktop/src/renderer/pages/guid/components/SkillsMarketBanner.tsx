@@ -7,12 +7,10 @@
 import { ipcBridge } from '@/common';
 import { configService } from '@/common/config/configService';
 import { openExternalUrl } from '@/renderer/utils/platform';
+import { getProductSkillsMarketDetailsUrl } from '@/renderer/services/runtime/productBrandRuntime';
 import { Message, Switch, Tooltip } from '@arco-design/web-react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-
-const SKILLS_MARKET_DETAILS_ZH = 'https://github.com/iOfficeAI/AionUi/discussions/1326';
-const SKILLS_MARKET_DETAILS_EN = 'https://github.com/iOfficeAI/AionUi/discussions/1325';
 
 const SkillsMarketBanner: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -55,8 +53,7 @@ const SkillsMarketBanner: React.FC = () => {
 
   const handleOpenDetails = useCallback(async () => {
     try {
-      const url = i18n.language.startsWith('zh') ? SKILLS_MARKET_DETAILS_ZH : SKILLS_MARKET_DETAILS_EN;
-      await openExternalUrl(url);
+      await openExternalUrl(getProductSkillsMarketDetailsUrl(i18n.language));
     } catch (error) {
       console.error('Failed to open Skills Market URL:', error);
     }

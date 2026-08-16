@@ -32,6 +32,7 @@ const SiderScheduledEntry: React.FC<SiderScheduledEntryProps> = ({
     return (
       <Tooltip {...siderTooltipProps} content={t('cron.scheduledTasks')} position='right'>
         <div
+          data-sider-nav-selected={isActive ? 'true' : 'false'}
           className={classNames(
             'w-full h-34px flex items-center justify-center cursor-pointer transition-colors rd-8px text-t-primary',
             isActive ? 'bg-fill-3' : 'hover:bg-fill-3 active:bg-fill-4'
@@ -42,7 +43,7 @@ const SiderScheduledEntry: React.FC<SiderScheduledEntryProps> = ({
             theme='outline'
             size='20'
             fill='currentColor'
-            className='block leading-none shrink-0'
+            className='sider-nav__icon block leading-none shrink-0'
             style={{ lineHeight: 0 }}
           />
         </div>
@@ -53,6 +54,7 @@ const SiderScheduledEntry: React.FC<SiderScheduledEntryProps> = ({
   return (
     <Tooltip {...siderTooltipProps} content={t('cron.scheduledTasks')} position='right'>
       <div
+        data-sider-nav-selected={isActive ? 'true' : 'false'}
         className={classNames(
           'box-border group h-34px w-full flex items-center justify-start gap-8px pl-10px pr-8px rd-0.5rem cursor-pointer shrink-0 transition-all text-t-primary',
           isMobile && 'sider-action-btn-mobile',
@@ -60,7 +62,7 @@ const SiderScheduledEntry: React.FC<SiderScheduledEntryProps> = ({
         )}
         onClick={onClick}
       >
-        <span className='size-22px flex items-center justify-center shrink-0 text-t-primary'>
+        <span className='sider-nav__icon size-22px flex items-center justify-center shrink-0 text-t-primary'>
           <AlarmClock
             theme='outline'
             size='16'
