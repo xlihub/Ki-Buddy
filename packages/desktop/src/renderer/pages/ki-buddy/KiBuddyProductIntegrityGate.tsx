@@ -7,6 +7,7 @@ import {
 import type { ProductBuiltinResourceState } from '@/common/platform/ki-buddy';
 import { loadProductBuiltinMcpResourceState } from '@/renderer/hooks/mcp/catalog';
 import { loadProductBuiltinAgentResourceState } from '@/renderer/services/runtime/kiBuddyAgentCatalog';
+import { loadProductBuiltinAssistantResourceState } from '@/renderer/services/runtime/catalogs/kiBuddyAssistantCatalog';
 
 type KiBuddyProductIntegrityGateProps = {
   failure: string;
@@ -53,10 +54,11 @@ export const KiBuddyProductResourceIntegrityGate: React.FC<PropsWithChildren<{ e
     const validateResources = async (): Promise<void> => {
       const results = await Promise.allSettled([
         loadProductBuiltinAgentResourceState(),
+        loadProductBuiltinAssistantResourceState(),
         loadProductBuiltinMcpResourceState(),
       ]);
       if (!active) return;
-      const labels = ['Agent', 'MCP'] as const;
+      const labels = ['Agent', 'Assistant', 'MCP'] as const;
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
           console.error(`[Ki-Buddy] Failed to validate product ${labels[index]} resources:`, result.reason);

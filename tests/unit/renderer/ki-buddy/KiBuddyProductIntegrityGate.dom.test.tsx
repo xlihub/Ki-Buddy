@@ -2,8 +2,13 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-const { loadProductBuiltinAgentResourceStateMock, loadProductBuiltinMcpResourceStateMock } = vi.hoisted(() => ({
+const {
+  loadProductBuiltinAgentResourceStateMock,
+  loadProductBuiltinAssistantResourceStateMock,
+  loadProductBuiltinMcpResourceStateMock,
+} = vi.hoisted(() => ({
   loadProductBuiltinAgentResourceStateMock: vi.fn(),
+  loadProductBuiltinAssistantResourceStateMock: vi.fn(),
   loadProductBuiltinMcpResourceStateMock: vi.fn(),
 }));
 
@@ -37,6 +42,9 @@ vi.mock('@/renderer/hooks/mcp/catalog', () => ({
 vi.mock('@/renderer/services/runtime/kiBuddyAgentCatalog', () => ({
   loadProductBuiltinAgentResourceState: loadProductBuiltinAgentResourceStateMock,
 }));
+vi.mock('@/renderer/services/runtime/catalogs/kiBuddyAssistantCatalog', () => ({
+  loadProductBuiltinAssistantResourceState: loadProductBuiltinAssistantResourceStateMock,
+}));
 
 import KiBuddyProductIntegrityGate, {
   KiBuddyProductResourceIntegrityGate,
@@ -45,6 +53,7 @@ import KiBuddyProductIntegrityGate, {
 beforeEach(() => {
   vi.clearAllMocks();
   loadProductBuiltinAgentResourceStateMock.mockResolvedValue({ status: 'ready', missing: [] });
+  loadProductBuiltinAssistantResourceStateMock.mockResolvedValue({ status: 'ready', missing: [] });
   loadProductBuiltinMcpResourceStateMock.mockResolvedValue({ status: 'ready', missing: [] });
 });
 
@@ -68,6 +77,7 @@ it('does not load the MCP catalog outside the authenticated Ki-Buddy product pat
 
   expect(screen.getByText('AionUi business content')).toBeInTheDocument();
   expect(loadProductBuiltinAgentResourceStateMock).not.toHaveBeenCalled();
+  expect(loadProductBuiltinAssistantResourceStateMock).not.toHaveBeenCalled();
   expect(loadProductBuiltinMcpResourceStateMock).not.toHaveBeenCalled();
 });
 
@@ -79,6 +89,7 @@ it('keeps business content available when registered product resources are prese
   );
 
   await waitFor(() => expect(loadProductBuiltinAgentResourceStateMock).toHaveBeenCalledOnce());
+  await waitFor(() => expect(loadProductBuiltinAssistantResourceStateMock).toHaveBeenCalledOnce());
   await waitFor(() => expect(loadProductBuiltinMcpResourceStateMock).toHaveBeenCalledOnce());
   expect(screen.getByText('Ki-Buddy business content')).toBeInTheDocument();
 });
@@ -139,6 +150,34 @@ it('shows installation integrity diagnostics when a required product MCP is miss
   expect(screen.getByText('agents-adapter')).toBeInTheDocument();
   expect(screen.getByText('closable integrity notice')).toBeInTheDocument();
   expect(screen.getByText('Ki-Buddy business content')).toBeInTheDocument();
+});
+
+it('shows installation integrity diagnostics when a required product Assistant is missing', async () => {
+  loadProductBuiltinAssistantResourceStateMock.mockResolvedValue({
+    status: 'invalid',
+    missing: [
+      {
+        code: 'required_product_resource_missing',
+        featureId: 'assistants',
+        kind: 'assistant',
+        origin: 'productBuiltin',
+        resourceId: 'word-creator',
+        resourceName: 'Word Creator',
+      },
+    ],
+  });
+
+  render(
+    <KiBuddyProductResourceIntegrityGate enabled>
+      <div>Account and diagnostics content</div>
+    </KiBuddyProductResourceIntegrityGate>
+  );
+
+  expect(
+    await screen.findByText('common.backendStartup.incompleteInstallation.runtimeComponentDescription:Word Creator')
+  ).toBeInTheDocument();
+  expect(screen.getByText('word-creator')).toBeInTheDocument();
+  expect(screen.getByText('Account and diagnostics content')).toBeInTheDocument();
 });
 
 it('does not misreport an installation failure when catalog loading throws', async () => {

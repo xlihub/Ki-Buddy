@@ -8,12 +8,12 @@ import {
   type ProductResourceHiddenRecord,
   type ProductResourceOrigin,
 } from '@/common/platform/ki-buddy';
-import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { requestManagedAgents, type ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import { getKiBuddyProductRuntime, getProductExperience } from './kiBuddyRuntime';
-import { reportHiddenProductResources } from './kiBuddyProductResourceDiagnostics';
+import { KI_CLI_PRODUCT_RESOURCE_ID } from './catalogs/kiBuddyAssistantIdentity';
+import { reportHiddenProductResources } from './catalogs/kiBuddyProductResourceDiagnostics';
 
-export const KI_CLI_PRODUCT_RESOURCE_ID = '632f31d2';
+export { KI_CLI_PRODUCT_RESOURCE_ID } from './catalogs/kiBuddyAssistantIdentity';
 
 const getProductBuiltinAgentRequirements = (): readonly ProductBuiltinResourceRequirement[] => {
   const resourceName = getKiBuddyProductRuntime()?.brand.cliName;
@@ -81,27 +81,6 @@ export const projectProductAgentCatalog = (
   };
 };
 
-/** Keeps Assistant candidates only when their stable Agent ID exists in the authoritative projected directory. */
-export const projectProductAssistantCandidates = (
-  assistants: readonly Assistant[],
-  agentCatalog: ProductAgentCatalog
-): Assistant[] => {
-  const visibleAgentIds = new Set(agentCatalog.entries.map(({ resourceId }) => resourceId));
-  const hiddenAssistants = assistants.filter((assistant) => !visibleAgentIds.has(assistant.agent_id));
-  reportHiddenProductResources(
-    'assistant',
-    hiddenAssistants.map((assistant) => ({
-      access: 'hidden',
-      code: 'product_resource_hidden',
-      kind: 'assistant',
-      origin: 'unclassified',
-      resourceId: assistant.id,
-      resourceName: assistant.name,
-    }))
-  );
-  return assistants.filter((assistant) => visibleAgentIds.has(assistant.agent_id));
-};
-
 /** Loads and projects the authoritative Agent directory for every renderer consumer. */
 export const loadProductAgentCatalog = async (
   experience: ProductExperience = getProductExperience()
@@ -110,12 +89,6 @@ export const loadProductAgentCatalog = async (
   reportHiddenProductResources('agent', catalog.hiddenResources);
   return catalog;
 };
-
-/** Projects Assistant candidates against the same authoritative Agent directory used by settings. */
-export const loadProductAssistantCandidates = async (
-  assistants: readonly Assistant[],
-  experience: ProductExperience = getProductExperience()
-): Promise<Assistant[]> => projectProductAssistantCandidates(assistants, await loadProductAgentCatalog(experience));
 
 /** Evaluates the required KiCLI identity after the backend Agent directory is ready. */
 export const loadProductBuiltinAgentResourceState = async (

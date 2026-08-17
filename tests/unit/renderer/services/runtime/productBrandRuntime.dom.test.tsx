@@ -129,7 +129,7 @@ describe('renderer product brand adapter', () => {
     stubAssistantAndAgentCatalogs(
       [
         {
-          id: 'bare-aionrs',
+          id: 'bare:632f31d2',
           source: 'generated',
           name: 'Aion CLI',
           name_i18n: { 'en-US': 'Aion CLI' },
@@ -148,38 +148,76 @@ describe('renderer product brand adapter', () => {
     expect(assistants[0]?.avatar).toMatch(/^data:image\/png;base64,/);
   });
 
-  it('hides assistant candidates whose Agent is hidden by the product directory', async () => {
+  it('projects every direct Assistant response through the stable product Assistant catalog', async () => {
     window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
     stubAssistantAndAgentCatalogs(
       [
         {
-          id: 'ki-cli-assistant',
+          id: 'word-creator',
+          source: 'builtin',
+          name: 'Word Creator',
+          agent_id: '632f31d2',
+          agent: { type: 'aionrs', source: 'internal' },
+        },
+        {
+          id: 'ppt-creator',
+          source: 'builtin',
+          name: 'PPT Creator',
+          agent_id: '632f31d2',
+          agent: { type: 'aionrs', source: 'internal' },
+        },
+        {
+          id: 'excel-creator',
+          source: 'builtin',
+          name: 'Excel Creator',
+          agent_id: '632f31d2',
+          agent: { type: 'aionrs', source: 'internal' },
+        },
+        {
+          id: 'bare:632f31d2',
           source: 'generated',
           name: 'Aion CLI',
           agent_id: '632f31d2',
           agent: { type: 'aionrs', source: 'internal' },
         },
         {
-          id: 'upstream-assistant',
-          source: 'generated',
-          name: 'Claude Code',
-          agent_id: 'builtin-claude',
-          agent: { type: 'acp', source: 'builtin' },
+          id: 'my-assistant',
+          source: 'user',
+          name: 'My Assistant',
+          agent_id: 'custom-agent',
+          agent: { type: 'acp', source: 'custom' },
+        },
+        {
+          id: 'cowork',
+          source: 'builtin',
+          name: 'Cowork',
+          agent_id: '632f31d2',
+          agent: { type: 'aionrs', source: 'internal' },
         },
       ],
-      [
-        { id: '632f31d2', name: 'Aion CLI', agent_source: 'internal', agent_type: 'aionrs' },
-        { id: 'builtin-claude', name: 'Claude Code', agent_source: 'builtin', agent_type: 'acp' },
-      ]
+      [{ id: '632f31d2', name: 'Aion CLI', agent_source: 'internal', agent_type: 'aionrs' }]
     );
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     installProductAssistantCatalogAdapter();
 
     const assistants = await ipcBridge.assistants.list.invoke();
 
-    expect(assistants.map(({ id }) => id)).toEqual(['ki-cli-assistant']);
+    expect(assistants.map(({ id }) => id)).toEqual([
+      'word-creator',
+      'ppt-creator',
+      'excel-creator',
+      'bare:632f31d2',
+      'my-assistant',
+    ]);
+    expect(assistants.map((assistant) => (assistant as { productAccess?: string }).productAccess)).toEqual([
+      'manage',
+      'manage',
+      'manage',
+      'manage',
+      'manage',
+    ]);
     expect(info).toHaveBeenCalledWith(
-      '[ProductExperience] Agent resources hidden by product policy',
+      '[ProductExperience] Assistant resources hidden by product policy',
       expect.objectContaining({ code: 'product_resource_projection' })
     );
     info.mockRestore();
@@ -202,10 +240,10 @@ describe('renderer product brand adapter', () => {
     installProductAssistantCatalogAdapter();
 
     await expect(ipcBridge.assistants.list.invoke()).resolves.toEqual([]);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
-  it('does not expose Assistant candidates when the authoritative Agent directory is unavailable', async () => {
+  it('does not depend on the Agent directory when projecting Assistant candidates', async () => {
     window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
     vi.stubGlobal(
       'fetch',
@@ -218,15 +256,15 @@ describe('renderer product brand adapter', () => {
     );
     installProductAssistantCatalogAdapter();
 
-    await expect(ipcBridge.assistants.list.invoke()).rejects.toThrow('Agent directory unavailable');
+    await expect(ipcBridge.assistants.list.invoke()).resolves.toEqual([]);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
-  it('recovers Assistant candidates after the authoritative Agent directory becomes available', async () => {
+  it('keeps a Custom Assistant manageable when its Agent directory is unavailable', async () => {
     window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
-    let agentDirectoryRequests = 0;
     const customAssistant = {
       id: 'custom-assistant',
-      source: 'generated',
+      source: 'user',
       name: 'Custom Assistant',
       agent_id: 'custom-1',
       agent: { type: 'acp', source: 'custom' },
@@ -236,20 +274,16 @@ describe('renderer product brand adapter', () => {
       vi.fn((input: string | URL | Request) => {
         const url = String(input);
         if (url.endsWith('/api/assistants')) return Promise.resolve(jsonResponse([customAssistant]));
-        if (url.endsWith('/api/agents/management')) {
-          agentDirectoryRequests += 1;
-          if (agentDirectoryRequests === 1) return Promise.reject(new Error('Agent directory unavailable'));
-          return Promise.resolve(
-            jsonResponse([{ id: 'custom-1', name: 'Custom Agent', agent_source: 'custom', agent_type: 'acp' }])
-          );
-        }
+        if (url.endsWith('/api/agents/management')) return Promise.reject(new Error('Agent directory unavailable'));
         return Promise.reject(new Error(`Unexpected request: ${url}`));
       })
     );
     installProductAssistantCatalogAdapter();
 
-    await expect(ipcBridge.assistants.list.invoke()).rejects.toThrow('Agent directory unavailable');
-    await expect(ipcBridge.assistants.list.invoke()).resolves.toEqual([customAssistant]);
+    await expect(ipcBridge.assistants.list.invoke()).resolves.toEqual([
+      { ...customAssistant, productAccess: 'manage' },
+    ]);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 
   it('keeps direct assistant bridge responses unchanged without the product capability', async () => {

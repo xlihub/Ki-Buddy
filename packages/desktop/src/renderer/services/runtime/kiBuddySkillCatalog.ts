@@ -6,7 +6,7 @@ import {
   type ProductResourceHiddenRecord,
   type ProductResourceOrigin,
 } from '@/common/platform/ki-buddy';
-import { reportHiddenProductResources } from './kiBuddyProductResourceDiagnostics';
+import { reportHiddenProductResources } from './catalogs/kiBuddyProductResourceDiagnostics';
 import { getProductExperience } from './kiBuddyRuntime';
 
 export type AvailableSkill = Awaited<ReturnType<typeof ipcBridge.fs.listAvailableSkills.invoke>>[number];

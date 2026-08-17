@@ -493,7 +493,7 @@ describe('useAssistantEditor', () => {
     expect((result.current as any).defaultThoughtLevelValue).toBe('');
   });
 
-  it('allows builtin assistants to persist main agent plus default model and permission', async () => {
+  it('keeps the product Word Assistant aligned with upstream builtin management', async () => {
     const builtinDetail = {
       ...mockAssistantDetail,
       source: 'builtin',
@@ -510,11 +510,11 @@ describe('useAssistantEditor', () => {
       },
     };
     (ipcBridge.assistants.get.invoke as any).mockResolvedValue(builtinDetail);
-    (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: 'builtin-1' });
+    (ipcBridge.assistants.update.invoke as any).mockResolvedValue({ id: 'word-creator' });
 
     const assistant: AssistantListItem = {
-      id: 'builtin-1',
-      name: 'Builtin',
+      id: 'word-creator',
+      name: 'Word Creator',
       sort_order: 1,
       source: 'builtin',
       enabled: true,
@@ -551,7 +551,7 @@ describe('useAssistantEditor', () => {
     });
 
     expect(ipcBridge.assistants.update.invoke).toHaveBeenCalledWith({
-      id: 'builtin-1',
+      id: 'word-creator',
       agent_id: 'agent-gemini',
       defaults: {
         model: { mode: 'fixed', value: 'gemini-2.5-pro' },

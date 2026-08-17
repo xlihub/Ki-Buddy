@@ -8,7 +8,7 @@ import {
   type ProductResourceOrigin,
 } from '@/common/platform/ki-buddy';
 import { getProductExperience } from './kiBuddyRuntime';
-import { reportHiddenProductResources } from './kiBuddyProductResourceDiagnostics';
+import { reportHiddenProductResources } from './catalogs/kiBuddyProductResourceDiagnostics';
 
 export type ProductModelCatalogEntry = Readonly<{
   access: Exclude<ProductResourceAccess, 'hidden'>;

@@ -46,7 +46,7 @@ const validPolicy = {
       unclassified: 'hidden',
     },
     assistant: {
-      productBuiltin: 'use',
+      productBuiltin: 'manage',
       upstreamBuiltin: 'hidden',
       custom: 'manage',
       extension: 'hidden',
@@ -217,7 +217,7 @@ describe('ProductExperience interface', () => {
 
     expect(experience.featureState('team')).toBe('disabled');
     expect(experience.featureState('scheduledTasks')).toBe('enabled');
-    expect(experience.resourceAccess('assistant', 'productBuiltin')).toBe('use');
+    expect(experience.resourceAccess('assistant', 'productBuiltin')).toBe('manage');
     expect(experience.resourceAccess('assistant', 'custom')).toBe('manage');
     expect(experience.behaviorDefaults()).toEqual({
       scheduledTaskExecutor: 'assistant',
