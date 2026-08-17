@@ -20,7 +20,9 @@ export {
   createAionUiProductExperience,
   createKiBuddyProductExperience,
   deepFreeze,
+  evaluateProductBuiltinResourceState,
   parseProductExperiencePolicy,
+  projectProductResources,
 } from './productExperience';
 export type {
   DeepReadonly,
@@ -32,6 +34,12 @@ export type {
   ProductResourceAccess,
   ProductResourceKind,
   ProductResourceOrigin,
+  ProductResourceDescriptor,
+  ProductResourceHiddenRecord,
+  ProductResourceProjection,
+  ProductBuiltinResourceRequirement,
+  ProductBuiltinResourceState,
+  MissingProductBuiltinResourceRecord,
 } from './productExperience';
 export {
   KI_BUDDY_CORE_TRANSPORT_CHANNEL,

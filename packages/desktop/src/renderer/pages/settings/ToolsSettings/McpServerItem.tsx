@@ -4,9 +4,11 @@ import type { IMcpServer } from '@/common/config/storage';
 import McpServerHeader from './McpServerHeader';
 import McpServerToolsList from './McpServerToolsList';
 import type { McpOAuthStatus } from '@/renderer/hooks/mcp/useMcpOAuth';
+import type { ProductResourceAccess } from '@/common/platform/ki-buddy';
 
 interface McpServerItemProps {
   server: IMcpServer;
+  access?: ProductResourceAccess;
   isCollapsed: boolean;
   isTestingConnection: boolean;
   oauthStatus?: McpOAuthStatus;
@@ -22,6 +24,7 @@ interface McpServerItemProps {
 
 const McpServerItem: React.FC<McpServerItemProps> = ({
   server,
+  access,
   isCollapsed,
   isTestingConnection,
   oauthStatus,
@@ -44,6 +47,7 @@ const McpServerItem: React.FC<McpServerItemProps> = ({
         header={
           <McpServerHeader
             server={server}
+            access={access}
             isTestingConnection={isTestingConnection}
             oauthStatus={oauthStatus}
             isLoggingIn={isLoggingIn}

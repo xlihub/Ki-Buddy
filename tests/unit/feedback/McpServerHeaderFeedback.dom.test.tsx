@@ -24,6 +24,7 @@ vi.mock('@/renderer/hooks/context/FeedbackContext', () => ({
 
 import McpServerHeader from '@/renderer/pages/settings/ToolsSettings/McpServerHeader';
 import type { IMcpServer } from '@/common/config/storage';
+import type { ProductResourceAccess } from '@/common/platform/ki-buddy';
 
 const buildServer = (last_test_status: IMcpServer['last_test_status']): IMcpServer =>
   ({
@@ -44,10 +45,10 @@ const commonProps = {
   onDeleteServer: vi.fn(),
 };
 
-const renderHeader = (last_test_status: IMcpServer['last_test_status']) =>
+const renderHeader = (last_test_status: IMcpServer['last_test_status'], access?: ProductResourceAccess) =>
   render(
     <ConfigProvider>
-      <McpServerHeader server={buildServer(last_test_status)} {...commonProps} />
+      <McpServerHeader server={buildServer(last_test_status)} access={access} {...commonProps} />
     </ConfigProvider>
   );
 
@@ -85,5 +86,35 @@ describe('McpServerHeader — FeedbackButton wiring', () => {
       module: 'mcp-tools',
       autoScreenshot: true,
     });
+  });
+
+  it('allows product built-in use access to run a connection test without exposing management actions', () => {
+    renderHeader('connected', 'use');
+
+    expect(screen.getByTitle('settings.mcpTestConnection')).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('keeps connection testing and management actions for manage access', () => {
+    renderHeader('connected', 'manage');
+
+    expect(screen.getByTitle('settings.mcpTestConnection')).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+  });
+
+  it('keeps connection testing available for use access when the last test requested authentication', () => {
+    render(
+      <ConfigProvider>
+        <McpServerHeader
+          server={buildServer('disconnected')}
+          access='use'
+          oauthStatus={{ needsLogin: true, isChecking: false, isAuthenticated: false }}
+          {...commonProps}
+        />
+      </ConfigProvider>
+    );
+
+    expect(screen.getByTitle('settings.mcpTestConnection')).toBeInTheDocument();
+    expect(screen.queryByTitle('settings.mcpLogin')).not.toBeInTheDocument();
   });
 });

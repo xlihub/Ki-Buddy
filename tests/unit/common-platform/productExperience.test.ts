@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PRODUCT_RESOURCE_ORIGINS,
   createAionUiProductExperience,
   createKiBuddyProductExperience,
+  evaluateProductBuiltinResourceState,
   parseProductExperiencePolicy,
+  projectProductResources,
 } from '@/common/platform/ki-buddy/productExperience';
 
 const validPolicy = {
@@ -78,6 +81,105 @@ const validPolicy = {
 } as const;
 
 describe('ProductExperience interface', () => {
+  it('projects visible MCP resources and records hidden resources without exposing their configuration', () => {
+    const experience = createKiBuddyProductExperience(validPolicy);
+    const projection = projectProductResources(experience, 'mcp', [
+      { id: 'agents-adapter', name: 'Agents Adapter', origin: 'productBuiltin' },
+      { id: 'custom-server', name: 'Custom server', origin: 'custom' },
+      { id: 'upstream-server', name: 'Upstream server', origin: 'upstreamBuiltin' },
+      { id: 'unknown-server', name: 'Unknown server', origin: 'unclassified' },
+    ]);
+
+    expect(projection.visible).toEqual([
+      {
+        resource: { id: 'agents-adapter', name: 'Agents Adapter', origin: 'productBuiltin' },
+        access: 'use',
+      },
+      {
+        resource: { id: 'custom-server', name: 'Custom server', origin: 'custom' },
+        access: 'manage',
+      },
+    ]);
+    expect(projection.hidden).toEqual([
+      {
+        code: 'product_resource_hidden',
+        kind: 'mcp',
+        resourceId: 'upstream-server',
+        resourceName: 'Upstream server',
+        origin: 'upstreamBuiltin',
+        access: 'hidden',
+      },
+      {
+        code: 'product_resource_hidden',
+        kind: 'mcp',
+        resourceId: 'unknown-server',
+        resourceName: 'Unknown server',
+        origin: 'unclassified',
+        access: 'hidden',
+      },
+    ]);
+  });
+
+  it('reports installation integrity when an enabled feature requires a missing product built-in MCP', () => {
+    const experience = createKiBuddyProductExperience(validPolicy);
+
+    expect(
+      evaluateProductBuiltinResourceState(experience, 'mcp', {
+        availableResourceIds: [],
+        catalogReady: true,
+        requirements: [{ featureId: 'agents', resourceId: 'agents-adapter', resourceName: 'Agents Adapter' }],
+      })
+    ).toEqual({
+      status: 'invalid',
+      missing: [
+        {
+          code: 'required_product_resource_missing',
+          featureId: 'agents',
+          kind: 'mcp',
+          origin: 'productBuiltin',
+          resourceId: 'agents-adapter',
+          resourceName: 'Agents Adapter',
+        },
+      ],
+    });
+  });
+
+  it('does not require an Agents Adapter MCP before a product resource requirement is declared', () => {
+    const experience = createKiBuddyProductExperience(validPolicy);
+
+    expect(
+      evaluateProductBuiltinResourceState(experience, 'mcp', {
+        availableResourceIds: [],
+        catalogReady: false,
+        requirements: [],
+      })
+    ).toEqual({ status: 'ready', missing: [] });
+  });
+
+  it('waits for the backend catalog before judging a declared product built-in MCP requirement', () => {
+    const experience = createKiBuddyProductExperience(validPolicy);
+
+    expect(
+      evaluateProductBuiltinResourceState(experience, 'mcp', {
+        availableResourceIds: [],
+        catalogReady: false,
+        requirements: [{ featureId: 'agents', resourceId: 'agents-adapter' }],
+      })
+    ).toEqual({ status: 'pending', missing: [] });
+  });
+
+  it('accepts a declared product built-in MCP when the backend catalog contains its stable ID', () => {
+    const experience = createKiBuddyProductExperience(validPolicy);
+
+    expect(
+      evaluateProductBuiltinResourceState(experience, 'mcp', {
+        availableResourceIds: ['agents-adapter'],
+        catalogReady: true,
+        requirements: [{ featureId: 'agents', resourceId: 'agents-adapter' }],
+      })
+    ).toEqual({ status: 'ready', missing: [] });
+  });
+
   it('keeps the complete AionUi feature and resource behavior when no product capability exists', () => {
     const experience = createAionUiProductExperience();
 
@@ -87,6 +189,27 @@ describe('ProductExperience interface', () => {
       scheduledTaskExecutor: 'assistant-or-team',
       autoInjectedSkillExclusions: [],
     });
+  });
+
+  it('keeps every MCP origin visible and manageable in the AionUi adapter', () => {
+    const experience = createAionUiProductExperience();
+    const projection = projectProductResources(
+      experience,
+      'mcp',
+      PRODUCT_RESOURCE_ORIGINS.map((origin) => ({
+        id: origin,
+        origin,
+      }))
+    );
+
+    expect(projection.visible.map(({ resource, access }) => ({ id: resource.id, access }))).toEqual([
+      { id: 'productBuiltin', access: 'manage' },
+      { id: 'upstreamBuiltin', access: 'manage' },
+      { id: 'custom', access: 'manage' },
+      { id: 'extension', access: 'manage' },
+      { id: 'unclassified', access: 'manage' },
+    ]);
+    expect(projection.hidden).toEqual([]);
   });
 
   it('provides feature, resource, and behavior decisions without exposing the product JSON', () => {

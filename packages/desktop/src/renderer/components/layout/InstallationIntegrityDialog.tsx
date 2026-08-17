@@ -347,12 +347,18 @@ export const InstallationIntegrityFooter: React.FC<{
 
 type InstallationIntegrityModalController = ReturnType<typeof Modal.useModal>[0];
 
+type InstallationIntegrityModalOptions = {
+  closable?: boolean;
+};
+
+/** Opens a structured installation-integrity dialog with blocking behavior by default. */
 export function showInstallationIntegrityModal(
   modal: InstallationIntegrityModalController,
   t: TFunction,
   description: string,
   diagnostics?: InstallationIntegrityDiagnostics,
-  diagnosticsKind: InstallationIntegrityDialogKind = 'incomplete_installation'
+  diagnosticsKind: InstallationIntegrityDialogKind = 'incomplete_installation',
+  options: InstallationIntegrityModalOptions = {}
 ): ReturnType<InstallationIntegrityModalController['error']> {
   const diagnosticsHint =
     diagnosticsKind === 'recoverable_database_corruption'
@@ -365,16 +371,18 @@ export function showInstallationIntegrityModal(
     title: getInstallationIntegrityTitle(t, diagnosticsKind),
     content: <InstallationIntegrityContent description={description} diagnosticsHint={diagnosticsHint} />,
     footer: <InstallationIntegrityFooter diagnostics={diagnostics} diagnosticsKind={diagnosticsKind} />,
-    closable: false,
+    closable: options.closable ?? false,
     maskClosable: false,
   });
 }
 
+/** Hosts a single installation-integrity dialog in the current React tree. */
 export const InstallationIntegrityModalHost: React.FC<{
+  closable?: boolean;
   description: string;
   diagnostics?: InstallationIntegrityDiagnostics;
   diagnosticsKind?: InstallationIntegrityDialogKind;
-}> = ({ description, diagnostics, diagnosticsKind = 'incomplete_installation' }) => {
+}> = ({ closable = false, description, diagnostics, diagnosticsKind = 'incomplete_installation' }) => {
   const [modal, modalContextHolder] = Modal.useModal();
   const { t } = useTranslation();
   const shownRef = useRef(false);
@@ -382,8 +390,8 @@ export const InstallationIntegrityModalHost: React.FC<{
   useEffect(() => {
     if (shownRef.current) return;
     shownRef.current = true;
-    showInstallationIntegrityModal(modal, t, description, diagnostics, diagnosticsKind);
-  }, [description, diagnostics, diagnosticsKind, modal, t]);
+    showInstallationIntegrityModal(modal, t, description, diagnostics, diagnosticsKind, { closable });
+  }, [closable, description, diagnostics, diagnosticsKind, modal, t]);
 
   return <>{modalContextHolder}</>;
 };

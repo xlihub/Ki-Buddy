@@ -19,8 +19,11 @@ const isOAuthCapableServer = (server: IMcpServer) =>
 
 const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
   const { t } = useTranslation();
-  const { mcpServers, extensionMcpServers, saveMcpServers, setMcpServers } = useMcpServers();
-  const visibleMcpServers = React.useMemo(() => mcpServers.filter(isVisibleMcpServer), [mcpServers]);
+  const { mcpServers, mcpCatalogEntries, extensionMcpCatalogEntries, saveMcpServers, setMcpServers } = useMcpServers();
+  const visibleMcpEntries = React.useMemo(
+    () => mcpCatalogEntries.filter(({ server }) => isVisibleMcpServer(server)),
+    [mcpCatalogEntries]
+  );
   const { oauthStatus, loggingIn, checkOAuthStatus, markLoginRequired, clearLoginRequired, login } = useMcpOAuth();
   const handleAuthRequired = React.useCallback(
     (server: IMcpServer) => {
@@ -167,13 +170,14 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
         name='mcp-servers'
       >
         <div>
-          {visibleMcpServers.length === 0 && extensionMcpServers.length === 0 ? (
+          {visibleMcpEntries.length === 0 && extensionMcpCatalogEntries.length === 0 ? (
             <div className='py-8 text-center text-t-secondary'>{t('settings.mcpNoServersFound')}</div>
           ) : (
-            visibleMcpServers.map((server) => (
+            visibleMcpEntries.map(({ server, access }) => (
               <McpServerItem
                 key={server.id}
                 server={server}
+                access={access}
                 isCollapsed={mcpCollapseKey[server.id] || false}
                 isTestingConnection={testingServers[server.id] || false}
                 oauthStatus={oauthStatus[server.id]}
@@ -186,10 +190,11 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
               />
             ))
           )}
-          {extensionMcpServers.map((server) => (
+          {extensionMcpCatalogEntries.map(({ server, access }) => (
             <McpServerItem
               key={server.id}
               server={server}
+              access={access}
               isCollapsed={mcpCollapseKey[server.id] || false}
               isTestingConnection={false}
               onToggleCollapse={() => toggleServerCollapse(server.id)}

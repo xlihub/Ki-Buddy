@@ -107,7 +107,9 @@ import { bootstrapRendererConfig } from '@renderer/services/bootstrapRenderer';
 // Components and utilities
 import BackendStartingView from './components/layout/BackendStartingView';
 import BackendStartupGate from './components/layout/BackendStartupGate';
-import KiBuddyProductIntegrityGate from './pages/ki-buddy/KiBuddyProductIntegrityGate';
+import KiBuddyProductIntegrityGate, {
+  KiBuddyMcpProductIntegrityGate,
+} from './pages/ki-buddy/KiBuddyProductIntegrityGate';
 import GpuAutoDisableNotice from './components/layout/GpuAutoDisableNotice';
 import Layout from './components/layout/Layout';
 import Router from './components/layout/Router';
@@ -328,7 +330,7 @@ const Config: React.FC<PropsWithChildren> = ({ children }) => {
 };
 
 const Main = () => {
-  const { ready } = useAuth();
+  const { ready, status } = useAuth();
   const [configReady, setConfigReady] = useState(false);
 
   useEffect(() => {
@@ -346,13 +348,15 @@ const Main = () => {
   }
 
   return (
-    <Router
-      layout={
-        <ConversationHistoryProvider>
-          <Layout sider={<Sider />} />
-        </ConversationHistoryProvider>
-      }
-    />
+    <KiBuddyMcpProductIntegrityGate enabled={Boolean(kiBuddyRuntime) && status === 'authenticated'}>
+      <Router
+        layout={
+          <ConversationHistoryProvider>
+            <Layout sider={<Sider />} />
+          </ConversationHistoryProvider>
+        }
+      />
+    </KiBuddyMcpProductIntegrityGate>
   );
 };
 

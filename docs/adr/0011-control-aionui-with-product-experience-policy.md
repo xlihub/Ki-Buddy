@@ -16,14 +16,15 @@ AionUi 与 Ki-Buddy 分别提供 adapter。产品 capability 完全缺失时使�
 
 现有 AionUi 扩展点只能分别控制页面或运行模块，不能在首个业务画面前向 main、preload 和 renderer 提供同一份产品能力快照，也不能保证导航、直接路由和生命周期同时停用。因此当前版本保留以下显式接缝：
 
-| 上游文件                                                                                                                                     | 产品职责                                                                        | AionUi 原行为保护                                                        |
-| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `packages/desktop/src/index.ts`                                                                                                              | 选择产品启动状态；配置损坏时只转发到 Ki-Buddy 完整性窗口，不进入业务生命周期    | capability 缺失时继续执行完整 AionUi 启动、更新、Tray 和 backend 流程    |
-| `packages/desktop/src/preload/main.ts`、`packages/desktop/src/common/types/platform/electron.ts`                                             | 通过单一 getter 转发不可变 bootstrap snapshot；完整性启动不读取业务 IPC         | AionUi preload 继续暴露原有 backend 与 renderer bridge                   |
-| `packages/desktop/src/renderer/index.html`、`packages/desktop/src/renderer/main.tsx`、`packages/desktop/src/renderer/services/i18n/index.ts` | 在首个业务画面前应用产品 capability；配置损坏时只显示完整性错误并停止业务初始化 | capability 缺失时继续使用 AionUi 标题、主题、i18n 与应用 host            |
-| `packages/desktop/src/renderer/components/layout/Layout.tsx`、`Router.tsx`、`Sider/index.tsx`、`Titlebar/index.tsx`                          | 从同一 feature ID 投影 Team 入口、直接路由、订阅和 workspace 控件               | `ProductExperience` 的 AionUi adapter 保持 Team 入口、路由与生命周期可用 |
-| `packages/desktop/src/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog.tsx`                                                           | 从 behavior defaults 决定 Scheduled Tasks 是否允许 Team 执行者                  | AionUi adapter 继续使用 `assistant-or-team`                              |
-| `packages/desktop/src/process/bridge/updateBridge.ts`、`notificationBridge.ts`                                                               | 注入产品更新源和通知资源；完整性失败时禁用对应业务服务                          | capability 缺失时继续使用 AionUi 更新源、User-Agent 和通知图标           |
+| 上游文件                                                                                                                                                                                                                                  | 产品职责                                                                                                       | AionUi 原行为保护                                                                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `packages/desktop/src/index.ts`                                                                                                                                                                                                           | 选择产品启动状态；配置损坏时只转发到 Ki-Buddy 完整性窗口，不进入业务生命周期                                   | capability 缺失时继续执行完整 AionUi 启动、更新、Tray 和 backend 流程                            |
+| `packages/desktop/src/preload/main.ts`、`packages/desktop/src/common/types/platform/electron.ts`                                                                                                                                          | 通过单一 getter 转发不可变 bootstrap snapshot；完整性启动不读取业务 IPC                                        | AionUi preload 继续暴露原有 backend 与 renderer bridge                                           |
+| `packages/desktop/src/renderer/index.html`、`packages/desktop/src/renderer/main.tsx`、`packages/desktop/src/renderer/services/i18n/index.ts`                                                                                              | 在首个业务画面前应用产品 capability；配置损坏时停止业务初始化；登录后目录缺少已注册产品资源时显示完整性错误    | capability 缺失时继续使用 AionUi 标题、主题、i18n 与应用 host                                    |
+| `packages/desktop/src/renderer/components/layout/Layout.tsx`、`Router.tsx`、`Sider/index.tsx`、`Titlebar/index.tsx`                                                                                                                       | 从同一 feature ID 投影 Team 入口、直接路由、订阅和 workspace 控件                                              | `ProductExperience` 的 AionUi adapter 保持 Team 入口、路由与生命周期可用                         |
+| `packages/desktop/src/renderer/hooks/mcp/catalog.ts`、`useMcpServers.ts`、`packages/desktop/src/renderer/pages/settings/ToolsSettings/`、`packages/desktop/src/renderer/components/settings/SettingsModal/contents/ToolsModalContent.tsx` | 按可信 catalog 通道和后端 `product_origin` 投影 MCP 的 `hidden`、`use`、`manage`；隐藏记录只保留非敏感诊断字段 | AionUi adapter 保持全部 MCP 来源可见；extension 原有只读交互和上游 image-generation 配置保持不变 |
+| `packages/desktop/src/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog.tsx`                                                                                                                                                        | 从 behavior defaults 决定 Scheduled Tasks 是否允许 Team 执行者                                                 | AionUi adapter 继续使用 `assistant-or-team`                                                      |
+| `packages/desktop/src/process/bridge/updateBridge.ts`、`notificationBridge.ts`                                                                                                                                                            | 注入产品更新源和通知资源；完整性失败时禁用对应业务服务                                                         | capability 缺失时继续使用 AionUi 更新源、User-Agent 和通知图标                                   |
 
 AionUi 原行为由以下测试保护：
 
@@ -31,6 +32,9 @@ AionUi 原行为由以下测试保护：
 - `tests/integration/ProductExperienceSiderHost.dom.test.tsx`：AionUi adapter 保留 Team 导航，Ki-Buddy adapter 隐藏入口。
 - `tests/unit/renderer/layout/TitlebarWorkspaceToggle.dom.test.tsx`：AionUi 保留 workspace 切换能力。
 - `tests/unit/renderer/cron/CreateTaskDialog.dom.test.tsx`：AionUi 保留 Assistant/Team 执行者，Ki-Buddy 只允许 Assistant。
+- `tests/unit/renderer/hooks/mcpCatalog.dom.test.ts`、`useMcpServers.dom.test.ts`：Ki-Buddy 只保留 Custom 与 product built-in MCP，并为上游、extension 和未知来源生成结构化隐藏记录；未注册产品 requirement 时不读取目录，已注册 requirement 使用稳定后端 ID 验证；AionUi 保持原 catalog。
+- `tests/unit/renderer/ki-buddy/KiBuddyProductIntegrityGate.dom.test.tsx`：只在登录后的 Ki-Buddy 产品路径验证 MCP requirement；目录已就绪但缺少已注册资源时显示结构化安装完整性错误。
+- `tests/unit/feedback/McpServerHeaderFeedback.dom.test.tsx`、`tests/unit/settings/ToolsModalContentImageGuide.dom.test.tsx`：`use` 允许连接检测但不提供管理操作；AionUi 的 `manage` 操作和 image-generation 配置保持可用。
 - `tests/unit/renderer/services/runtime/productBootstrap.dom.test.ts` 与 `kiBuddyRuntime.dom.test.ts`：capability 存在、缺失和损坏时使用对应启动路径。
 
 每次同步 AionUi 基线时必须复查：
@@ -40,6 +44,10 @@ AionUi 原行为由以下测试保护：
 3. AionUi 新增的完整产品能力是否已经加入稳定 feature ID，并在 Ki-Buddy 策略中明确声明启用或停用。
 4. 更新、通知、Tray、菜单、backend 和后台订阅是否仍在 invalid 路径之外启动。
 5. capability 存在与缺失两组回归、AionUi 原行为保护测试以及完整测试是否通过。
+
+MCP 来源由 catalog 边界决定：extension bridge 固定产生 `extension`，本地 AionUi built-in 固定产生 `upstreamBuiltin`，后端普通 MCP 缺少来源字段时按现有 canonical `builtin` 字段区分 `upstreamBuiltin` 与 `custom`。后端可以通过只读响应字段 `product_origin: productBuiltin` 接入未来受信任产品资源；MCP create、import 和 update payload 不发送该字段。未知字段值归为 `unclassified`，不能按名称、ID 前缀或 renderer 输入提升为 product built-in。
+
+MCP requirement 使用独立注册表和稳定后端资源 ID。#41 接入前注册表为空，不读取目录也不要求 Agents Adapter MCP 存在；#41 启用对应能力时登记真实资源 ID。登录后的 Ki-Buddy 在后端目录可用后执行验证：读取失败保持 `pending`，明确缺失才进入安装完整性错误。`manage` 只保留上游 AionUi 当前已经提供的管理操作，不据此增加上游尚未具备的启停入口。
 
 当 AionUi 提供正式的产品策略注册、单一 preload bootstrap、首帧 capability 注入和按 capability 管理生命周期的公开扩展点后，应将对应职责迁移到上游接口，并删除本 ADR 列出的本地上游接缝。迁移只有在 Ki-Buddy invalid/ready 与 AionUi absent 三种状态的等价测试全部通过后才能完成。
 

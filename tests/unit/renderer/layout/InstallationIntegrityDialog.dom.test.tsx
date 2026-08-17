@@ -43,6 +43,7 @@ vi.mock('@/renderer/services/feedback/submitFeedbackReport', () => ({
 import {
   type InstallationIntegrityDiagnostics,
   InstallationIntegrityFooter,
+  showInstallationIntegrityModal,
 } from '@/renderer/components/layout/InstallationIntegrityDialog';
 
 const diagnostics: InstallationIntegrityDiagnostics = { source: 'backend_startup_failure' };
@@ -145,4 +146,26 @@ describe('InstallationIntegrityDialog — recoverable_database_corruption recove
     // by scripts/check-i18n.js.
     expect(COPY[`${RDC}.description`].toLowerCase()).not.toContain('for now');
   });
+});
+
+it('allows product resource integrity notices to request a close button', () => {
+  const error = vi.fn().mockReturnValue({ close: vi.fn(), update: vi.fn() });
+  const modal = { error } as unknown as Parameters<typeof showInstallationIntegrityModal>[0];
+  const t = ((key: string) => key) as unknown as Parameters<typeof showInstallationIntegrityModal>[1];
+
+  showInstallationIntegrityModal(modal, t, 'Missing product MCP', diagnostics, 'incomplete_installation', {
+    closable: true,
+  });
+
+  expect(error).toHaveBeenCalledWith(expect.objectContaining({ closable: true, maskClosable: false }));
+});
+
+it('keeps installation integrity dialogs blocking by default', () => {
+  const error = vi.fn().mockReturnValue({ close: vi.fn(), update: vi.fn() });
+  const modal = { error } as unknown as Parameters<typeof showInstallationIntegrityModal>[0];
+  const t = ((key: string) => key) as unknown as Parameters<typeof showInstallationIntegrityModal>[1];
+
+  showInstallationIntegrityModal(modal, t, 'Missing runtime component', diagnostics);
+
+  expect(error).toHaveBeenCalledWith(expect.objectContaining({ closable: false, maskClosable: false }));
 });
