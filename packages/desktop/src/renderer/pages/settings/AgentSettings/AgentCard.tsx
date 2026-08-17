@@ -20,6 +20,7 @@ import { BoundAssistantStack } from './BoundAssistants';
 type AgentCardProps =
   | {
       type: 'official';
+      readOnly?: boolean;
       agent: ManagedAgent;
       boundAssistants: Assistant[];
       onTestConnection: () => void;
@@ -28,6 +29,7 @@ type AgentCardProps =
     }
   | {
       type: 'custom';
+      readOnly?: boolean;
       agent: ManagedAgent;
       boundAssistants: Assistant[];
       onTestConnection: () => void;
@@ -106,6 +108,7 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
   const { agent, boundAssistants, onTestConnection, onConfigure, isTesting } = props;
 
   const isCustom = props.type === 'custom';
+  const canManage = !props.readOnly;
   const isDisabled = isCustom && agent.enabled === false;
   const diagnostics = formatManagedAgentDiagnosticMessage(t, agent);
   const displayStatus = resolveDisplayStatus(agent.status, agent.last_check_error_code);
@@ -122,8 +125,8 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
   return (
     <div
       data-testid={`agent-row-${agent.id}`}
-      className='group flex cursor-pointer items-center justify-between gap-12px rounded-12px border border-solid border-transparent bg-base px-14px py-10px transition-all duration-180 hover:border-border-1 hover:bg-fill-1'
-      onClick={onConfigure}
+      className={`group flex items-center justify-between gap-12px rounded-12px border border-solid border-transparent bg-base px-14px py-10px transition-all duration-180 hover:border-border-1 hover:bg-fill-1 ${canManage ? 'cursor-pointer' : 'cursor-default'}`}
+      onClick={canManage ? onConfigure : undefined}
     >
       <div className={`flex min-w-0 flex-1 items-center gap-12px ${isDisabled ? 'opacity-50' : ''}`}>
         <Avatar
@@ -174,16 +177,18 @@ const AgentCard: React.FC<AgentCardProps> = (props) => {
         {/* Both agent kinds get an explicit Edit button that opens the same
             configuration page the whole row links to (status, path/env
             overrides, bound assistants). */}
-        <Button
-          data-testid={`agent-row-edit-${agent.id}`}
-          size='small'
-          type='outline'
-          onClick={onConfigure}
-          className='!h-30px !rounded-8px !border-border-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-border-1 hover:!bg-fill-1'
-        >
-          {t('common.edit', { defaultValue: 'Edit' })}
-        </Button>
-        {props.type === 'custom' ? (
+        {canManage ? (
+          <Button
+            data-testid={`agent-row-edit-${agent.id}`}
+            size='small'
+            type='outline'
+            onClick={onConfigure}
+            className='!h-30px !rounded-8px !border-border-2 !bg-base !px-10px !text-12px !font-500 !text-t-primary hover:!border-border-1 hover:!bg-fill-1'
+          >
+            {t('common.edit', { defaultValue: 'Edit' })}
+          </Button>
+        ) : null}
+        {props.type === 'custom' && canManage ? (
           <>
             {/* Custom agents add the definition editor (command/args/env) plus
                 enable/delete — controls that have no meaning for built-ins. */}

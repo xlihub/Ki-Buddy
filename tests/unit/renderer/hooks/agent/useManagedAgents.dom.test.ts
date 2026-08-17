@@ -15,9 +15,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
+const { fetchProductManagedAgentsMock, mutateMock, useSWRMock } = vi.hoisted(() => ({
+  fetchProductManagedAgentsMock: vi.fn(),
+  mutateMock: vi.fn().mockResolvedValue(undefined),
+  useSWRMock: vi.fn(() => ({ data: [], error: null, isLoading: false })),
+}));
+
 vi.mock('swr', () => ({
-  default: vi.fn(() => ({ data: [], error: null, isLoading: false })),
-  mutate: vi.fn().mockResolvedValue(undefined),
+  default: useSWRMock,
+  mutate: mutateMock,
 }));
 
 vi.mock('@/common', () => ({
@@ -33,13 +39,15 @@ vi.mock('@/renderer/utils/model/agentTypes', () => ({
 }));
 
 vi.mock('@/renderer/services/runtime/productBrandRuntime', () => ({
-  fetchProductManagedAgents: vi.fn(),
+  fetchProductManagedAgents: fetchProductManagedAgentsMock,
 }));
 
-import { getManagedAgents, useManagedAgents } from '@/renderer/hooks/agent/useManagedAgents';
+import {
+  getManagedAgents,
+  useManagedAgentRuntimeCatalog,
+  useManagedAgents,
+} from '@/renderer/hooks/agent/useManagedAgents';
 import { ipcBridge } from '@/common';
-import useSWR, { mutate } from 'swr';
-import { fetchProductManagedAgents } from '@/renderer/services/runtime/productBrandRuntime';
 
 describe('useManagedAgents', () => {
   beforeEach(() => {
@@ -47,18 +55,31 @@ describe('useManagedAgents', () => {
   });
 
   it('subscribes to the management SWR key with the managed fetcher', () => {
-    (useSWR as any).mockReturnValue({ data: [], error: null, isLoading: false });
+    useSWRMock.mockReturnValue({ data: [], error: null, isLoading: false });
 
     renderHook(() => useManagedAgents());
 
-    expect(useSWR).toHaveBeenCalledWith('agents.managed', fetchProductManagedAgents);
+    expect(useSWRMock).toHaveBeenCalledWith('agents.managed', fetchProductManagedAgentsMock);
+  });
+
+  it('shares one projected Agent directory between settings and runtime consumers', () => {
+    const agents = [{ id: '632f31d2', name: 'Ki CLI', agent_type: 'aionrs', agent_source: 'internal', enabled: true }];
+    useSWRMock.mockReturnValue({ data: agents, error: null, isLoading: false });
+
+    const settings = renderHook(() => useManagedAgents());
+    const runtime = renderHook(() => useManagedAgentRuntimeCatalog());
+
+    expect(settings.result.current.agents).toEqual(agents);
+    expect(runtime.result.current).toEqual(agents);
+    expect(useSWRMock).toHaveBeenNthCalledWith(1, 'agents.managed', fetchProductManagedAgentsMock);
+    expect(useSWRMock).toHaveBeenNthCalledWith(2, 'agents.managed', fetchProductManagedAgentsMock);
   });
 
   it('exposes the agents returned by SWR', () => {
     const agents = [
       { id: 'x', name: 'X', agent_type: 'acp', agent_source: 'custom', enabled: false, available: false },
     ];
-    (useSWR as any).mockReturnValue({ data: agents, error: null, isLoading: false });
+    useSWRMock.mockReturnValue({ data: agents, error: null, isLoading: false });
 
     const { result } = renderHook(() => useManagedAgents());
 
@@ -66,7 +87,7 @@ describe('useManagedAgents', () => {
   });
 
   it('falls back to an empty list when SWR has no data yet', () => {
-    (useSWR as any).mockReturnValue({ data: undefined, error: null, isLoading: true });
+    useSWRMock.mockReturnValue({ data: undefined, error: null, isLoading: true });
 
     const { result } = renderHook(() => useManagedAgents());
 
@@ -74,7 +95,7 @@ describe('useManagedAgents', () => {
   });
 
   it('revalidate refreshes only the management key', async () => {
-    (useSWR as any).mockReturnValue({ data: [], error: null, isLoading: false });
+    useSWRMock.mockReturnValue({ data: [], error: null, isLoading: false });
 
     const { result } = renderHook(() => useManagedAgents());
 
@@ -82,12 +103,12 @@ describe('useManagedAgents', () => {
       await result.current.revalidate();
     });
 
-    expect(mutate).toHaveBeenCalledWith('agents.managed');
-    expect(mutate).not.toHaveBeenCalledWith('agents.detected');
+    expect(mutateMock).toHaveBeenCalledWith('agents.managed');
+    expect(mutateMock).not.toHaveBeenCalledWith('agents.detected');
   });
 
   it('refreshCatalog refreshes the management key and assistant list caches', async () => {
-    (useSWR as any).mockReturnValue({ data: [], error: null, isLoading: false });
+    useSWRMock.mockReturnValue({ data: [], error: null, isLoading: false });
 
     const { result } = renderHook(() => useManagedAgents());
 
@@ -95,12 +116,12 @@ describe('useManagedAgents', () => {
       await result.current.refreshCatalog();
     });
 
-    expect(mutate).toHaveBeenCalledWith('agents.managed');
-    expect(mutate).toHaveBeenCalledWith('assistants.list');
+    expect(mutateMock).toHaveBeenCalledWith('agents.managed');
+    expect(mutateMock).toHaveBeenCalledWith('assistants.list');
   });
 
   it('refreshCustomAgents triggers a backend rescan then refreshes management and assistant caches', async () => {
-    (useSWR as any).mockReturnValue({ data: [], error: null, isLoading: false });
+    useSWRMock.mockReturnValue({ data: [], error: null, isLoading: false });
 
     const { result } = renderHook(() => useManagedAgents());
 
@@ -109,21 +130,21 @@ describe('useManagedAgents', () => {
     });
 
     expect(ipcBridge.acpConversation.refreshCustomAgents.invoke).toHaveBeenCalled();
-    expect(mutate).toHaveBeenCalledWith('agents.managed');
-    expect(mutate).toHaveBeenCalledWith('assistants.list');
+    expect(mutateMock).toHaveBeenCalledWith('agents.managed');
+    expect(mutateMock).toHaveBeenCalledWith('assistants.list');
   });
 
   it('getManagedAgents fetches the management catalog without invalidating the detected cache', async () => {
     const managedAgents = [
       { id: 'managed-1', name: 'Managed Agent', agent_type: 'acp', agent_source: 'builtin', enabled: true },
     ];
-    (fetchProductManagedAgents as any).mockResolvedValue(managedAgents);
+    fetchProductManagedAgentsMock.mockResolvedValue(managedAgents);
 
     const result = await getManagedAgents();
 
-    expect(fetchProductManagedAgents).toHaveBeenCalledTimes(1);
-    expect(mutate).toHaveBeenCalledWith('agents.managed', managedAgents, { revalidate: false });
-    expect(mutate).not.toHaveBeenCalledWith('agents.detected');
+    expect(fetchProductManagedAgentsMock).toHaveBeenCalledTimes(1);
+    expect(mutateMock).toHaveBeenCalledWith('agents.managed', managedAgents, { revalidate: false });
+    expect(mutateMock).not.toHaveBeenCalledWith('agents.detected');
     expect(result).toEqual(managedAgents);
   });
 });

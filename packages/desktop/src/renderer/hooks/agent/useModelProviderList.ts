@@ -1,6 +1,6 @@
-import { ipcBridge } from '@/common';
 import { GOOGLE_AUTH_PROVIDER_ID } from '@/common/config/constants';
 import type { IProvider } from '@/common/config/storage';
+import { loadProductModelCatalog } from '@/renderer/services/runtime/kiBuddyModelCatalog';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import useSWR, { type SWRConfiguration } from 'swr';
 import { useGoogleAuthModels } from './useGoogleAuthModels';
@@ -23,7 +23,8 @@ export const PROVIDERS_SWR_OPTIONS: SWRConfiguration<IProvider[], Error> = {
 };
 
 export const fetchProviders = async (): Promise<IProvider[]> => {
-  return (await ipcBridge.mode.listProviders.invoke()) ?? [];
+  const catalog = await loadProductModelCatalog();
+  return [...catalog.visibleProviders];
 };
 
 export const useProvidersQuery = () => {

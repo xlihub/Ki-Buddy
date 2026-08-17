@@ -4,15 +4,30 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAionUiProductExperience, createKiBuddyProductExperience } from '@/common/platform/ki-buddy';
 import {
   filterProductVisibleSkillNames,
+  loadProductSkillCatalog,
   projectProductSkillCatalog,
 } from '@/renderer/services/runtime/kiBuddySkillCatalog';
 import productConfig from '../../../../../ki-buddy-product.json';
 
+const { listAvailableSkillsMock } = vi.hoisted(() => ({ listAvailableSkillsMock: vi.fn() }));
+
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    fs: {
+      listAvailableSkills: { invoke: listAvailableSkillsMock },
+    },
+  },
+}));
+
 describe('projectProductSkillCatalog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('filters runtime-loaded names to the product-visible catalog', () => {
     expect(
       filterProductVisibleSkillNames(
@@ -239,5 +254,41 @@ describe('projectProductSkillCatalog', () => {
     expect(result.visibleSkills).toEqual(skills);
     expect(result.entries.every(({ access }) => access === 'manage')).toBe(true);
     expect(result.hiddenResources).toEqual([]);
+  });
+});
+
+describe('loadProductSkillCatalog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('emits structured diagnostics for Skills hidden by the active product policy', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    listAvailableSkillsMock.mockResolvedValue([
+      {
+        name: 'mermaid',
+        description: 'Upstream built-in',
+        location: '/builtin/mermaid/SKILL.md',
+        relative_location: 'mermaid/SKILL.md',
+        is_auto_inject: false,
+        is_custom: false,
+        source: 'builtin',
+      },
+    ]);
+
+    const catalog = await loadProductSkillCatalog(createKiBuddyProductExperience(productConfig.experience));
+
+    expect(info).toHaveBeenCalledWith(
+      '[ProductExperience] Skill resources hidden by product policy',
+      expect.objectContaining({ code: 'product_resource_projection', resources: catalog.hiddenResources })
+    );
+    info.mockRestore();
+  });
+
+  it('preserves the bridge rejection when the Skill catalog cannot be loaded', async () => {
+    const error = new Error('catalog unavailable');
+    listAvailableSkillsMock.mockRejectedValue(error);
+
+    await expect(loadProductSkillCatalog(createKiBuddyProductExperience(productConfig.experience))).rejects.toBe(error);
   });
 });

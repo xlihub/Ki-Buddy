@@ -2,12 +2,12 @@ import { useCallback, useEffect, useMemo, useState, type SetStateAction } from '
 import { ipcBridge } from '@/common';
 import type { IMcpServer } from '@/common/config/storage';
 import type { ProductResourceHiddenRecord } from '@/common/platform/ki-buddy';
+import { reportHiddenProductResources } from '@/renderer/services/runtime/kiBuddyProductResourceDiagnostics';
 import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
 import {
   ensureBackendMcpCatalog,
   getMcpCatalogServerKey,
   projectMcpCatalogCandidates,
-  reportHiddenMcpResources,
   type McpCatalogEntry,
 } from './catalog';
 
@@ -60,7 +60,7 @@ export const useMcpServers = () => {
           converted.map((server) => ({ server, origin: 'extension' as const })),
           getProductExperience()
         );
-        reportHiddenMcpResources(projection.hiddenResources);
+        reportHiddenProductResources('mcp', projection.hiddenResources);
         setExtensionMcpCatalogEntries(projection.entries);
         setExtensionHiddenResources(projection.hiddenResources);
       })

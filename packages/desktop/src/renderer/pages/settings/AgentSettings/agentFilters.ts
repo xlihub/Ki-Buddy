@@ -10,7 +10,10 @@ export const getAgentAvailabilityFilterStats = (agents: ManagedAgent[]) => ({
   unavailable: agents.filter((agent) => !isAgentAvailable(agent)).length,
 });
 
-export const filterAgentsByAvailability = (agents: ManagedAgent[], filter: AgentAvailabilityFilter): ManagedAgent[] => {
+export const filterAgentsByAvailability = <T extends ManagedAgent>(
+  agents: T[],
+  filter: AgentAvailabilityFilter
+): T[] => {
   if (filter === 'available') {
     return agents.filter(isAgentAvailable);
   }

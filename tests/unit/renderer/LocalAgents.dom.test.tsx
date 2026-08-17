@@ -102,7 +102,7 @@ import type { Assistant } from '@/common/types/agent/assistantTypes';
 
 const makeAgents = () => [
   {
-    id: 'aionrs',
+    id: '632f31d2',
     name: 'Aion CLI',
     agent_type: 'aionrs',
     agent_source: 'internal',
@@ -111,6 +111,7 @@ const makeAgents = () => [
     available: true,
     installed: true,
     status: 'online',
+    productAccess: 'use',
   },
   {
     id: 'acp-claude',
@@ -122,6 +123,7 @@ const makeAgents = () => [
     available: false,
     installed: false,
     status: 'missing',
+    productAccess: 'manage',
   },
   {
     id: 'openclaw-gateway',
@@ -133,6 +135,7 @@ const makeAgents = () => [
     available: false,
     installed: false,
     status: 'missing',
+    productAccess: 'manage',
   },
   {
     id: 'custom-1',
@@ -144,6 +147,7 @@ const makeAgents = () => [
     available: true,
     installed: true,
     status: 'offline',
+    productAccess: 'manage',
   },
 ];
 
@@ -161,7 +165,7 @@ describe('LocalAgents', () => {
     fireEvent.click(screen.getAllByText('settings.agentManagement.testConnection')[0]);
 
     await waitFor(() => {
-      expect(ipcBridge.acpConversation.checkManagedAgentHealthById.invoke).toHaveBeenCalledWith({ id: 'aionrs' });
+      expect(ipcBridge.acpConversation.checkManagedAgentHealthById.invoke).toHaveBeenCalledWith({ id: '632f31d2' });
     });
     await waitFor(() => {
       expect(refreshCatalog).toHaveBeenCalled();
@@ -202,6 +206,20 @@ describe('LocalAgents', () => {
     expect(screen.getByText('Aion CLI')).toBeTruthy();
     expect(screen.getByText('Claude Code')).toBeTruthy();
     expect(screen.getByText('My Agent')).toBeTruthy();
+  });
+
+  it('keeps a use-only product Agent testable without management actions', () => {
+    useManagedAgents.mockReturnValue({
+      agents: makeAgents(),
+      revalidate: vi.fn(),
+      refreshCatalog: vi.fn(),
+    });
+
+    render(<LocalAgents />);
+
+    expect(screen.getByTestId('agent-row-test-632f31d2')).toBeInTheDocument();
+    expect(screen.queryByTestId('agent-row-edit-632f31d2')).toBeNull();
+    expect(screen.getByTestId('agent-row-edit-custom-1')).toBeInTheDocument();
   });
 
   it('shows the empty state when no detected agents are present', () => {
@@ -360,6 +378,7 @@ describe('LocalAgents', () => {
           available: false,
           installed: false,
           status: 'missing',
+          productAccess: 'manage',
         },
       ],
       revalidate: vi.fn(),

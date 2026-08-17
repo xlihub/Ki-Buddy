@@ -2,7 +2,11 @@ import aionUiLogoUrl from '@/renderer/assets/logos/brand/app.png';
 import { configureAssistantPresentationMapper } from '@/common/adapter/ipcBridge';
 import type { TConversationAssistantIdentity } from '@/common/config/storage';
 import type { Assistant, AssistantAgent, AssistantDetail } from '@/common/types/agent/assistantTypes';
-import { fetchManagedAgents, type ManagedAgent } from '@/renderer/utils/model/agentTypes';
+import {
+  loadProductAgentCatalog,
+  loadProductAssistantCandidates,
+  type ProductManagedAgent,
+} from './kiBuddyAgentCatalog';
 import { getKiBuddyProductRuntime } from './kiBuddyRuntime';
 import { createKiBuddyPresentationAdapter } from './kiBuddyPresentationAdapter';
 import type {
@@ -71,9 +75,9 @@ export function adaptProductAgentIdentity<T extends AgentIdentity>(agent: T): T 
 }
 
 /** Fetches the managed-agent catalog with product identity applied at one shared boundary. */
-export async function fetchProductManagedAgents(): Promise<ManagedAgent[]> {
-  const agents = await fetchManagedAgents();
-  return agents.map(adaptProductAgentIdentity);
+export async function fetchProductManagedAgents(): Promise<ProductManagedAgent[]> {
+  const catalog = await loadProductAgentCatalog();
+  return catalog.visibleAgents.map(adaptProductAgentIdentity);
 }
 
 /** Resolves the product logo for views that display the internal CLI as an assistant runtime. */
@@ -101,7 +105,8 @@ export function installProductAssistantCatalogAdapter(): void {
   if (!getKiBuddyProductRuntime()) return;
   configureAssistantPresentationMapper({
     detail: adaptProductAssistantDetailIdentity,
-    list: (assistants: Assistant[]) => assistants.map(adaptProductAssistantIdentity),
+    list: async (assistants: Assistant[]) =>
+      (await loadProductAssistantCandidates(assistants)).map(adaptProductAssistantIdentity),
   });
 }
 

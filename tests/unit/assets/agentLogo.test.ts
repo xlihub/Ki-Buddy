@@ -149,7 +149,7 @@ describe('agentLogo', () => {
       vi.stubGlobal('window', { __kiBuddyProductPresentation: KI_BUDDY_PRODUCT_CAPABILITY });
       bridgeMocks.getManagedAgents.mockResolvedValue([
         {
-          id: 'aionrs',
+          id: '632f31d2',
           name: 'Aion CLI',
           agent_type: 'aionrs',
           agent_source: 'internal',

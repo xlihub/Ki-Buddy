@@ -158,6 +158,12 @@ export type ManagedAgent = Omit<AgentMetadata, 'available' | 'handshake'> & {
   handshake?: AgentHandshake;
 };
 
+/** Requests the managed Agent directory while preserving transport failures for authoritative consumers. */
+export async function requestManagedAgents(): Promise<ManagedAgent[]> {
+  const agents = await ipcBridge.acpConversation.getManagedAgents.invoke();
+  return Array.isArray(agents) ? (agents as ManagedAgent[]) : [];
+}
+
 /**
  * Fetcher for MANAGED_AGENTS_SWR_KEY — the Agent settings management view.
  * Hits `/api/agents/management` so user-disabled and missing rows remain
@@ -167,14 +173,10 @@ export type ManagedAgent = Omit<AgentMetadata, 'available' | 'handshake'> & {
  */
 export async function fetchManagedAgents(): Promise<ManagedAgent[]> {
   try {
-    const agents = await ipcBridge.acpConversation.getManagedAgents.invoke();
-    if (Array.isArray(agents)) {
-      return agents as ManagedAgent[];
-    }
+    return await requestManagedAgents();
   } catch {
-    // fallback to empty
+    return [];
   }
-  return [];
 }
 
 const getAgentManagementErrorDetails = (details: unknown): AgentManagementErrorDetails => {

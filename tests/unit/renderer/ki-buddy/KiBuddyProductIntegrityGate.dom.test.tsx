@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-const { loadProductBuiltinMcpResourceStateMock } = vi.hoisted(() => ({
+const { loadProductBuiltinAgentResourceStateMock, loadProductBuiltinMcpResourceStateMock } = vi.hoisted(() => ({
+  loadProductBuiltinAgentResourceStateMock: vi.fn(),
   loadProductBuiltinMcpResourceStateMock: vi.fn(),
 }));
 
@@ -33,14 +34,22 @@ vi.mock('@/renderer/components/layout/InstallationIntegrityDialog', () => ({
 vi.mock('@/renderer/hooks/mcp/catalog', () => ({
   loadProductBuiltinMcpResourceState: loadProductBuiltinMcpResourceStateMock,
 }));
+vi.mock('@/renderer/services/runtime/kiBuddyAgentCatalog', () => ({
+  loadProductBuiltinAgentResourceState: loadProductBuiltinAgentResourceStateMock,
+}));
 
 import KiBuddyProductIntegrityGate, {
-  KiBuddyMcpProductIntegrityGate,
+  KiBuddyProductResourceIntegrityGate,
 } from '@/renderer/pages/ki-buddy/KiBuddyProductIntegrityGate';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  loadProductBuiltinAgentResourceStateMock.mockResolvedValue({ status: 'ready', missing: [] });
   loadProductBuiltinMcpResourceStateMock.mockResolvedValue({ status: 'ready', missing: [] });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 it('shows an installation-integrity error instead of AionUi business content for an invalid Ki-Buddy policy', () => {
@@ -52,24 +61,55 @@ it('shows an installation-integrity error instead of AionUi business content for
 
 it('does not load the MCP catalog outside the authenticated Ki-Buddy product path', () => {
   render(
-    <KiBuddyMcpProductIntegrityGate enabled={false}>
+    <KiBuddyProductResourceIntegrityGate enabled={false}>
       <div>AionUi business content</div>
-    </KiBuddyMcpProductIntegrityGate>
+    </KiBuddyProductResourceIntegrityGate>
   );
 
   expect(screen.getByText('AionUi business content')).toBeInTheDocument();
+  expect(loadProductBuiltinAgentResourceStateMock).not.toHaveBeenCalled();
   expect(loadProductBuiltinMcpResourceStateMock).not.toHaveBeenCalled();
 });
 
-it('keeps business content available when registered product MCP resources are present', async () => {
+it('keeps business content available when registered product resources are present', async () => {
   render(
-    <KiBuddyMcpProductIntegrityGate enabled>
+    <KiBuddyProductResourceIntegrityGate enabled>
       <div>Ki-Buddy business content</div>
-    </KiBuddyMcpProductIntegrityGate>
+    </KiBuddyProductResourceIntegrityGate>
   );
 
+  await waitFor(() => expect(loadProductBuiltinAgentResourceStateMock).toHaveBeenCalledOnce());
   await waitFor(() => expect(loadProductBuiltinMcpResourceStateMock).toHaveBeenCalledOnce());
   expect(screen.getByText('Ki-Buddy business content')).toBeInTheDocument();
+});
+
+it('shows installation integrity diagnostics for a missing KiCLI while keeping Account content available', async () => {
+  loadProductBuiltinAgentResourceStateMock.mockResolvedValue({
+    status: 'invalid',
+    missing: [
+      {
+        code: 'required_product_resource_missing',
+        featureId: 'agents',
+        kind: 'agent',
+        origin: 'productBuiltin',
+        resourceId: '632f31d2',
+        resourceName: 'Ki CLI',
+      },
+    ],
+  });
+
+  render(
+    <KiBuddyProductResourceIntegrityGate enabled>
+      <div>Account and diagnostics content</div>
+    </KiBuddyProductResourceIntegrityGate>
+  );
+
+  expect(
+    await screen.findByText('common.backendStartup.incompleteInstallation.runtimeComponentDescription:Ki CLI')
+  ).toBeInTheDocument();
+  expect(screen.getByText('632f31d2')).toBeInTheDocument();
+  expect(screen.getByText('closable integrity notice')).toBeInTheDocument();
+  expect(screen.getByText('Account and diagnostics content')).toBeInTheDocument();
 });
 
 it('shows installation integrity diagnostics when a required product MCP is missing', async () => {
@@ -88,9 +128,9 @@ it('shows installation integrity diagnostics when a required product MCP is miss
   });
 
   render(
-    <KiBuddyMcpProductIntegrityGate enabled>
+    <KiBuddyProductResourceIntegrityGate enabled>
       <div>Ki-Buddy business content</div>
-    </KiBuddyMcpProductIntegrityGate>
+    </KiBuddyProductResourceIntegrityGate>
   );
 
   expect(
@@ -106,12 +146,47 @@ it('does not misreport an installation failure when catalog loading throws', asy
   loadProductBuiltinMcpResourceStateMock.mockRejectedValue(new Error('catalog unavailable'));
 
   render(
-    <KiBuddyMcpProductIntegrityGate enabled>
+    <KiBuddyProductResourceIntegrityGate enabled>
       <div>Ki-Buddy business content</div>
-    </KiBuddyMcpProductIntegrityGate>
+    </KiBuddyProductResourceIntegrityGate>
   );
 
   await waitFor(() => expect(consoleError).toHaveBeenCalled());
   expect(screen.getByText('Ki-Buddy business content')).toBeInTheDocument();
   consoleError.mockRestore();
+});
+
+it('retries a pending Agent directory and reports a missing KiCLI after it becomes authoritative', async () => {
+  vi.useFakeTimers();
+  loadProductBuiltinAgentResourceStateMock
+    .mockResolvedValueOnce({ status: 'pending', missing: [] })
+    .mockResolvedValueOnce({
+      status: 'invalid',
+      missing: [
+        {
+          code: 'required_product_resource_missing',
+          featureId: 'agents',
+          kind: 'agent',
+          origin: 'productBuiltin',
+          resourceId: '632f31d2',
+          resourceName: 'Ki CLI',
+        },
+      ],
+    });
+
+  render(
+    <KiBuddyProductResourceIntegrityGate enabled>
+      <div>Account and diagnostics content</div>
+    </KiBuddyProductResourceIntegrityGate>
+  );
+
+  await act(async () => Promise.resolve());
+  expect(loadProductBuiltinAgentResourceStateMock).toHaveBeenCalledOnce();
+
+  await act(async () => vi.advanceTimersByTimeAsync(1_000));
+
+  expect(loadProductBuiltinAgentResourceStateMock).toHaveBeenCalledTimes(2);
+  expect(
+    screen.getByText('common.backendStartup.incompleteInstallation.runtimeComponentDescription:Ki CLI')
+  ).toBeInTheDocument();
 });

@@ -108,7 +108,7 @@ import { bootstrapRendererConfig } from '@renderer/services/bootstrapRenderer';
 import BackendStartingView from './components/layout/BackendStartingView';
 import BackendStartupGate from './components/layout/BackendStartupGate';
 import KiBuddyProductIntegrityGate, {
-  KiBuddyMcpProductIntegrityGate,
+  KiBuddyProductResourceIntegrityGate,
 } from './pages/ki-buddy/KiBuddyProductIntegrityGate';
 import GpuAutoDisableNotice from './components/layout/GpuAutoDisableNotice';
 import Layout from './components/layout/Layout';
@@ -348,7 +348,7 @@ const Main = () => {
   }
 
   return (
-    <KiBuddyMcpProductIntegrityGate enabled={Boolean(kiBuddyRuntime) && status === 'authenticated'}>
+    <KiBuddyProductResourceIntegrityGate enabled={Boolean(kiBuddyRuntime) && status === 'authenticated'}>
       <Router
         layout={
           <ConversationHistoryProvider>
@@ -356,7 +356,7 @@ const Main = () => {
           </ConversationHistoryProvider>
         }
       />
-    </KiBuddyMcpProductIntegrityGate>
+    </KiBuddyProductResourceIntegrityGate>
   );
 };
 

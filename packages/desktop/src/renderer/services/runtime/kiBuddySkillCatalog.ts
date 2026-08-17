@@ -6,6 +6,7 @@ import {
   type ProductResourceHiddenRecord,
   type ProductResourceOrigin,
 } from '@/common/platform/ki-buddy';
+import { reportHiddenProductResources } from './kiBuddyProductResourceDiagnostics';
 import { getProductExperience } from './kiBuddyRuntime';
 
 export type AvailableSkill = Awaited<ReturnType<typeof ipcBridge.fs.listAvailableSkills.invoke>>[number];
@@ -100,15 +101,6 @@ export const projectProductSkillCatalog = (
   };
 };
 
-/** Emits non-sensitive diagnostics for Skill resources hidden by the product policy. */
-export const reportHiddenProductSkills = (hiddenResources: readonly ProductResourceHiddenRecord[]): void => {
-  if (hiddenResources.length === 0) return;
-  console.info('[ProductExperience] Skill resources hidden by product policy', {
-    code: 'product_resource_projection',
-    resources: hiddenResources,
-  });
-};
-
 /** Keeps runtime-loaded Skill names that remain visible in the active product catalog. */
 export const filterProductVisibleSkillNames = (
   names: readonly string[] | undefined,
@@ -132,6 +124,6 @@ export const loadProductSkillCatalog = async (
 ): Promise<ProductSkillCatalog> => {
   const skills = await ipcBridge.fs.listAvailableSkills.invoke();
   const catalog = projectProductSkillCatalog(skills, experience);
-  reportHiddenProductSkills(catalog.hiddenResources);
+  reportHiddenProductResources('skill', catalog.hiddenResources);
   return catalog;
 };
