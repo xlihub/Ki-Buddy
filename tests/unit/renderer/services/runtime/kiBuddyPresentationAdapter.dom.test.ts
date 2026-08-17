@@ -65,9 +65,9 @@ describe('Ki-Buddy product presentation adapter', () => {
     expect(adaptProductAssistantIdentity(assistant)).toEqual(assistant);
   });
 
-  it('upgrades a legacy internal CLI conversation snapshot', () => {
+  it('projects the stable internal CLI Assistant identity in conversation snapshots', () => {
     const assistant = adaptProductConversationAssistantIdentity({
-      id: 'bare-aionrs',
+      id: 'bare:632f31d2',
       source: 'generated',
       name: 'Aion CLI',
       avatar: '/api/assets/logos/aionui.svg',

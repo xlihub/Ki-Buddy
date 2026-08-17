@@ -183,6 +183,12 @@ describe('CreateTaskDialog', () => {
       kind: 'cron',
       expr: '*/5 * * * *',
     });
+    expect(updates.metadata?.agent_config).toEqual({
+      assistant_id: 'assistant-1',
+      name: '问好助手',
+      mode: 'default',
+    });
+    expect(updates).not.toHaveProperty('team_id');
   });
 
   it('keeps advanced cron input available for complex expressions', async () => {
@@ -388,6 +394,13 @@ describe('CreateTaskDialog', () => {
       agentValue: 'assistant-1',
     });
     await waitFor(() => expect(ipcBridge.cron.addJob.invoke).toHaveBeenCalledTimes(1));
+    const [params] = vi.mocked(ipcBridge.cron.addJob.invoke).mock.calls[0];
+    expect(params.agent_config).toEqual({
+      assistant_id: 'assistant-1',
+      name: '问好助手',
+      mode: 'default',
+    });
+    expect(params).not.toHaveProperty('team_id');
   });
 });
 

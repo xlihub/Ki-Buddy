@@ -5,12 +5,10 @@ import {
   createKiBuddyProductExperience,
 } from '@/common/platform/ki-buddy';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
-import type { Assistant } from '@/common/types/agent/assistantTypes';
 import {
   KI_CLI_PRODUCT_RESOURCE_ID,
   loadProductAgentCatalog,
   loadProductBuiltinAgentResourceState,
-  projectProductAssistantCandidates,
   projectProductAgentCatalog,
 } from '@/renderer/services/runtime/kiBuddyAgentCatalog';
 import productConfig from '../../../../../ki-buddy-product.json';
@@ -52,28 +50,6 @@ const candidates = [
     agent_source: 'future' as ManagedAgent['agent_source'],
   }),
 ];
-
-const assistant = (id: string, agentId: string, source: 'internal' | 'builtin' | 'custom'): Assistant => ({
-  id,
-  source: 'generated',
-  name: id,
-  name_i18n: {},
-  description_i18n: {},
-  enabled: true,
-  sort_order: 1,
-  agent_id: agentId,
-  agent: { type: source === 'internal' ? 'aionrs' : 'acp', source },
-  enabled_skills: [],
-  custom_skill_names: [],
-  disabled_builtin_skills: [],
-  context_i18n: {},
-  prompts: [],
-  prompts_i18n: {},
-  models: [],
-  agent_status: 'online',
-  team_selectable: true,
-  deletable: true,
-});
 
 describe('projectProductAgentCatalog', () => {
   beforeEach(() => {
@@ -204,21 +180,5 @@ describe('loadProductBuiltinAgentResourceState', () => {
     ).resolves.toEqual({ status: 'pending', missing: [] });
     expect(error).toHaveBeenCalled();
     error.mockRestore();
-  });
-});
-
-describe('projectProductAssistantCandidates', () => {
-  it('uses the authoritative projected Agent directory for Guid and conversation Assistant candidates', () => {
-    const assistants = [
-      assistant('ki-cli-assistant', KI_CLI_PRODUCT_RESOURCE_ID, 'internal'),
-      assistant('upstream-assistant', 'builtin-claude', 'builtin'),
-      assistant('custom-assistant', 'custom-1', 'custom'),
-      assistant('stale-custom-assistant', 'custom-removed', 'custom'),
-    ];
-    const catalog = projectProductAgentCatalog(candidates, createKiBuddyProductExperience(productConfig.experience));
-
-    const visible = projectProductAssistantCandidates(assistants, catalog);
-
-    expect(visible.map(({ id }) => id)).toEqual(['ki-cli-assistant', 'custom-assistant']);
   });
 });

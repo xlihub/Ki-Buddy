@@ -12,7 +12,7 @@ import {
   type ProductResourceOrigin,
 } from '@/common/platform/ki-buddy';
 import { getClientBusinessSetting } from '@/renderer/services/clientBusinessSettings';
-import { reportHiddenProductResources } from '@/renderer/services/runtime/kiBuddyProductResourceDiagnostics';
+import { reportHiddenProductResources } from '@/renderer/services/runtime/catalogs/kiBuddyProductResourceDiagnostics';
 import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
 
 type BackendMcpTransport = Exclude<IMcpServerTransport, { type: 'streamable_http' }>;

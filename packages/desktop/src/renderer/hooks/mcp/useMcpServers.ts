@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type SetStateAction } from '
 import { ipcBridge } from '@/common';
 import type { IMcpServer } from '@/common/config/storage';
 import type { ProductResourceHiddenRecord } from '@/common/platform/ki-buddy';
-import { reportHiddenProductResources } from '@/renderer/services/runtime/kiBuddyProductResourceDiagnostics';
+import { reportHiddenProductResources } from '@/renderer/services/runtime/catalogs/kiBuddyProductResourceDiagnostics';
 import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
 import {
   ensureBackendMcpCatalog,

@@ -863,13 +863,13 @@ describe('AssistantEditorSections', () => {
     expect(promptScope.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
   });
 
-  it('renders generated assistants with locked identity and editable local configuration', () => {
+  it('keeps KiCLI identity locked while preserving upstream generated Assistant management', () => {
     const { container } = renderWithProviders(
       <AssistantEditorSections
         editor={createEditor({
           isCreating: false,
           profile: {
-            name: 'Droid',
+            name: 'Ki CLI',
             setName: vi.fn(),
             description: 'Bare assistant',
             setDescription: vi.fn(),
@@ -904,19 +904,19 @@ describe('AssistantEditorSections', () => {
             setDisabledBuiltinSkills: vi.fn(),
           },
           agent: {
-            value: 'agent-droid',
+            value: '632f31d2',
             setValue: vi.fn(),
-            availableBackends: [backendOption('agent-droid', 'droid', 'droid')],
+            availableBackends: [backendOption('632f31d2', 'aionrs', 'Ki CLI')],
           },
         })}
         activeAssistant={{
-          id: 'generated-assistant',
-          name: 'Droid',
+          id: 'bare:632f31d2',
+          name: 'Ki CLI',
           sort_order: 1,
           source: 'generated',
           enabled: true,
-          agent_id: 'agent-droid',
-          agent: { type: 'droid', source: 'custom' },
+          agent_id: '632f31d2',
+          agent: { type: 'aionrs', source: 'internal' },
         }}
       />
     );

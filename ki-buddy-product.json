@@ -43,7 +43,7 @@
         "unclassified": "hidden"
       },
       "assistant": {
-        "productBuiltin": "use",
+        "productBuiltin": "manage",
         "upstreamBuiltin": "hidden",
         "custom": "manage",
         "extension": "hidden",

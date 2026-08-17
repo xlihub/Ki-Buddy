@@ -2,6 +2,7 @@ import type { TConversationAssistantIdentity } from '@/common/config/storage';
 import type { AssistantDetail } from '@/common/types/agent/assistantTypes';
 import type { KiBuddyProductRuntime } from './kiBuddyRuntime';
 import type { AgentIdentity, AssistantIdentity, ProductPresentationAdapter } from './productPresentationContract';
+import { KI_BUDDY_ASSISTANT_IDENTITIES } from './catalogs/kiBuddyAssistantIdentity';
 
 const documentThemeObservers = new WeakMap<Document, MutationObserver>();
 
@@ -74,7 +75,9 @@ export function createKiBuddyPresentationAdapter(runtime: KiBuddyProductRuntime)
       const isBuiltinCli =
         assistant.backend === 'aionrs' &&
         assistant.source === 'generated' &&
-        (assistant.id === 'bare-aionrs' || assistant.id === 'aionrs');
+        (assistant.id === KI_BUDDY_ASSISTANT_IDENTITIES.kiCli.assistantId ||
+          assistant.id === 'bare-aionrs' ||
+          assistant.id === 'aionrs');
       if (!isBuiltinCli) return assistant;
       return {
         ...assistant,

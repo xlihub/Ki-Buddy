@@ -2,11 +2,9 @@ import aionUiLogoUrl from '@/renderer/assets/logos/brand/app.png';
 import { configureAssistantPresentationMapper } from '@/common/adapter/ipcBridge';
 import type { TConversationAssistantIdentity } from '@/common/config/storage';
 import type { Assistant, AssistantAgent, AssistantDetail } from '@/common/types/agent/assistantTypes';
-import {
-  loadProductAgentCatalog,
-  loadProductAssistantCandidates,
-  type ProductManagedAgent,
-} from './kiBuddyAgentCatalog';
+import { loadProductAgentCatalog, type ProductManagedAgent } from './kiBuddyAgentCatalog';
+import { projectProductAssistantCatalog } from './catalogs/kiBuddyAssistantCatalog';
+import { reportHiddenProductResources } from './catalogs/kiBuddyProductResourceDiagnostics';
 import { getKiBuddyProductRuntime } from './kiBuddyRuntime';
 import { createKiBuddyPresentationAdapter } from './kiBuddyPresentationAdapter';
 import type {
@@ -102,11 +100,15 @@ export function adaptProductConversationAssistantIdentity<T extends TConversatio
 
 /** Installs product identity once at the shared assistant catalog boundary. */
 export function installProductAssistantCatalogAdapter(): void {
-  if (!getKiBuddyProductRuntime()) return;
+  const runtime = getKiBuddyProductRuntime();
+  if (!runtime) return;
   configureAssistantPresentationMapper({
     detail: adaptProductAssistantDetailIdentity,
-    list: async (assistants: Assistant[]) =>
-      (await loadProductAssistantCandidates(assistants)).map(adaptProductAssistantIdentity),
+    list: (assistants: Assistant[]) => {
+      const catalog = projectProductAssistantCatalog(assistants, runtime.productExperience);
+      reportHiddenProductResources('assistant', catalog.hiddenResources);
+      return catalog.visibleAssistants.map(adaptProductAssistantIdentity);
+    },
   });
 }
 

@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ConfigProvider } from '@arco-design/web-react';
 import AssistantEditorPage from '@/renderer/pages/settings/AssistantSettings/AssistantEditorPage';
-import type { AssistantEditorViewModel } from '@/renderer/pages/settings/AssistantSettings/types';
+import type { AssistantEditorViewModel, AssistantListItem } from '@/renderer/pages/settings/AssistantSettings/types';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -160,5 +160,69 @@ describe('AssistantEditorPage', () => {
 
     expect(screen.queryByTestId('btn-delete-assistant')).not.toBeInTheDocument();
     expect(screen.getByTestId('btn-save-assistant')).not.toBeDisabled();
+  });
+
+  it('keeps save available for a manageable product Assistant', () => {
+    const editor = createEditor();
+    editor.isCreating = false;
+    editor.profile.name = 'Word Creator';
+    const productAssistant = {
+      id: 'word-creator',
+      name: 'Word Creator',
+      source: 'builtin',
+      enabled: true,
+      sort_order: 1,
+      name_i18n: {},
+      description_i18n: {},
+      context_i18n: {},
+      prompts_i18n: {},
+      enabled_skills: [],
+      custom_skill_names: [],
+      disabled_builtin_skills: [],
+      models: [],
+      productAccess: 'manage',
+    } as AssistantListItem;
+
+    render(
+      <ConfigProvider>
+        <AssistantEditorPage editor={editor} activeAssistant={productAssistant} onBack={vi.fn()} />
+      </ConfigProvider>
+    );
+
+    expect(screen.queryByTestId('btn-delete-assistant')).not.toBeInTheDocument();
+    expect(screen.getByTestId('btn-save-assistant')).not.toBeDisabled();
+    expect(screen.queryByText('Read only')).not.toBeInTheDocument();
+  });
+
+  it('keeps save and delete available for a Custom Assistant with manage access', () => {
+    const editor = createEditor();
+    editor.isCreating = false;
+    editor.profile.name = 'My Assistant';
+    const customAssistant = {
+      id: 'my-assistant',
+      name: 'My Assistant',
+      source: 'user',
+      enabled: true,
+      sort_order: 1,
+      name_i18n: {},
+      description_i18n: {},
+      context_i18n: {},
+      prompts_i18n: {},
+      enabled_skills: [],
+      custom_skill_names: [],
+      disabled_builtin_skills: [],
+      models: [],
+      productAccess: 'manage',
+    } as AssistantListItem;
+
+    render(
+      <ConfigProvider>
+        <AssistantEditorPage editor={editor} activeAssistant={customAssistant} onBack={vi.fn()} />
+      </ConfigProvider>
+    );
+
+    expect(screen.getByTestId('btn-save-assistant')).not.toBeDisabled();
+    expect(screen.getByTestId('btn-delete-assistant')).toBeInTheDocument();
+    expect(screen.queryByText('Read only')).not.toBeInTheDocument();
   });
 });
