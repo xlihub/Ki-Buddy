@@ -12,6 +12,7 @@ import CssThemeSettings from '@renderer/pages/settings/AppearanceSettings/CssThe
 import AionScrollArea from '@/renderer/components/base/AionScrollArea';
 import { FONT_SIZE_KEYS, FONT_SIZE_SPECS, FONT_SIZE_STEP, type FontSizeKey } from '@/common/config/fontSizes';
 import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
+import { isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
 import { useSettingsViewMode } from '../settingsViewContext';
 
 /** Map each configurable font-size region to its row label i18n key. */
@@ -52,6 +53,12 @@ const AppearanceModalContent: React.FC = () => {
   const viewMode = useSettingsViewMode();
   const isPageMode = viewMode === 'page';
   const { fontSizes, setFontSize } = useThemeContext();
+  const themeCapabilities = {
+    customThemes: isProductFeatureEnabled('themeCustomEditor'),
+    marketplace: isProductFeatureEnabled('themeMarketplace'),
+    presets: isProductFeatureEnabled('themePresets'),
+  };
+  const showThemeSettings = Object.values(themeCapabilities).some(Boolean);
 
   return (
     <div className='flex flex-col h-full w-full'>
@@ -59,10 +66,12 @@ const AppearanceModalContent: React.FC = () => {
       <AionScrollArea className='flex-1 min-h-0 pb-16px' disableOverflow={isPageMode}>
         <div className='space-y-16px'>
           {/* 主题画廊 / Theme Gallery */}
-          <div className='px-16px md:px-24px lg:px-28px py-14px md:py-16px bg-2 rd-16px'>
-            <div className='text-14px text-t-primary leading-22px mb-12px'>{t('settings.theme')}</div>
-            <CssThemeSettings />
-          </div>
+          {showThemeSettings && (
+            <div className='px-16px md:px-24px lg:px-28px py-14px md:py-16px bg-2 rd-16px'>
+              <div className='text-14px text-t-primary leading-22px mb-12px'>{t('settings.theme')}</div>
+              <CssThemeSettings capabilities={themeCapabilities} />
+            </div>
+          )}
 
           {/* 字体大小 / Font sizes */}
           <div className='px-16px md:px-24px lg:px-28px py-14px md:py-16px bg-2 rd-16px'>

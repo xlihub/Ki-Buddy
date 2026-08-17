@@ -115,8 +115,7 @@ export function getKiBuddyRouteComponents(): typeof KI_BUDDY_ROUTE_COMPONENTS | 
   return getKiBuddyRendererRuntime() ? KI_BUDDY_ROUTE_COMPONENTS : null;
 }
 
-/** Adds the product account entry to a settings item list when Ki-Buddy is active. */
-export function withKiBuddySettingsItem(items: SettingsItem[], t: TranslateFn): SettingsItem[] {
-  const item = getKiBuddyRendererRuntime() ? createKiBuddyAccountSettingsItem(t) : null;
-  return item ? [item, ...items] : items;
+/** Returns the product-owned account registration when the Ki-Buddy runtime is active. */
+export function getKiBuddyAccountSettingsItem(t: TranslateFn): SettingsItem | null {
+  return getKiBuddyRendererRuntime() ? createKiBuddyAccountSettingsItem(t) : null;
 }

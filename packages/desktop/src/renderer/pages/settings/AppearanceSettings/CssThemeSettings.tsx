@@ -238,7 +238,21 @@ const ensureBackgroundCss = <T extends { id?: string; cover?: string; css?: stri
  * CSS 主题设置组件 / CSS Theme Settings Component
  * 用于管理和切换 CSS 皮肤主题 / For managing and switching CSS skin themes
  */
-const CssThemeSettings: React.FC = () => {
+export type CssThemeCapabilities = Readonly<{
+  customThemes: boolean;
+  marketplace: boolean;
+  presets: boolean;
+}>;
+
+const ALL_THEME_CAPABILITIES: CssThemeCapabilities = {
+  customThemes: true,
+  marketplace: true,
+  presets: true,
+};
+
+const CssThemeSettings: React.FC<{ capabilities?: CssThemeCapabilities }> = ({
+  capabilities = ALL_THEME_CAPABILITIES,
+}) => {
   const { t } = useTranslation();
   const { theme: currentTheme, activeTheme, activeId, selectTheme } = useThemeContext();
   const [themes, setThemes] = useState<Theme[]>([]);
@@ -259,7 +273,7 @@ const CssThemeSettings: React.FC = () => {
   // Virtual "Follow System" card, third in the gallery (after Light and Dark).
   // Not part of BUILTIN_THEMES — it must never enter resolution/dedup/persistence.
   const displayThemes = useMemo(() => {
-    if (themes.length === 0) return themes;
+    if (themes.length === 0 || !capabilities.presets) return themes;
     const systemCard: Theme = {
       id: SYSTEM_THEME_ID,
       name: t('settings.cssTheme.followSystem'),
@@ -271,41 +285,44 @@ const CssThemeSettings: React.FC = () => {
     const arr = [...themes];
     arr.splice(Math.min(2, arr.length), 0, systemCard);
     return arr;
-  }, [themes, t]);
+  }, [capabilities.presets, themes, t]);
 
   // 加载主题列表 / Load theme list
   useEffect(() => {
     const loadThemes = async () => {
       try {
-        const userThemes = (configService.get('theme.userThemes') as Theme[]) ?? [];
+        const userThemes = capabilities.customThemes ? ((configService.get('theme.userThemes') as Theme[]) ?? []) : [];
 
         // Apply background CSS to user themes that have cover images
         const normalizedUserThemes = userThemes.map((theme) => ensureBackgroundCss(theme));
 
         // 加载扩展主题 / Load extension-contributed themes
         let extensionThemes: Theme[] = [];
-        try {
-          const loadedExtensionThemes = await ipcBridge.extensions.getThemes.invoke();
-          // Map extension themes to Theme shape (css-only, builtin: true, appearance inferred as 'light')
-          extensionThemes = loadedExtensionThemes.map((theme) => ({
-            id: theme.id,
-            name: theme.name,
-            cover: resolveExtensionAssetUrl(theme.cover),
-            css: theme.css,
-            appearance: 'light' as const,
-            builtin: true,
-            created_at: theme.created_at ?? 0,
-            updated_at: theme.updated_at ?? 0,
-          }));
-        } catch {
-          // Extensions not available (e.g., WebUI mode or not initialized yet)
+        if (capabilities.marketplace) {
+          try {
+            const loadedExtensionThemes = await ipcBridge.extensions.getThemes.invoke();
+            // Map extension themes to Theme shape (css-only, builtin: true, appearance inferred as 'light')
+            extensionThemes = loadedExtensionThemes.map((theme) => ({
+              id: theme.id,
+              name: theme.name,
+              cover: resolveExtensionAssetUrl(theme.cover),
+              css: theme.css,
+              appearance: 'light' as const,
+              builtin: true,
+              created_at: theme.created_at ?? 0,
+              updated_at: theme.updated_at ?? 0,
+            }));
+          } catch {
+            // Extensions not available (e.g., WebUI mode or not initialized yet)
+          }
         }
 
         // 合并主题，按 ID 去重（先出现的优先）
         // Merge builtin, extension, and user themes; deduplicate by ID (first occurrence wins)
         const seenIds = new Set<string>();
         const allThemes: Theme[] = [];
-        for (const theme of [...BUILTIN_THEMES, ...extensionThemes, ...normalizedUserThemes]) {
+        const builtinThemes = capabilities.presets ? BUILTIN_THEMES : [];
+        for (const theme of [...builtinThemes, ...extensionThemes, ...normalizedUserThemes]) {
           if (!theme?.id || seenIds.has(theme.id)) continue;
           seenIds.add(theme.id);
           allThemes.push(theme);
@@ -317,7 +334,7 @@ const CssThemeSettings: React.FC = () => {
       }
     };
     void loadThemes();
-  }, []);
+  }, [capabilities.customThemes, capabilities.marketplace, capabilities.presets]);
 
   /**
    * 选择主题 / Select theme
@@ -440,9 +457,11 @@ const CssThemeSettings: React.FC = () => {
       {/* 标题栏 / Header */}
       <div className='flex items-start md:items-center justify-between gap-8px flex-wrap'>
         <span className='text-14px text-t-secondary leading-22px'>{t('settings.cssTheme.selectOrCustomize')}</span>
-        <Button type='primary' size='small' className='!h-32px !rounded-8px !px-14px !m-0' onClick={handleAddTheme}>
-          {t('settings.cssTheme.addManually')}
-        </Button>
+        {capabilities.customThemes && (
+          <Button type='primary' size='small' className='!h-32px !rounded-8px !px-14px !m-0' onClick={handleAddTheme}>
+            {t('settings.cssTheme.addManually')}
+          </Button>
+        )}
       </div>
 
       {/* 主题卡片列表 / Theme card list */}
@@ -484,7 +503,7 @@ const CssThemeSettings: React.FC = () => {
               <div className='absolute bottom-0 left-0 right-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent flex items-end justify-between p-8px'>
                 <span className='text-13px text-white truncate flex-1'>{theme.name}</span>
                 {/* 编辑按钮（仅用户主题） / Edit button (user themes only) */}
-                {hoveredThemeId === theme.id && !theme.builtin && (
+                {capabilities.customThemes && hoveredThemeId === theme.id && !theme.builtin && (
                   <div
                     className='p-4px rounded-6px bg-white/20 cursor-pointer hover:bg-white/40 transition-colors ml-8px'
                     onClick={(e) => handleEditTheme(theme, e)}
@@ -506,16 +525,18 @@ const CssThemeSettings: React.FC = () => {
       </div>
 
       {/* 主题编辑弹窗 / Theme edit modal */}
-      <CssThemeModal
-        visible={modalVisible}
-        theme={editingTheme}
-        onClose={() => {
-          setModalVisible(false);
-          setEditingTheme(null);
-        }}
-        onSave={handleSaveTheme}
-        onDelete={editingTheme && !editingTheme.builtin ? () => handleDeleteTheme(editingTheme.id) : undefined}
-      />
+      {capabilities.customThemes && (
+        <CssThemeModal
+          visible={modalVisible}
+          theme={editingTheme}
+          onClose={() => {
+            setModalVisible(false);
+            setEditingTheme(null);
+          }}
+          onSave={handleSaveTheme}
+          onDelete={editingTheme && !editingTheme.builtin ? () => handleDeleteTheme(editingTheme.id) : undefined}
+        />
+      )}
     </div>
   );
 };
