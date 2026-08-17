@@ -98,6 +98,7 @@ const SidebarIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({ size =
 );
 
 const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
+  const conversationEnabled = isProductFeatureEnabled('conversation');
   const teamEnabled = isProductFeatureEnabled('team');
   const { t } = useTranslation();
   const appTitle = getRendererBrand().productName;
@@ -162,7 +163,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   // Conversation search moved from the sidebar into the titlebar toolbar
   // (between the sidebar toggle and the back/forward nav). Desktop only —
   // mobile keeps search inside the sidebar.
-  const showSearchButton = !layout?.isMobile;
+  const showSearchButton = conversationEnabled && !layout?.isMobile;
   const searchTooltip = t('conversation.historySearch.tooltip', { defaultValue: 'Search conversations' });
 
   const handleSiderToggle = () => {

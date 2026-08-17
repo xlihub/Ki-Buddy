@@ -7,11 +7,16 @@ import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
 import { blurActiveElement } from '@renderer/utils/ui/focus';
 import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
-import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderAssistantEntry } from './SiderNav';
+import {
+  getWorkspaceNavigationProjection,
+  SiderAssistantEntry,
+  SiderScheduledEntry,
+  SiderSearchEntry,
+  SiderToolbar,
+} from './SiderNav';
 import SiderFooter, { shouldShowAionUiSiderLogout } from './SiderFooter';
 import TeamSiderSection from './TeamSiderSection';
 import siderStyles from './Sider.module.css';
-import { isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
 
 const WorkspaceGroupedHistory = React.lazy(() => import('@renderer/pages/conversation/GroupedHistory'));
 const SettingsSider = React.lazy(() => import('@renderer/pages/settings/components/SettingsSider'));
@@ -38,7 +43,11 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     authenticated: status === 'authenticated',
     electronDesktop: typeof window !== 'undefined' && Boolean(window.electronAPI),
   });
-  const teamEnabled = isProductFeatureEnabled('team');
+  const navigationProjection = getWorkspaceNavigationProjection();
+  const enabledNavigation = new Set(navigationProjection.map(({ id }) => id));
+  const primaryNavigation = navigationProjection.filter(({ placement }) => placement === 'primary');
+  const conversationHistoryEnabled = enabledNavigation.has('conversationHistory');
+  const teamEnabled = enabledNavigation.has('team');
 
   useEffect(() => {
     if (!pathname.startsWith('/settings')) {
@@ -174,6 +183,14 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     batchMode: isBatchMode,
     onBatchModeChange: setIsBatchMode,
   };
+  const teamNavigation = teamEnabled ? (
+    <TeamSiderSection
+      collapsed={collapsed}
+      pathname={pathname}
+      siderTooltipProps={siderTooltipProps}
+      onSessionClick={onSessionClick}
+    />
+  ) : null;
 
   return (
     <div className='size-full flex flex-col'>
@@ -185,41 +202,59 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
           </Suspense>
         ) : (
           <div className='size-full flex flex-col gap-2px'>
-            <SiderToolbar
-              isMobile={isMobile}
-              isBatchMode={isBatchMode}
-              collapsed={collapsed}
-              siderTooltipProps={siderTooltipProps}
-              onNewChat={handleNewChat}
-              onToggleBatchMode={() => setIsBatchMode((prev) => !prev)}
-            />
-            {/* Search entry — desktop moves this into the titlebar toolbar;
-                mobile keeps it here in the sidebar. */}
-            {isMobile && (
-              <SiderSearchEntry
-                isMobile={isMobile}
-                collapsed={collapsed}
-                siderTooltipProps={siderTooltipProps}
-                onConversationSelect={handleConversationSelect}
-                onSessionClick={onSessionClick}
-              />
-            )}
-            {/* Assistant nav entry - fixed above Scheduled */}
-            <SiderAssistantEntry
-              isMobile={isMobile}
-              isActive={pathname.startsWith('/assistants')}
-              collapsed={collapsed}
-              siderTooltipProps={siderTooltipProps}
-              onClick={handleAssistantClick}
-            />
-            {/* Scheduled tasks nav entry - fixed above scroll */}
-            <SiderScheduledEntry
-              isMobile={isMobile}
-              isActive={pathname === '/scheduled'}
-              collapsed={collapsed}
-              siderTooltipProps={siderTooltipProps}
-              onClick={handleScheduledClick}
-            />
+            {primaryNavigation.map(({ id }) => {
+              if (id === 'newConversation') {
+                return (
+                  <SiderToolbar
+                    key={id}
+                    isMobile={isMobile}
+                    isBatchMode={isBatchMode}
+                    collapsed={collapsed}
+                    siderTooltipProps={siderTooltipProps}
+                    onNewChat={handleNewChat}
+                    onToggleBatchMode={() => setIsBatchMode((prev) => !prev)}
+                    showHistoryActions={conversationHistoryEnabled}
+                  />
+                );
+              }
+              if (id === 'conversationSearch') {
+                return isMobile ? (
+                  <SiderSearchEntry
+                    key={id}
+                    isMobile={isMobile}
+                    collapsed={collapsed}
+                    siderTooltipProps={siderTooltipProps}
+                    onConversationSelect={handleConversationSelect}
+                    onSessionClick={onSessionClick}
+                  />
+                ) : null;
+              }
+              if (id === 'assistants') {
+                return (
+                  <SiderAssistantEntry
+                    key={id}
+                    isMobile={isMobile}
+                    isActive={pathname.startsWith('/assistants')}
+                    collapsed={collapsed}
+                    siderTooltipProps={siderTooltipProps}
+                    onClick={handleAssistantClick}
+                  />
+                );
+              }
+              if (id === 'scheduledTasks') {
+                return (
+                  <SiderScheduledEntry
+                    key={id}
+                    isMobile={isMobile}
+                    isActive={pathname === '/scheduled'}
+                    collapsed={collapsed}
+                    siderTooltipProps={siderTooltipProps}
+                    onClick={handleScheduledClick}
+                  />
+                );
+              }
+              return null;
+            })}
             {/* Divider between fixed top nav and scrollable content area */}
             <div
               className={classNames(
@@ -229,23 +264,12 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
             />
             {/* Scrollable content: pinned → team (slot) → projects → conversations */}
             <div className={classNames('flex-1 min-h-0 overflow-y-auto', siderStyles.scrollArea)}>
-              <Suspense fallback={<div className='min-h-200px' />}>
-                <WorkspaceGroupedHistory
-                  {...workspaceHistoryProps}
-                  afterPinnedContent={
-                    <>
-                      {teamEnabled && (
-                        <TeamSiderSection
-                          collapsed={collapsed}
-                          pathname={pathname}
-                          siderTooltipProps={siderTooltipProps}
-                          onSessionClick={onSessionClick}
-                        />
-                      )}
-                    </>
-                  }
-                />
-              </Suspense>
+              {conversationHistoryEnabled && (
+                <Suspense fallback={<div className='min-h-200px' />}>
+                  <WorkspaceGroupedHistory {...workspaceHistoryProps} afterPinnedContent={teamNavigation} />
+                </Suspense>
+              )}
+              {!conversationHistoryEnabled && teamNavigation}
             </div>
           </div>
         )}

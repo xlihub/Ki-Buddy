@@ -203,6 +203,24 @@ describe('Ki-Buddy product configuration', () => {
     });
   });
 
+  it('captures a disabled required Guid as an installation integrity error', () => {
+    const result = loadKiBuddyProductConfig({
+      ...validConfig,
+      experience: {
+        ...validConfig.experience,
+        features: {
+          ...validConfig.experience.features,
+          guid: 'disabled',
+        },
+      },
+    });
+
+    expect(result).toEqual({
+      config: null,
+      error: 'Product feature guid must be enabled',
+    });
+  });
+
   it('rejects missing theme resources at startup', () => {
     const { themes: _themes, ...withoutThemes } = validConfig;
     expect(() => parseKiBuddyProductConfig(withoutThemes)).toThrow('missing themes');

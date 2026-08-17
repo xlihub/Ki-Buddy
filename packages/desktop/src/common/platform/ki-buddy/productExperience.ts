@@ -170,6 +170,9 @@ export function parseProductExperiencePolicy(value: unknown): ProductExperienceS
       throw new Error(`Product feature ${child} requires enabled parent ${parent}`);
     }
   }
+  if (features.guid !== 'enabled') {
+    throw new Error('Product feature guid must be enabled');
+  }
 
   const rawResources = requireRecord(policy.resources, 'Product experience resources');
   requireExactKeys(rawResources, PRODUCT_RESOURCE_KINDS, 'Product experience resources');

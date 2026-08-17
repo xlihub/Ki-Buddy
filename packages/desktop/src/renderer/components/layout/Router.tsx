@@ -63,7 +63,12 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
 const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
   const kiBuddyRoutes = getKiBuddyRouteComponents();
+  const guidEnabled = isProductFeatureEnabled('guid');
+  const conversationEnabled = isProductFeatureEnabled('conversation');
+  const assistantsEnabled = isProductFeatureEnabled('assistants');
+  const scheduledTasksEnabled = isProductFeatureEnabled('scheduledTasks');
   const teamEnabled = isProductFeatureEnabled('team');
+  const componentShowcaseEnabled = isProductFeatureEnabled('componentShowcase');
   const settingsProjection = getSettingsExperienceProjection({
     includeProductEntries: Boolean(kiBuddyRoutes),
     isDesktop: true,
@@ -89,14 +94,17 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
         />
         <Route element={<ProtectedLayout layout={layout} />}>
           <Route index element={<Navigate to='/guid' replace />} />
-          <Route path='/guid' element={withRouteFallback(Guid)} />
-          <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
+          {guidEnabled && <Route path='/guid' element={withRouteFallback(Guid)} />}
+          {conversationEnabled && <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />}
           {teamEnabled && <Route path='/team/:id' element={withRouteFallback(TeamIndex)} />}
           {enabledSettings.has('model') && <Route path='/settings/model' element={withRouteFallback(ModeSettings)} />}
-          <Route path='/assistants' element={withRouteFallback(AssistantSettings)} />
+          {assistantsEnabled && <Route path='/assistants' element={withRouteFallback(AssistantSettings)} />}
           {/* Assistants moved out of Settings to a top-level entry; keep a redirect
               so old deep links / back-nav still land on the new page. */}
-          <Route path='/settings/assistants' element={<Navigate to='/assistants' replace />} />
+          <Route
+            path='/settings/assistants'
+            element={<Navigate to={assistantsEnabled ? '/assistants' : '/guid'} replace />}
+          />
           {enabledSettings.has('agent') && (
             <>
               <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
@@ -152,9 +160,15 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           )}
           <Route path='/settings' element={<Navigate to={defaultSettingsPath} replace />} />
           <Route path='/settings/*' element={<Navigate to={defaultSettingsPath} replace />} />
-          <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
-          <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
-          <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
+          {componentShowcaseEnabled && (
+            <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
+          )}
+          {scheduledTasksEnabled && (
+            <>
+              <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
+              <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
+            </>
+          )}
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />} />
       </Routes>

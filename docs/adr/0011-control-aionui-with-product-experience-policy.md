@@ -10,6 +10,8 @@ Ki-Buddy 长期跟随 AionUi 演进，但首个正式版本只开放经过产品
 
 AionUi 与 Ki-Buddy 分别提供 adapter。产品 capability 完全缺失时使用完整 AionUi 行为；运行环境已经识别为 Ki-Buddy，但策略缺失、字段未知、依赖矛盾或版本不支持时显示安装完整性错误，不能退回 AionUi。AionUi 新增产品能力后，Ki-Buddy 必须明确声明启用或停用，构建校验才能通过。
 
+当前 ProductExperience schema v1 要求 `guid` 保持 `enabled`，作为 Ki-Buddy 认证后的必选入口。随包策略将 `guid` 声明为 `disabled` 时属于安装完整性错误；未来若要发布不含 Guid 的产品版本，必须先定义替代入口并升级策略契约。
+
 路由、导航、资源 catalog 和生命周期分别根据同一策略生成投影。导航 registry 保持稳定顺序，产品策略不复制菜单和路由结构。停用功能的代码继续随上游基线打包，使后续 Ki-Buddy 版本可以通过更新策略重新开放能力；产品功能状态只约束客户端产品行为，不替代 Agents 平台或 AionCore 的安全授权。
 
 ## 上游接缝与同步维护
@@ -60,10 +62,12 @@ MCP requirement 使用独立注册表和稳定后端资源 ID。#41 接入前注
 - 分别配置可见路由、导航和设置项：同一能力可能出现入口隐藏、路由可达或副作用仍启动的不一致状态。
 - 在各个 AionUi 页面直接判断 Ki-Buddy：产品规则会分散到上游文件，增加每次基线同步的冲突和遗漏风险。
 - 由服务端或用户设置动态覆盖策略：会增加远程状态、缓存和启动时序问题，首个正式版本没有该需求。
+- 允许关闭 Guid 并从 workspace 与 settings registry 动态选择认证后的入口：当前版本明确保留新建对话，增加动态入口选择会扩大策略组合和测试范围；等产品确实需要无 Guid 版本时再随策略契约升级引入。
 
 ## Consequences
 
 - `ki-buddy-product.json` 升级为 schema v3，并完整声明当前产品能力；schema v2 不进行运行时迁移。
+- ProductExperience schema v1 拒绝 `guid: disabled`；该错误沿产品配置加载路径进入安装完整性界面，不启动业务生命周期，也不退回 AionUi。
 - 产品内置资源缺失时，受影响能力显示安装完整性错误，不按名称选择相似上游资源替代；账户和诊断功能仍然可用。
 - Ki-Buddy 首个正式版本使用独立且没有历史产品数据的运行空间；#40 不处理 AionUi、开发版或预发布 Ki-Buddy 数据兼容。
 - Scheduled Tasks 只选择 Assistant，并使用产品策略投影后的 Assistant catalog；Team 不是定时任务执行者。
