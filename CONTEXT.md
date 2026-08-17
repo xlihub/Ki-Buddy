@@ -58,6 +58,60 @@ _Avoid_：AionPro 账户复用、用户名映射、裸用户 ID 映射
 归属于一个 Agents 部署中某个 Agents 平台账户的持久化 conversation、Team 记录和结果引用。
 _Avoid_：登录会话、临时状态、全局历史
 
+## 产品能力控制
+
+**产品体验策略**：
+一个产品版本对 AionUi 功能、资源和默认行为作出的统一可用性声明；同一声明同时约束用户入口、直接访问和相关运行行为。
+_Avoid_：页面显隐清单、菜单白名单、Ki-Buddy 条件判断
+
+**随包产品策略**：
+随 Ki-Buddy 安装包发布并由该版本唯一采用的产品体验策略；产品功能变化通过发布新版本生效。
+_Avoid_：远程功能开关、用户功能开关、环境变量覆盖
+
+**产品能力 ID**：
+在产品体验策略中稳定标识一项完整产品能力的领域名称；入口、直接访问和运行行为可以共同引用同一个 ID。
+_Avoid_：路由路径、组件名、菜单 ID
+
+**产品功能状态**：
+产品体验策略对一项完整产品能力作出的启用或停用决定；停用表示该能力不可展示、不可直接访问，也不启动其专属运行行为，但不构成底层接口的安全授权。
+_Avoid_：仅隐藏、CSS 隐藏、菜单开关
+
+**首发数据基线**：
+Ki-Buddy 第一个正式版本使用独立且没有历史产品数据的运行空间；开发数据、AionUi 数据和未正式发布版本的数据不构成产品兼容输入。
+_Avoid_：旧版 Ki-Buddy 数据、AionUi 数据迁移、预发布数据兼容
+
+**产品资源访问**：
+产品体验策略对一类 Agent、Assistant、Model、Skill 或 MCP 资源规定的隐藏、使用或管理范围；使用允许调用及必要的运行检测，但不允许改变资源定义，管理保留该类资源的完整管理能力。
+_Avoid_：列表过滤、按钮显隐、资源权限
+
+**产品内置资源**：
+由 Ki-Buddy 随产品发布并负责定义和生命周期的 Agent、Assistant、Skill 或 MCP 资源；用户可以使用和检测，但不能修改其定义。
+_Avoid_：上游内置资源、Custom 资源、Extension 贡献资源
+
+**上游内置资源**：
+由 AionUi 或 AionCore 提供、但没有被 Ki-Buddy 声明为产品内置资源的 Agent、Assistant、Skill 或 MCP 资源。
+_Avoid_：产品内置资源、Custom 资源
+
+**未分类资源**：
+Ki-Buddy 无法依据稳定身份和来源归入已声明资源类别的上游或 Extension 资源；它不自动取得可见或可用状态。
+_Avoid_：Custom 资源、默认允许资源
+
+**Custom 资源**：
+用户通过 Ki-Buddy 保留的内置扩展入口创建并管理的 Agent、Assistant、Model、Skill 或 MCP 资源。
+_Avoid_：Extension 贡献资源、产品内置资源、上游内置资源
+
+**Extension 贡献资源**：
+AionUi Extension 运行时提供的设置页、Agent、Skill 或 MCP 资源；它不因表现得像 Custom 资源而取得 Custom 资源访问范围。
+_Avoid_：Custom 资源、产品内置资源
+
+**自动注入 Skill**：
+AionCore 在 conversation 运行时自动提供、无需用户从 Skills 目录选择的 Skill；它是否注入与是否在 Skills 设置页展示是两个独立决定。
+_Avoid_：产品官方 Skill、Custom Skill、目录可见 Skill
+
+**定时任务**：
+由一个 Assistant 按计划在新 conversation 或指定的现有 conversation 中执行的任务；Team 不是定时任务执行者。
+_Avoid_：Team 定时任务、Team 执行计划
+
 ## Agents 混合执行
 
 **混合执行**：
