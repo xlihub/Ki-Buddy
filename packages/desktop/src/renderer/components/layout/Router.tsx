@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-d
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { getKiBuddyRouteComponents, isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { getSettingsExperienceProjection } from '@renderer/pages/settings/components/SettingsSider';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
@@ -33,10 +34,16 @@ const withRouteFallback = (Component: React.LazyExoticComponent<React.ComponentT
  * Legacy `/settings/capabilities?tab=tools` deep links now map to the standalone
  * Tools page; everything else (skills tab or no tab) lands on the Skills page.
  */
-const CapabilitiesRedirect: React.FC = () => {
+const CapabilitiesRedirect: React.FC<{
+  defaultSettingsPath: string;
+  skillsEnabled: boolean;
+  toolsEnabled: boolean;
+}> = ({ defaultSettingsPath, skillsEnabled, toolsEnabled }) => {
   const { search } = useLocation();
   const tab = new URLSearchParams(search).get('tab');
-  return <Navigate to={tab === 'tools' ? '/settings/tools' : '/settings/skills'} replace />;
+  const target =
+    tab === 'tools' && toolsEnabled ? '/settings/tools' : skillsEnabled ? '/settings/skills' : defaultSettingsPath;
+  return <Navigate to={target} replace />;
 };
 
 const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
@@ -57,6 +64,12 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
   const kiBuddyRoutes = getKiBuddyRouteComponents();
   const teamEnabled = isProductFeatureEnabled('team');
+  const settingsProjection = getSettingsExperienceProjection({
+    includeProductEntries: Boolean(kiBuddyRoutes),
+    isDesktop: true,
+  });
+  const enabledSettings = new Set(settingsProjection.entries.map(({ id }) => id));
+  const { defaultPath: defaultSettingsPath, extensionSettingsEnabled } = settingsProjection;
   const LoginPage = kiBuddyRoutes?.LoginPage ?? AionUiLoginPage;
 
   const routes = (
@@ -79,43 +92,66 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/guid' element={withRouteFallback(Guid)} />
           <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
           {teamEnabled && <Route path='/team/:id' element={withRouteFallback(TeamIndex)} />}
-          <Route path='/settings/model' element={withRouteFallback(ModeSettings)} />
+          {enabledSettings.has('model') && <Route path='/settings/model' element={withRouteFallback(ModeSettings)} />}
           <Route path='/assistants' element={withRouteFallback(AssistantSettings)} />
           {/* Assistants moved out of Settings to a top-level entry; keep a redirect
               so old deep links / back-nav still land on the new page. */}
           <Route path='/settings/assistants' element={<Navigate to='/assistants' replace />} />
-          <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
-          <Route path='/settings/agent/:id/repair' element={withRouteFallback(AgentRepairPage)} />
+          {enabledSettings.has('agent') && (
+            <>
+              <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
+              <Route path='/settings/agent/:id/repair' element={withRouteFallback(AgentRepairPage)} />
+            </>
+          )}
           {/* Skills and Tools are top-level settings entries. */}
-          <Route path='/settings/skills' element={withRouteFallback(SkillsSettings)} />
-          <Route path='/settings/skills/import-history' element={withRouteFallback(SkillsSettings)} />
-          <Route path='/settings/skills/detail/:skillName' element={withRouteFallback(SkillDetailPage)} />
-          <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />
+          {enabledSettings.has('skills') && (
+            <>
+              <Route path='/settings/skills' element={withRouteFallback(SkillsSettings)} />
+              <Route path='/settings/skills/import-history' element={withRouteFallback(SkillsSettings)} />
+              <Route path='/settings/skills/detail/:skillName' element={withRouteFallback(SkillDetailPage)} />
+            </>
+          )}
+          {enabledSettings.has('tools') && <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />}
           {/* Legacy routes — the previous combined "Capabilities" page is now two pages. */}
-          <Route path='/settings/capabilities' element={<CapabilitiesRedirect />} />
           <Route
-            path='/settings/capabilities/skills/import-history'
-            element={<Navigate to='/settings/skills/import-history' replace />}
-          />
-          <Route path='/settings/skills-hub' element={<Navigate to='/settings/skills' replace />} />
-          <Route path='/settings/appearance' element={withRouteFallback(AppearanceSettings)} />
-          <Route path='/settings/display' element={<Navigate to='/settings/appearance' replace />} />
-          <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
-          <Route path='/settings/pet' element={withRouteFallback(PetSettings)} />
-          <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
-          <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
-          <Route
-            path='/settings/account'
+            path='/settings/capabilities'
             element={
-              kiBuddyRoutes ? (
-                withRouteFallback(kiBuddyRoutes.AccountSettings)
-              ) : (
-                <Navigate to='/settings/agent' replace />
-              )
+              <CapabilitiesRedirect
+                defaultSettingsPath={defaultSettingsPath}
+                skillsEnabled={enabledSettings.has('skills')}
+                toolsEnabled={enabledSettings.has('tools')}
+              />
             }
           />
-          <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
-          <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
+          {enabledSettings.has('skills') && (
+            <>
+              <Route
+                path='/settings/capabilities/skills/import-history'
+                element={<Navigate to='/settings/skills/import-history' replace />}
+              />
+              <Route path='/settings/skills-hub' element={<Navigate to='/settings/skills' replace />} />
+            </>
+          )}
+          {enabledSettings.has('appearance') && (
+            <>
+              <Route path='/settings/appearance' element={withRouteFallback(AppearanceSettings)} />
+              <Route path='/settings/display' element={<Navigate to='/settings/appearance' replace />} />
+            </>
+          )}
+          {enabledSettings.has('webui') && <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />}
+          {enabledSettings.has('pet') && <Route path='/settings/pet' element={withRouteFallback(PetSettings)} />}
+          {enabledSettings.has('system') && (
+            <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
+          )}
+          {enabledSettings.has('about') && <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />}
+          {enabledSettings.has('account') && kiBuddyRoutes && (
+            <Route path='/settings/account' element={withRouteFallback(kiBuddyRoutes.AccountSettings)} />
+          )}
+          {extensionSettingsEnabled && (
+            <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
+          )}
+          <Route path='/settings' element={<Navigate to={defaultSettingsPath} replace />} />
+          <Route path='/settings/*' element={<Navigate to={defaultSettingsPath} replace />} />
           <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
           <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />

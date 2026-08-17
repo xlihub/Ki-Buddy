@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 import {
   getProductExperience,
+  getKiBuddyAccountSettingsItem,
   getKiBuddyProductBootstrapError,
   getKiBuddyProductRuntime,
   getKiBuddyRendererRuntime,
   getKiBuddyRouteComponents,
-  withKiBuddySettingsItem,
 } from '@/renderer/services/runtime/kiBuddyRuntime';
 
 const translateKey = (key: string) => key;
@@ -22,7 +22,7 @@ describe('Ki-Buddy renderer runtime selection', () => {
   it('keeps product routes and settings absent without the product capability', () => {
     expect(getKiBuddyRendererRuntime()).toBeNull();
     expect(getKiBuddyRouteComponents()).toBeNull();
-    expect(withKiBuddySettingsItem([], translateKey)).toEqual([]);
+    expect(getKiBuddyAccountSettingsItem(translateKey)).toBeNull();
   });
 
   it('exposes product branding independently of authentication', () => {
@@ -48,7 +48,7 @@ describe('Ki-Buddy renderer runtime selection', () => {
       LoginPage: expect.any(Object),
       StartupGate: expect.any(Object),
     });
-    expect(withKiBuddySettingsItem([], translateKey)[0]).toMatchObject({ id: 'account', path: 'account' });
+    expect(getKiBuddyAccountSettingsItem(translateKey)).toMatchObject({ id: 'account', path: 'account' });
   });
 
   it('does not access the preload capability after bootstrap', () => {

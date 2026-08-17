@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { getRendererBrand } from '@/renderer/services/runtime/productBrandRuntime';
+import { isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
 import styles from '../index.module.css';
 
 type QuickActionButtonsProps = {
@@ -27,16 +28,14 @@ let webuiStatusCache: {
   at: number;
 } | null = null;
 
-const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
-  onOpenLink,
-  onOpenBugReport,
-  inactiveBorderColor,
-  activeShadow,
-}) => {
+type WebuiQuickActionProps = Readonly<{
+  onHoverChange: (hovered: boolean) => void;
+  style: React.CSSProperties;
+}>;
+
+const WebuiQuickAction: React.FC<WebuiQuickActionProps> = ({ onHoverChange, style }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const repositoryUrl = getRendererBrand().links.repository;
-  const [hoveredQuickAction, setHoveredQuickAction] = useState<'bugReport' | 'repo' | 'webui' | null>(null);
   const [webuiQuickStatus, setWebuiQuickStatus] = useState<WebuiQuickStatus>('checking');
 
   useEffect(() => {
@@ -80,20 +79,6 @@ const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
     };
   }, []);
 
-  const quickActionStyle = useCallback(
-    (isActive: boolean) => ({
-      borderWidth: '1px',
-      borderStyle: 'solid',
-      borderColor: inactiveBorderColor,
-      boxShadow: isActive ? activeShadow : 'none',
-    }),
-    [activeShadow, inactiveBorderColor]
-  );
-
-  const handleOpenWebUI = useCallback(() => {
-    void navigate('/settings/webui');
-  }, [navigate]);
-
   const webuiStatusLabel =
     webuiQuickStatus === 'running'
       ? t('settings.webui.running', { defaultValue: 'Running' })
@@ -110,6 +95,53 @@ const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
         : webuiQuickStatus === 'error'
           ? 'var(--color-text-3)'
           : 'var(--color-text-4)';
+
+  return (
+    <div
+      className='group inline-flex items-center justify-center h-36px min-w-36px max-w-36px px-0 rd-999px bg-fill-0 cursor-pointer overflow-hidden whitespace-nowrap hover:max-w-200px hover:px-14px hover:justify-start hover:gap-8px transition-[max-width,padding,border-radius,box-shadow] duration-420 ease-in-out'
+      style={style}
+      onMouseEnter={() => onHoverChange(true)}
+      onMouseLeave={() => onHoverChange(false)}
+      onClick={() => void navigate('/settings/webui')}
+    >
+      <div className='relative w-20px h-20px flex-shrink-0 leading-none'>
+        <div className='absolute inset-0 flex items-center justify-center'>
+          <Earth
+            theme='outline'
+            size={20}
+            fill='currentColor'
+            className='block transition-colors duration-360'
+            style={{ color: webuiIconColor }}
+          />
+        </div>
+      </div>
+      <span className='opacity-0 max-w-0 overflow-hidden text-14px text-[var(--color-text-2)] group-hover:opacity-100 group-hover:max-w-160px transition-all duration-360 ease-in-out'>
+        {t('settings.webui', { defaultValue: 'WebUI' })} · {webuiStatusLabel}
+      </span>
+    </div>
+  );
+};
+
+const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
+  onOpenLink,
+  onOpenBugReport,
+  inactiveBorderColor,
+  activeShadow,
+}) => {
+  const { t } = useTranslation();
+  const repositoryUrl = getRendererBrand().links.repository;
+  const [hoveredQuickAction, setHoveredQuickAction] = useState<'bugReport' | 'repo' | 'webui' | null>(null);
+  const webUiEnabled = isProductFeatureEnabled('guidWebUi') && isProductFeatureEnabled('webUi');
+
+  const quickActionStyle = useCallback(
+    (isActive: boolean) => ({
+      borderWidth: '1px',
+      borderStyle: 'solid',
+      borderColor: inactiveBorderColor,
+      boxShadow: isActive ? activeShadow : 'none',
+    }),
+    [activeShadow, inactiveBorderColor]
+  );
 
   return (
     <div
@@ -170,28 +202,12 @@ const QuickActionButtons: React.FC<QuickActionButtonsProps> = ({
             {t('conversation.welcome.quickActionStar')}
           </span>
         </div>
-        <div
-          className='group inline-flex items-center justify-center h-36px min-w-36px max-w-36px px-0 rd-999px bg-fill-0 cursor-pointer overflow-hidden whitespace-nowrap hover:max-w-200px hover:px-14px hover:justify-start hover:gap-8px transition-[max-width,padding,border-radius,box-shadow] duration-420 ease-in-out'
-          style={quickActionStyle(hoveredQuickAction === 'webui')}
-          onMouseEnter={() => setHoveredQuickAction('webui')}
-          onMouseLeave={() => setHoveredQuickAction(null)}
-          onClick={handleOpenWebUI}
-        >
-          <div className='relative w-20px h-20px flex-shrink-0 leading-none'>
-            <div className='absolute inset-0 flex items-center justify-center'>
-              <Earth
-                theme='outline'
-                size={20}
-                fill='currentColor'
-                className='block transition-colors duration-360'
-                style={{ color: webuiIconColor }}
-              />
-            </div>
-          </div>
-          <span className='opacity-0 max-w-0 overflow-hidden text-14px text-[var(--color-text-2)] group-hover:opacity-100 group-hover:max-w-160px transition-all duration-360 ease-in-out'>
-            {t('settings.webui', { defaultValue: 'WebUI' })} · {webuiStatusLabel}
-          </span>
-        </div>
+        {webUiEnabled && (
+          <WebuiQuickAction
+            onHoverChange={(hovered) => setHoveredQuickAction(hovered ? 'webui' : null)}
+            style={quickActionStyle(hoveredQuickAction === 'webui')}
+          />
+        )}
       </div>
     </div>
   );

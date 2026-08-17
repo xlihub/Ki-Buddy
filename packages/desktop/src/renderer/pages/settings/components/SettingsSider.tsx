@@ -1,6 +1,7 @@
 import FlexFullContainer from '@/renderer/components/layout/FlexFullContainer';
 import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/platform';
 import { type IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
+import type { ProductFeatureId } from '@/common/platform/ki-buddy';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
 import { useExtensionSettingsTabs } from '@/renderer/hooks/system/useExtensionSettingsTabs';
 import {
@@ -22,20 +23,36 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Tooltip } from '@arco-design/web-react';
 import { getSiderTooltipProps } from '@/renderer/utils/ui/siderTooltip';
-import { withKiBuddySettingsItem } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { getKiBuddyAccountSettingsItem, isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
+
+type TranslateFn = (key: string, options?: { defaultValue?: string }) => string;
+
+export type SettingsRegistryEntry = Readonly<{
+  desktopOnly?: boolean;
+  featureId: ProductFeatureId;
+  id: string;
+  path: string;
+  productOnly?: boolean;
+}>;
+
+/** Stable settings order shared by navigation and route registration. */
+export const SETTINGS_REGISTRY = [
+  { id: 'account', path: 'account', featureId: 'account', productOnly: true, desktopOnly: false },
+  { id: 'agent', path: 'agent', featureId: 'agents', productOnly: false, desktopOnly: false },
+  { id: 'model', path: 'model', featureId: 'models', productOnly: false, desktopOnly: false },
+  { id: 'skills', path: 'skills', featureId: 'skills', productOnly: false, desktopOnly: false },
+  { id: 'tools', path: 'tools', featureId: 'tools', productOnly: false, desktopOnly: false },
+  { id: 'appearance', path: 'appearance', featureId: 'appearance', productOnly: false, desktopOnly: false },
+  { id: 'webui', path: 'webui', featureId: 'webUi', productOnly: false, desktopOnly: false },
+  { id: 'pet', path: 'pet', featureId: 'desktopPet', productOnly: false, desktopOnly: true },
+  { id: 'system', path: 'system', featureId: 'system', productOnly: false, desktopOnly: false },
+  { id: 'about', path: 'about', featureId: 'system', productOnly: false, desktopOnly: false },
+] as const satisfies readonly SettingsRegistryEntry[];
+
+export type BuiltinSettingsId = (typeof SETTINGS_REGISTRY)[number]['id'];
 
 /** Builtin settings tab IDs in display order (must match router paths). */
-export const BUILTIN_TAB_IDS = [
-  'agent',
-  'model',
-  'skills',
-  'tools',
-  'appearance',
-  'webui',
-  'pet',
-  'system',
-  'about',
-] as const;
+export const BUILTIN_TAB_IDS = SETTINGS_REGISTRY.map(({ id }) => id);
 
 /**
  * Legacy anchor IDs that have been merged into other tabs.
@@ -59,7 +76,7 @@ const GROUP_HEADER_BEFORE: Record<string, string> = {
   about: 'settings.groupAbout',
 };
 
-type SiderItem = {
+export type SettingsNavItem = {
   id: string;
   label: string;
   icon: React.ReactElement;
@@ -68,133 +85,166 @@ type SiderItem = {
   path: string;
 };
 
-const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }> = ({
-  collapsed = false,
-  tooltipEnabled = false,
-}) => {
+type EnabledSettingsOptions = Readonly<{
+  includeProductEntries: boolean;
+  isDesktop: boolean;
+}>;
+
+export type SettingsExperienceProjection = Readonly<{
+  defaultPath: string;
+  entries: ReadonlyArray<(typeof SETTINGS_REGISTRY)[number]>;
+  extensionSettingsEnabled: boolean;
+}>;
+
+/** Projects settings registration and Extension settings through the active ProductExperience. */
+export function getSettingsExperienceProjection({
+  includeProductEntries,
+  isDesktop,
+}: EnabledSettingsOptions): SettingsExperienceProjection {
+  const entries = SETTINGS_REGISTRY.filter((entry) => {
+    if (entry.productOnly && !includeProductEntries) return false;
+    if (entry.desktopOnly && !isDesktop) return false;
+    return isProductFeatureEnabled(entry.featureId);
+  });
+  const first = entries[0];
+  return {
+    defaultPath: first ? `/settings/${first.path}` : '/guid',
+    entries,
+    extensionSettingsEnabled: isProductFeatureEnabled('extensionSettings'),
+  };
+}
+
+export type SettingsNavigationProjection = Readonly<{
+  extensionSettingsEnabled: boolean;
+  items: readonly SettingsNavItem[];
+}>;
+
+/** Builds translated navigation items from the shared settings projection. */
+export function getSettingsNavigationProjection(isDesktop: boolean, t: TranslateFn): SettingsNavigationProjection {
+  const accountItem = getKiBuddyAccountSettingsItem(t);
+  const builtinMap: Record<Exclude<BuiltinSettingsId, 'account'>, SettingsNavItem> = {
+    agent: {
+      id: 'agent',
+      label: t('settings.agents', { defaultValue: 'Agents' }),
+      icon: <Speed />,
+      path: 'agent',
+    },
+    model: { id: 'model', label: t('settings.model'), icon: <LinkCloud />, path: 'model' },
+    skills: {
+      id: 'skills',
+      label: t('settings.skills', { defaultValue: 'Skills' }),
+      icon: <Lightning />,
+      path: 'skills',
+    },
+    tools: {
+      id: 'tools',
+      label: t('settings.tools', { defaultValue: 'Tools' }),
+      icon: <Toolkit />,
+      path: 'tools',
+    },
+    appearance: {
+      id: 'appearance',
+      label: t('settings.appearancePanel'),
+      icon: <Computer />,
+      path: 'appearance',
+    },
+    webui: {
+      id: 'webui',
+      label: t('settings.webui'),
+      icon: isDesktop ? <Earth /> : <Communication />,
+      path: 'webui',
+    },
+    pet: { id: 'pet', label: t('pet.desktopPet'), icon: <Cat />, path: 'pet' },
+    system: { id: 'system', label: t('settings.system'), icon: <System />, path: 'system' },
+    about: { id: 'about', label: t('settings.about'), icon: <Info />, path: 'about' },
+  };
+  const { entries, extensionSettingsEnabled } = getSettingsExperienceProjection({
+    includeProductEntries: Boolean(accountItem),
+    isDesktop,
+  });
+
+  const items = entries.flatMap((entry) => {
+    if (entry.id === 'account') return accountItem ? [accountItem] : [];
+    return [builtinMap[entry.id]];
+  });
+  return { extensionSettingsEnabled, items };
+}
+
+/** Inserts Extension settings contributions around the projected builtin registry. */
+export function mergeExtensionSettingsItems(
+  builtins: readonly SettingsNavItem[],
+  extensionTabs: readonly IExtensionSettingsTab[],
+  toItem: (tab: IExtensionSettingsTab) => SettingsNavItem
+): SettingsNavItem[] {
+  const result = [...builtins];
+  const beforeMap = new Map<string, IExtensionSettingsTab[]>();
+  const afterMap = new Map<string, IExtensionSettingsTab[]>();
+  const unanchored: IExtensionSettingsTab[] = [];
+
+  for (const tab of extensionTabs) {
+    if (!tab.position) {
+      unanchored.push(tab);
+      continue;
+    }
+    const { relativeTo: rawAnchor, placement } = tab.position;
+    const anchor = LEGACY_ANCHOR_REMAP[rawAnchor] ?? rawAnchor;
+    if (!result.some((item) => item.id === anchor)) {
+      unanchored.push(tab);
+      continue;
+    }
+    const map = placement === 'before' ? beforeMap : afterMap;
+    const list = map.get(anchor) ?? [];
+    list.push(tab);
+    map.set(anchor, list);
+  }
+
+  for (let index = result.length - 1; index >= 0; index--) {
+    const builtinId = result[index].id;
+    const afters = afterMap.get(builtinId);
+    if (afters) result.splice(index + 1, 0, ...afters.map(toItem));
+    const befores = beforeMap.get(builtinId);
+    if (befores) result.splice(index, 0, ...befores.map(toItem));
+  }
+
+  if (unanchored.length > 0) {
+    const systemIndex = result.findIndex((item) => item.id === 'system');
+    result.splice(systemIndex >= 0 ? systemIndex : result.length, 0, ...unanchored.map(toItem));
+  }
+
+  return result;
+}
+
+function getGroupHeaderPositions(
+  menus: readonly SettingsNavItem[],
+  extensionTabs: readonly IExtensionSettingsTab[]
+): Map<number, string> {
+  const headerAt = new Map<number, string>();
+  for (const [builtinId, headerKey] of Object.entries(GROUP_HEADER_BEFORE)) {
+    const builtinIndex = menus.findIndex((item) => item.id === builtinId);
+    if (builtinIndex < 0) continue;
+    const beforeCount = extensionTabs.filter((tab) => {
+      if (!tab.position || tab.position.placement !== 'before') return false;
+      return (LEGACY_ANCHOR_REMAP[tab.position.relativeTo] ?? tab.position.relativeTo) === builtinId;
+    }).length;
+    headerAt.set(builtinIndex - beforeCount, headerKey);
+  }
+  return headerAt;
+}
+
+type SettingsSiderViewProps = Readonly<{
+  collapsed: boolean;
+  extensionTabs: readonly IExtensionSettingsTab[];
+  menus: readonly SettingsNavItem[];
+  tooltipEnabled: boolean;
+}>;
+
+const SettingsSiderView: React.FC<SettingsSiderViewProps> = ({ collapsed, extensionTabs, menus, tooltipEnabled }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { pathname } = useLocation();
-  const isDesktop = isElectronDesktop();
-
-  const extensionTabs = useExtensionSettingsTabs();
-  const { resolveExtTabName } = useExtI18n();
-
-  const { menus, groupHeaderAt } = useMemo(() => {
-    // Build builtin items
-    const builtinMap: Record<string, SiderItem> = {
-      model: { id: 'model', label: t('settings.model'), icon: <LinkCloud />, path: 'model' },
-      agent: {
-        id: 'agent',
-        label: t('settings.agents', { defaultValue: 'Agents' }),
-        icon: <Speed />,
-        path: 'agent',
-      },
-      skills: {
-        id: 'skills',
-        label: t('settings.skills', { defaultValue: 'Skills' }),
-        icon: <Lightning />,
-        path: 'skills',
-      },
-      tools: {
-        id: 'tools',
-        label: t('settings.tools', { defaultValue: 'Tools' }),
-        icon: <Toolkit />,
-        path: 'tools',
-      },
-      appearance: { id: 'appearance', label: t('settings.appearancePanel'), icon: <Computer />, path: 'appearance' },
-      webui: {
-        id: 'webui',
-        label: t('settings.webui'),
-        icon: isDesktop ? <Earth /> : <Communication />,
-        path: 'webui',
-      },
-      pet: { id: 'pet', label: t('pet.desktopPet'), icon: <Cat />, path: 'pet' },
-      system: { id: 'system', label: t('settings.system'), icon: <System />, path: 'system' },
-      about: { id: 'about', label: t('settings.about'), icon: <Info />, path: 'about' },
-    };
-
-    // Start with ordered builtin IDs, hiding desktop-only tabs in browser mode
-    const result = withKiBuddySettingsItem(
-      BUILTIN_TAB_IDS.filter((id) => isDesktop || id !== 'pet').map((id) => builtinMap[id]),
-      t
-    );
-
-    // Extension tabs with position anchoring
-    const beforeMap = new Map<string, IExtensionSettingsTab[]>();
-    const afterMap = new Map<string, IExtensionSettingsTab[]>();
-    const unanchored: IExtensionSettingsTab[] = [];
-
-    for (const tab of extensionTabs) {
-      if (!tab.position) {
-        unanchored.push(tab);
-        continue;
-      }
-      const { relativeTo: rawAnchor, placement } = tab.position;
-      const anchor = LEGACY_ANCHOR_REMAP[rawAnchor] ?? rawAnchor;
-      if (!result.some((item) => item.id === anchor)) {
-        unanchored.push(tab);
-        continue;
-      }
-      const map = placement === 'before' ? beforeMap : afterMap;
-      let list = map.get(anchor);
-      if (!list) {
-        list = [];
-        map.set(anchor, list);
-      }
-      list.push(tab);
-    }
-
-    // Helper to create SiderItem from extension tab
-    const toSiderItem = (tab: IExtensionSettingsTab): SiderItem => {
-      const resolvedIcon = resolveExtensionAssetUrl(tab.icon) || tab.icon;
-      return {
-        id: tab.id,
-        label: resolveExtTabName(tab),
-        icon: resolvedIcon ? <img src={resolvedIcon} alt='' className='w-full h-full object-contain' /> : <Puzzle />,
-        isImageIcon: Boolean(resolvedIcon),
-        path: `ext/${tab.id}`,
-      };
-    };
-
-    // Insert anchored tabs (reverse iteration to preserve indices)
-    for (let i = result.length - 1; i >= 0; i--) {
-      const builtinId = result[i].id;
-      const afters = afterMap.get(builtinId);
-      if (afters) {
-        result.splice(i + 1, 0, ...afters.map(toSiderItem));
-      }
-      const befores = beforeMap.get(builtinId);
-      if (befores) {
-        result.splice(i, 0, ...befores.map(toSiderItem));
-      }
-    }
-
-    // Append unanchored before "system"
-    if (unanchored.length > 0) {
-      const systemIdx = result.findIndex((item) => item.id === 'system');
-      const insertIdx = systemIdx >= 0 ? systemIdx : result.length;
-      result.splice(insertIdx, 0, ...unanchored.map(toSiderItem));
-    }
-
-    // Compute group header render positions.
-    //
-    // A header must appear before the first *visible* item of its group, which may
-    // be an extension tab anchored with placement='before' to the group's first
-    // builtin — not the builtin itself. Otherwise such an extension would render
-    // above the header and visually belong to the previous group.
-    const headerAt = new Map<number, string>();
-    for (const [builtinId, headerKey] of Object.entries(GROUP_HEADER_BEFORE)) {
-      const builtinIdx = result.findIndex((item) => item.id === builtinId);
-      if (builtinIdx < 0) continue;
-      const beforeCount = beforeMap.get(builtinId)?.length ?? 0;
-      headerAt.set(builtinIdx - beforeCount, headerKey);
-    }
-
-    return { menus: result, groupHeaderAt: headerAt };
-  }, [t, isDesktop, extensionTabs, resolveExtTabName]);
-
+  const groupHeaderAt = useMemo(() => getGroupHeaderPositions(menus, extensionTabs), [extensionTabs, menus]);
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
+
   return (
     <div
       className={classNames('h-full settings-sider flex flex-col gap-2px overflow-y-auto overflow-x-hidden', {
@@ -232,7 +282,6 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
                   });
                 }}
               >
-                {/* Leading icon — 22px slot to align with main sider rows */}
                 <span className='settings-sider__item-icon size-22px flex items-center justify-center shrink-0 line-height-0'>
                   {item.isImageIcon ? (
                     <span className='w-16px h-16px flex items-center justify-center'>{item.icon}</span>
@@ -265,6 +314,64 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
       })}
     </div>
   );
+};
+
+type ExtensionAwareSettingsSiderProps = Readonly<{
+  builtins: readonly SettingsNavItem[];
+  collapsed: boolean;
+  tooltipEnabled: boolean;
+}>;
+
+const ExtensionAwareSettingsSider: React.FC<ExtensionAwareSettingsSiderProps> = ({
+  builtins,
+  collapsed,
+  tooltipEnabled,
+}) => {
+  const extensionTabs = useExtensionSettingsTabs();
+  const { resolveExtTabName } = useExtI18n();
+  const menus = useMemo(
+    () =>
+      mergeExtensionSettingsItems(builtins, extensionTabs, (tab) => {
+        const resolvedIcon = resolveExtensionAssetUrl(tab.icon) || tab.icon;
+        return {
+          id: tab.id,
+          label: resolveExtTabName(tab),
+          icon: resolvedIcon ? <img src={resolvedIcon} alt='' className='w-full h-full object-contain' /> : <Puzzle />,
+          isImageIcon: Boolean(resolvedIcon),
+          path: `ext/${tab.id}`,
+        };
+      }),
+    [builtins, extensionTabs, resolveExtTabName]
+  );
+
+  return (
+    <SettingsSiderView
+      collapsed={collapsed}
+      extensionTabs={extensionTabs}
+      menus={menus}
+      tooltipEnabled={tooltipEnabled}
+    />
+  );
+};
+
+const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }> = ({
+  collapsed = false,
+  tooltipEnabled = false,
+}) => {
+  const { t } = useTranslation();
+  const isDesktop = isElectronDesktop();
+  const { extensionSettingsEnabled, items: builtins } = useMemo(
+    () => getSettingsNavigationProjection(isDesktop, t),
+    [isDesktop, t]
+  );
+
+  if (!extensionSettingsEnabled) {
+    return (
+      <SettingsSiderView collapsed={collapsed} extensionTabs={[]} menus={builtins} tooltipEnabled={tooltipEnabled} />
+    );
+  }
+
+  return <ExtensionAwareSettingsSider builtins={builtins} collapsed={collapsed} tooltipEnabled={tooltipEnabled} />;
 };
 
 export default SettingsSider;

@@ -4,8 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 import { createKiBuddyAccountSettingsItem } from '@/renderer/pages/ki-buddy/settingsNavigation';
-import SettingsSider from '@/renderer/pages/settings/components/SettingsSider';
-import { getBuiltinSettingsNavItems } from '@/renderer/pages/settings/components/SettingsPageWrapper';
+import SettingsSider, { getSettingsNavigationProjection } from '@/renderer/pages/settings/components/SettingsSider';
 
 const translateKey = (key: string) => key;
 
@@ -32,7 +31,7 @@ describe('Ki-Buddy settings navigation', () => {
   });
 
   it('adds the product entry only when the Ki-Buddy capability is present', () => {
-    expect(getBuiltinSettingsNavItems(true, translateKey).some(({ id }) => id === 'account')).toBe(false);
+    expect(getSettingsNavigationProjection(true, translateKey).items.some(({ id }) => id === 'account')).toBe(false);
     window.electronAPI = {
       ...window.electronAPI,
       kiBuddyAuth: {
@@ -43,7 +42,7 @@ describe('Ki-Buddy settings navigation', () => {
     };
     window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
 
-    expect(getBuiltinSettingsNavItems(true, translateKey)[0]?.id).toBe('account');
+    expect(getSettingsNavigationProjection(true, translateKey).items[0]?.id).toBe('account');
   });
 
   it.each(['account', 'agent'])('uses the shared selected navigation contract for %s', (settingsId) => {
