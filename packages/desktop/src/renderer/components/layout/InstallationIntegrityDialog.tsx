@@ -351,6 +351,7 @@ type InstallationIntegrityModalOptions = {
   closable?: boolean;
 };
 
+/** Opens a structured installation-integrity dialog with blocking behavior by default. */
 export function showInstallationIntegrityModal(
   modal: InstallationIntegrityModalController,
   t: TFunction,
@@ -375,6 +376,7 @@ export function showInstallationIntegrityModal(
   });
 }
 
+/** Hosts a single installation-integrity dialog in the current React tree. */
 export const InstallationIntegrityModalHost: React.FC<{
   closable?: boolean;
   description: string;

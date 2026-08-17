@@ -51,8 +51,10 @@ const resolveBackendMcpOrigin = (server: ProductAwareMcpServer): ProductResource
 
 const normalizeServerName = (name: string) => name.trim().toLowerCase();
 
+/** Product-owned MCP requirements registered by features such as the future Agents Adapter integration. */
 export const PRODUCT_BUILTIN_MCP_REQUIREMENTS: readonly ProductBuiltinResourceRequirement[] = [];
 
+/** Returns the stable key used to reconcile MCP catalog entries across backend and local sources. */
 export const getMcpCatalogServerKey = (server: Pick<IMcpServer, 'id' | 'name' | 'builtin'>) => {
   const normalizedName = normalizeServerName(server.name);
   if (server.builtin === true) {
@@ -93,6 +95,7 @@ const normalizeTransportForBackend = (transport: IMcpServerTransport): BackendMc
   return transport;
 };
 
+/** Converts a renderer MCP record into the transport shape accepted by the backend service. */
 export const toBackendMcpPayload = (
   server: Pick<IMcpServer, 'name' | 'description' | 'transport' | 'original_json' | 'builtin'>
 ): BackendMcpPayload => ({
@@ -103,12 +106,14 @@ export const toBackendMcpPayload = (
   builtin: Boolean(server.builtin),
 });
 
+/** Selects the MCP fields forwarded to conversation session configuration. */
 export const toSessionMcpServer = (server: Pick<IMcpServer, 'id' | 'name' | 'transport'>): ISessionMcpServer => ({
   id: server.id,
   name: server.name,
   transport: server.transport,
 });
 
+/** Applies the active product resource policy to trusted MCP catalog candidates. */
 export const projectMcpCatalogCandidates = (
   candidates: readonly McpCatalogCandidate[],
   experience: ProductExperience
@@ -128,6 +133,7 @@ export const projectMcpCatalogCandidates = (
   };
 };
 
+/** Emits non-sensitive diagnostics for MCP resources hidden by the product policy. */
 export const reportHiddenMcpResources = (hiddenResources: readonly ProductResourceHiddenRecord[]): void => {
   if (hiddenResources.length === 0) return;
   console.info('[ProductExperience] MCP resources hidden by product policy', {
@@ -164,6 +170,7 @@ export async function loadProductBuiltinMcpResourceState(
   }
 }
 
+/** Loads, deduplicates, and projects backend and local built-in MCP records into one catalog. */
 export const ensureBackendMcpCatalog = async (
   experience: ProductExperience = getProductExperience()
 ): Promise<{

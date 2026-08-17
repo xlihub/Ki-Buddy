@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type SetStateAction } from 'react';
 import { ipcBridge } from '@/common';
 import type { IMcpServer } from '@/common/config/storage';
-import type { ProductResourceHiddenRecord, ProductResourceOrigin } from '@/common/platform/ki-buddy';
+import type { ProductResourceHiddenRecord } from '@/common/platform/ki-buddy';
 import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
 import {
   ensureBackendMcpCatalog,
@@ -16,26 +16,21 @@ import {
  * Combines backend-managed user servers with extension-contributed servers.
  */
 export const useMcpServers = () => {
-  const [mcpServers, setMcpServers] = useState<IMcpServer[]>([]);
-  const [extensionMcpServers, setExtensionMcpServers] = useState<IMcpServer[]>([]);
-  const [mcpOrigins, setMcpOrigins] = useState<Record<string, ProductResourceOrigin>>({});
+  const [mcpCatalogEntries, setMcpCatalogEntries] = useState<readonly McpCatalogEntry[]>([]);
+  const [extensionMcpCatalogEntries, setExtensionMcpCatalogEntries] = useState<readonly McpCatalogEntry[]>([]);
   const [backendHiddenResources, setBackendHiddenResources] = useState<readonly ProductResourceHiddenRecord[]>([]);
   const [extensionHiddenResources, setExtensionHiddenResources] = useState<readonly ProductResourceHiddenRecord[]>([]);
   const [isMcpServersLoading, setIsMcpServersLoading] = useState(true);
 
   useEffect(() => {
     void ensureBackendMcpCatalog()
-      .then(({ allServers, entries = [], hiddenResources = [] }) => {
-        setMcpServers(allServers);
-        setMcpOrigins(
-          Object.fromEntries(entries.map(({ server, origin }) => [getMcpCatalogServerKey(server), origin]))
-        );
+      .then(({ entries = [], hiddenResources = [] }) => {
+        setMcpCatalogEntries(entries);
         setBackendHiddenResources(hiddenResources);
       })
       .catch((error) => {
         console.error('[useMcpServers] Failed to load MCP catalog:', error);
-        setMcpServers([]);
-        setMcpOrigins({});
+        setMcpCatalogEntries([]);
         setBackendHiddenResources([]);
       })
       .finally(() => {
@@ -46,7 +41,7 @@ export const useMcpServers = () => {
       .invoke()
       .then((extServers) => {
         if (!extServers || extServers.length === 0) {
-          setExtensionMcpServers([]);
+          setExtensionMcpCatalogEntries([]);
           return;
         }
 
@@ -66,38 +61,56 @@ export const useMcpServers = () => {
           getProductExperience()
         );
         reportHiddenMcpResources(projection.hiddenResources);
-        setExtensionMcpServers(projection.entries.map(({ server }) => server));
+        setExtensionMcpCatalogEntries(projection.entries);
         setExtensionHiddenResources(projection.hiddenResources);
       })
       .catch((error) => {
         console.error('[useMcpServers] Failed to load extension MCP servers:', error);
-        setExtensionMcpServers([]);
+        setExtensionMcpCatalogEntries([]);
         setExtensionHiddenResources([]);
       });
   }, []);
 
-  const saveMcpServers = useCallback((serversOrUpdater: IMcpServer[] | ((prev: IMcpServer[]) => IMcpServer[])) => {
-    setMcpServers((prevServers) =>
-      typeof serversOrUpdater === 'function' ? serversOrUpdater(prevServers) : serversOrUpdater
-    );
-    return Promise.resolve();
+  const setMcpServers = useCallback((serversOrUpdater: SetStateAction<IMcpServer[]>) => {
+    setMcpCatalogEntries((previousEntries) => {
+      const previousServers = previousEntries.map(({ server }) => server);
+      const nextServers = typeof serversOrUpdater === 'function' ? serversOrUpdater(previousServers) : serversOrUpdater;
+      const previousEntriesByKey = new Map(
+        previousEntries.map((entry) => [getMcpCatalogServerKey(entry.server), entry])
+      );
+      const newServers = nextServers.filter((server) => !previousEntriesByKey.has(getMcpCatalogServerKey(server)));
+      const newEntriesByKey =
+        newServers.length === 0
+          ? new Map<string, McpCatalogEntry>()
+          : new Map(
+              projectMcpCatalogCandidates(
+                newServers.map((server) => ({ server, origin: 'custom' })),
+                getProductExperience()
+              ).entries.map((entry) => [getMcpCatalogServerKey(entry.server), entry])
+            );
+
+      return nextServers.flatMap((server) => {
+        const key = getMcpCatalogServerKey(server);
+        const existingEntry = previousEntriesByKey.get(key);
+        if (existingEntry) return [{ ...existingEntry, server }];
+        const newEntry = newEntriesByKey.get(key);
+        return newEntry ? [newEntry] : [];
+      });
+    });
   }, []);
 
-  const mcpCatalogEntries = useMemo<readonly McpCatalogEntry[]>(
-    () =>
-      projectMcpCatalogCandidates(
-        mcpServers.map((server) => ({ server, origin: mcpOrigins[getMcpCatalogServerKey(server)] ?? 'custom' })),
-        getProductExperience()
-      ).entries,
-    [mcpOrigins, mcpServers]
+  const saveMcpServers = useCallback(
+    (serversOrUpdater: SetStateAction<IMcpServer[]>) => {
+      setMcpServers(serversOrUpdater);
+      return Promise.resolve();
+    },
+    [setMcpServers]
   );
-  const extensionMcpCatalogEntries = useMemo<readonly McpCatalogEntry[]>(
-    () =>
-      projectMcpCatalogCandidates(
-        extensionMcpServers.map((server) => ({ server, origin: 'extension' })),
-        getProductExperience()
-      ).entries,
-    [extensionMcpServers]
+
+  const mcpServers = useMemo(() => mcpCatalogEntries.map(({ server }) => server), [mcpCatalogEntries]);
+  const extensionMcpServers = useMemo(
+    () => extensionMcpCatalogEntries.map(({ server }) => server),
+    [extensionMcpCatalogEntries]
   );
   const hiddenResources = useMemo(
     () => [...backendHiddenResources, ...extensionHiddenResources],
