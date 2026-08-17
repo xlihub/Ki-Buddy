@@ -1,4 +1,10 @@
-import { KI_BUDDY_DEFAULT_LANGUAGE } from '@/common/platform/ki-buddy';
+import {
+  KI_BUDDY_DEFAULT_LANGUAGE,
+  createAionUiProductExperience,
+  createKiBuddyProductExperience,
+  type ProductExperience,
+  type ProductFeatureId,
+} from '@/common/platform/ki-buddy';
 import type { KiBuddyAuthApi } from '@/common/types/platform/kiBuddyAuth';
 import React from 'react';
 import { loadKiBuddyAccountSettings, loadKiBuddyLoginPage, loadKiBuddyStartupGate } from '@/renderer/pages/ki-buddy';
@@ -37,8 +43,11 @@ export type KiBuddyProductRuntime = {
   defaultLanguage: string | null;
   id: 'ki-buddy';
   localeNamespace: string;
+  productExperience: ProductExperience;
   themes: KiBuddyProductCapability['themes'];
 };
+
+const AION_UI_PRODUCT_EXPERIENCE = createAionUiProductExperience();
 
 const KI_BUDDY_ASSET_URLS = {
   'ki-buddy-app': kiBuddyLogoUrl,
@@ -48,18 +57,50 @@ const KI_BUDDY_ASSET_URLS = {
 /** Resolves product-owned renderer semantics from the validated first-frame bootstrap state. */
 export function getKiBuddyProductRuntime(): KiBuddyProductRuntime | null {
   const bootstrapError = typeof window === 'undefined' ? null : window.__kiBuddyProductBootstrapError;
-  if (bootstrapError) throw new Error(`Ki-Buddy product bootstrap failed: ${bootstrapError}`);
+  if (bootstrapError) return null;
   const product = typeof window === 'undefined' ? null : (window.__kiBuddyProductPresentation ?? null);
   if (!product) return null;
-  const logoUrl = KI_BUDDY_ASSET_URLS[product.assets.logo as keyof typeof KI_BUDDY_ASSET_URLS];
-  const mascotUrl = KI_BUDDY_ASSET_URLS[product.assets.mascot as keyof typeof KI_BUDDY_ASSET_URLS];
-  return {
-    id: 'ki-buddy',
-    brand: { ...product.brand, logoUrl, mascotUrl },
-    defaultLanguage: KI_BUDDY_DEFAULT_LANGUAGE ?? null,
-    localeNamespace: product.locale.namespace,
-    themes: product.themes,
-  };
+  try {
+    const productExperience = createKiBuddyProductExperience(product.experience);
+    const logoUrl = KI_BUDDY_ASSET_URLS[product.assets.logo as keyof typeof KI_BUDDY_ASSET_URLS];
+    const mascotUrl = KI_BUDDY_ASSET_URLS[product.assets.mascot as keyof typeof KI_BUDDY_ASSET_URLS];
+    return {
+      id: 'ki-buddy',
+      brand: { ...product.brand, logoUrl, mascotUrl },
+      defaultLanguage: KI_BUDDY_DEFAULT_LANGUAGE ?? null,
+      localeNamespace: product.locale.namespace,
+      productExperience,
+      themes: product.themes,
+    };
+  } catch (error) {
+    if (typeof window !== 'undefined') {
+      const detail = error instanceof Error ? error.message : String(error);
+      window.__kiBuddyProductBootstrapError = `Ki-Buddy product experience policy is invalid: ${detail}`;
+    }
+    return null;
+  }
+}
+
+/** Returns the installation-integrity failure captured before business UI mounts. */
+export function getKiBuddyProductBootstrapError(): string | null {
+  if (typeof window === 'undefined') return null;
+  if (!window.__kiBuddyProductBootstrapError && window.__kiBuddyProductPresentation) {
+    getKiBuddyProductRuntime();
+  }
+  return window.__kiBuddyProductBootstrapError ?? null;
+}
+
+/** Resolves the active adapter without exposing its serialized policy. */
+export function getProductExperience(): ProductExperience {
+  const productRuntime = getKiBuddyProductRuntime();
+  const bootstrapError = getKiBuddyProductBootstrapError();
+  if (bootstrapError) throw new Error(`Ki-Buddy product bootstrap failed: ${bootstrapError}`);
+  return productRuntime?.productExperience ?? AION_UI_PRODUCT_EXPERIENCE;
+}
+
+/** Thin renderer seam for product-controlled feature registration and mounting. */
+export function isProductFeatureEnabled(featureId: ProductFeatureId): boolean {
+  return getProductExperience().featureState(featureId) === 'enabled';
 }
 
 /** Resolves the authenticated Ki-Buddy runtime only when both capabilities are present. */

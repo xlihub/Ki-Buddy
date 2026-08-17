@@ -1,5 +1,5 @@
 import { DEFAULT_LANGUAGE, normalizeLanguageCode, type SupportedLanguage } from '@/common/config/i18n';
-import { KI_BUDDY_PRODUCT_CONFIG } from './productConfig';
+import { KI_BUDDY_PRODUCT_CONFIG_RESULT } from './productConfig';
 
 type LanguagePreferenceInput = {
   fallbackLanguage?: string | null;
@@ -14,8 +14,8 @@ function nonEmpty(value: string | null | undefined): string | null {
   return trimmed === '' ? null : trimmed;
 }
 
-export const KI_BUDDY_DEFAULT_AGENTS_BASE_URL = KI_BUDDY_PRODUCT_CONFIG.defaults.agentsBaseUrl;
-export const KI_BUDDY_DEFAULT_LANGUAGE = KI_BUDDY_PRODUCT_CONFIG.defaults.language;
+export const KI_BUDDY_DEFAULT_AGENTS_BASE_URL = KI_BUDDY_PRODUCT_CONFIG_RESULT.config?.defaults.agentsBaseUrl ?? null;
+export const KI_BUDDY_DEFAULT_LANGUAGE = KI_BUDDY_PRODUCT_CONFIG_RESULT.config?.defaults.language ?? null;
 
 /** Resolves saved → product → system → global fallback using one rule for every startup phase. */
 export function resolveLanguagePreference(input: LanguagePreferenceInput): SupportedLanguage {

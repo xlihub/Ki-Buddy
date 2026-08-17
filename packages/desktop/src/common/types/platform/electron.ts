@@ -84,7 +84,7 @@ export interface BackendStartupFailureInfo {
 declare global {
   interface Window {
     electronAPI?: ElectronBridgeAPI;
-    __getKiBuddyProductPresentation?: () => KiBuddyProductCapability | null;
+    __getKiBuddyProductBootstrap?: () => import('./kiBuddyProduct').KiBuddyProductBootstrap;
     __kiBuddyProductBootstrapError?: string | null;
     __kiBuddyProductPresentation?: KiBuddyProductCapability | null;
     __initialLanguage?: string | null;

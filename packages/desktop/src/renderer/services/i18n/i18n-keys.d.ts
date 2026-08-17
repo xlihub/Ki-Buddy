@@ -1030,6 +1030,7 @@ export type I18nKey =
   | 'login.kiBuddy.onboarding.tools.openCode'
   | 'login.kiBuddy.onboarding.tools.qwen'
   | 'login.kiBuddy.pageTitle'
+  | 'login.kiBuddy.productExperience.invalidPolicyDescription'
   | 'login.kiBuddy.subtitle'
   | 'login.kiBuddy.welcome'
   | 'login.languageToggle'

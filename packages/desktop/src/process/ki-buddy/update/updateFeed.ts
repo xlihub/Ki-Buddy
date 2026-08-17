@@ -1,4 +1,4 @@
-import { KI_BUDDY_PRODUCT_CONFIG } from '@/common/platform/ki-buddy';
+import type { KiBuddyProductConfig } from '@/common/platform/ki-buddy';
 import type { UpdateBridgeConfiguration } from '@process/bridge/updateBridge';
 import type { UpdateFeedConfiguration } from '@process/services/updateFeed';
 import {
@@ -10,34 +10,34 @@ type KiBuddyFeedOptions = KiBuddyGitHubProviderConfiguration & {
   updateProvider: typeof KiBuddyGitHubProvider;
 };
 
-function buildKiBuddyFeedOptions(): KiBuddyFeedOptions {
-  const [owner, repo] = KI_BUDDY_PRODUCT_CONFIG.updates.repository.split('/');
+function buildKiBuddyFeedOptions(config: KiBuddyProductConfig): KiBuddyFeedOptions {
+  const [owner, repo] = config.updates.repository.split('/');
   if (!owner || !repo) throw new Error('Ki-Buddy update repository must use owner/repo format');
   return {
     owner,
     provider: 'custom',
     repo,
-    tagPrefix: KI_BUDDY_PRODUCT_CONFIG.updates.tagPrefix,
+    tagPrefix: config.updates.tagPrefix,
     updateProvider: KiBuddyGitHubProvider,
   };
 }
 
 /** Creates the product-owned update contract supplied to the shared updater service. */
-export function createKiBuddyUpdateFeedConfiguration(): UpdateFeedConfiguration {
+export function createKiBuddyUpdateFeedConfiguration(config: KiBuddyProductConfig): UpdateFeedConfiguration {
   return {
-    feedOptions: buildKiBuddyFeedOptions(),
+    feedOptions: buildKiBuddyFeedOptions(config),
     label: 'Ki-Buddy GitHub provider',
-    updaterCacheDirName: KI_BUDDY_PRODUCT_CONFIG.electronBuilder.appId,
+    updaterCacheDirName: config.electronBuilder.appId,
   };
 }
 
 /** Creates the product-owned manual update contract supplied to the shared update bridge. */
-export function createKiBuddyUpdateBridgeConfiguration(): UpdateBridgeConfiguration {
+export function createKiBuddyUpdateBridgeConfiguration(config: KiBuddyProductConfig): UpdateBridgeConfiguration {
   return {
     allowRepositoryOverride: false,
-    repository: KI_BUDDY_PRODUCT_CONFIG.updates.repository,
+    repository: config.updates.repository,
     source: 'github',
-    tagPrefix: KI_BUDDY_PRODUCT_CONFIG.updates.tagPrefix,
-    userAgent: KI_BUDDY_PRODUCT_CONFIG.brand.productName,
+    tagPrefix: config.updates.tagPrefix,
+    userAgent: config.brand.productName,
   };
 }

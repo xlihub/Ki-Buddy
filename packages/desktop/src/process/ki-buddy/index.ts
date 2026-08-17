@@ -7,10 +7,16 @@
 import type { SupportedLanguage } from '@/common/config/i18n';
 import {
   KI_BUDDY_CORE_TRANSPORT_CHANNEL,
-  KI_BUDDY_DEFAULT_LANGUAGE,
-  KI_BUDDY_PRODUCT_CONFIG,
+  KI_BUDDY_PRODUCT_CONFIG_RESULT,
+  createKiBuddyProductCapability,
+  createKiBuddyProductExperience,
+  deepFreeze,
   resolveLanguagePreference,
+  type KiBuddyProductConfigLoadResult,
+  type ProductExperience,
+  type ProductFeatureId,
 } from '@/common/platform/ki-buddy';
+import type { KiBuddyProductBootstrap, KiBuddyProductCapability } from '@/common/types/platform/kiBuddyProduct';
 import { registerKiBuddyAuthBridge } from './authBridge';
 import type { AgentsAuthService } from './AgentsAuthService';
 import { createKiBuddyCoreAuthOptions, type KiBuddyCoreAuthOptions } from './bootstrap';
@@ -20,6 +26,7 @@ import { KI_BUDDY_PRODUCT_RUNTIME, readKiBuddyRuntimeIdentity, shouldEnableKiBud
 import { createKiBuddyUpdateBridgeConfiguration, createKiBuddyUpdateFeedConfiguration } from './update/updateFeed';
 import type { UpdateBridgeConfiguration } from '@process/bridge/updateBridge';
 import type { UpdateFeedConfiguration } from '@process/services/updateFeed';
+import { BrowserWindow } from 'electron';
 
 export type KiBuddyRuntime = {
   brand: {
@@ -29,38 +36,148 @@ export type KiBuddyRuntime = {
   coreAuthOptions: KiBuddyCoreAuthOptions;
   coreTransportChannel: typeof KI_BUDDY_CORE_TRANSPORT_CHANNEL;
   productIdentity: typeof KI_BUDDY_PRODUCT_RUNTIME;
+  productCapability: KiBuddyProductCapability;
+  productExperience: ProductExperience;
   registerAuthBridge: (getCoreBaseUrl: () => string) => AgentsAuthService;
   resolveDataPath: (dataPath: string) => string;
   resolveLanguage: (savedLanguage: string | null | undefined, systemLanguage: string | null) => SupportedLanguage;
+  startFeatureLifecycles: (lifecycles: readonly ProductFeatureLifecycle[]) => void;
   updateBridge: UpdateBridgeConfiguration;
   updateFeed: UpdateFeedConfiguration;
 };
 
+export type KiBuddyRuntimeSelection =
+  | Readonly<{ error: null; productIdentity: null; runtime: null; status: 'absent' }>
+  | Readonly<{ error: string; productIdentity: typeof KI_BUDDY_PRODUCT_RUNTIME; runtime: null; status: 'invalid' }>
+  | Readonly<{
+      error: null;
+      productIdentity: typeof KI_BUDDY_PRODUCT_RUNTIME;
+      runtime: KiBuddyRuntime;
+      status: 'ready';
+    }>;
+
+export type ProductFeatureLifecycle = {
+  featureId: ProductFeatureId;
+  start: () => void;
+};
+
+export type KiBuddyProductIntegrityWindowOptions = {
+  isPackaged: boolean;
+  preloadPath: string;
+  rendererFile: string;
+  rendererUrl?: string;
+};
+
+/** Builds the single serializable product bootstrap snapshot forwarded through preload. */
+export function createKiBuddyProductBootstrap(selection: KiBuddyRuntimeSelection): KiBuddyProductBootstrap {
+  if (selection.status === 'ready') {
+    return deepFreeze({
+      status: 'ready',
+      productIdentity: selection.productIdentity,
+      capability: selection.runtime.productCapability,
+      error: null,
+    });
+  }
+  if (selection.status === 'invalid') {
+    return deepFreeze({
+      status: 'invalid',
+      productIdentity: selection.productIdentity,
+      capability: null,
+      error: selection.error,
+    });
+  }
+  return deepFreeze({ status: 'absent', productIdentity: null, capability: null, error: null });
+}
+
+/** Keeps product-integrity startup isolated from every business lifecycle. */
+export function shouldStartProductBusinessLifecycle(selection: KiBuddyRuntimeSelection): boolean {
+  return selection.status !== 'invalid';
+}
+
+/** Creates the isolated Ki-Buddy window used only for packaged product integrity failures. */
+export function createKiBuddyProductIntegrityWindow(options: KiBuddyProductIntegrityWindowOptions): BrowserWindow {
+  const window = new BrowserWindow({
+    width: 900,
+    height: 640,
+    minWidth: 720,
+    minHeight: 480,
+    show: false,
+    title: 'Ki-Buddy',
+    webPreferences: {
+      preload: options.preloadPath,
+    },
+  });
+
+  window.once('ready-to-show', () => {
+    if (!window.isDestroyed()) window.show();
+  });
+
+  if (!options.isPackaged && options.rendererUrl) {
+    window.loadURL(options.rendererUrl).catch((error) => {
+      console.error('[Ki-Buddy] Failed to load product integrity UI:', error);
+    });
+  } else {
+    window.loadFile(options.rendererFile).catch((error) => {
+      console.error('[Ki-Buddy] Failed to load product integrity UI:', error);
+    });
+  }
+
+  return window;
+}
+
+/** Starts only lifecycle entries enabled by the selected product adapter. */
+export function startProductFeatureLifecycles(
+  productExperience: ProductExperience,
+  lifecycles: readonly ProductFeatureLifecycle[]
+): void {
+  for (const lifecycle of lifecycles) {
+    if (productExperience.featureState(lifecycle.featureId) === 'enabled') lifecycle.start();
+  }
+}
+
 /** Creates and installs the main-process Ki-Buddy runtime when explicit product metadata selects it. */
-export function createKiBuddyRuntime(options: {
-  appPath: string;
-  resetPassword: boolean;
-  webUi: boolean;
-}): KiBuddyRuntime | null {
+export function createKiBuddyRuntime(
+  options: {
+    appPath: string;
+    resetPassword: boolean;
+    webUi: boolean;
+  },
+  productConfigResult: KiBuddyProductConfigLoadResult = KI_BUDDY_PRODUCT_CONFIG_RESULT
+): KiBuddyRuntimeSelection {
+  const productIdentity = readKiBuddyRuntimeIdentity(options.appPath);
+  if (!productIdentity) return { status: 'absent', productIdentity: null, runtime: null, error: null };
+  if (!productConfigResult.config) {
+    return {
+      status: 'invalid',
+      productIdentity: KI_BUDDY_PRODUCT_RUNTIME,
+      runtime: null,
+      error: `Ki-Buddy product configuration is invalid: ${productConfigResult.error}`,
+    };
+  }
+
   const enabled = shouldEnableKiBuddyRuntime({
-    productIdentity: readKiBuddyRuntimeIdentity(options.appPath),
+    productIdentity,
     resetPassword: options.resetPassword,
     webUi: options.webUi,
   });
-  if (!enabled) return null;
+  if (!enabled) return { status: 'absent', productIdentity: null, runtime: null, error: null };
 
+  const config = productConfigResult.config;
+  const productExperience = createKiBuddyProductExperience(config.experience);
   const coreAuthOptions = createKiBuddyCoreAuthOptions();
   const coreTransport = new KiBuddyMainCoreTransport(coreAuthOptions.coreCsrfToken);
-  coreTransport.install();
+  startProductFeatureLifecycles(productExperience, [{ featureId: 'account', start: () => coreTransport.install() }]);
 
-  return {
+  const runtime: KiBuddyRuntime = {
     brand: {
-      iconPath: KI_BUDDY_PRODUCT_CONFIG.assets.packaged.icon,
-      productName: KI_BUDDY_PRODUCT_CONFIG.brand.productName,
+      iconPath: config.assets.packaged.icon,
+      productName: config.brand.productName,
     },
     coreAuthOptions,
     coreTransportChannel: KI_BUDDY_CORE_TRANSPORT_CHANNEL,
     productIdentity: KI_BUDDY_PRODUCT_RUNTIME,
+    productCapability: createKiBuddyProductCapability(config),
+    productExperience,
     registerAuthBridge: (getCoreBaseUrl) =>
       registerKiBuddyAuthBridge({
         bootstrapSecret: coreAuthOptions.bootstrapSecret,
@@ -71,12 +188,19 @@ export function createKiBuddyRuntime(options: {
     resolveLanguage: (savedLanguage, systemLanguage) =>
       resolveLanguagePreference({
         savedLanguage,
-        productLanguage: KI_BUDDY_DEFAULT_LANGUAGE,
+        productLanguage: config.defaults.language,
         systemLanguage,
       }),
-    updateBridge: createKiBuddyUpdateBridgeConfiguration(),
-    updateFeed: createKiBuddyUpdateFeedConfiguration(),
+    startFeatureLifecycles: (lifecycles) => startProductFeatureLifecycles(productExperience, lifecycles),
+    updateBridge: createKiBuddyUpdateBridgeConfiguration(config),
+    updateFeed: createKiBuddyUpdateFeedConfiguration(config),
   };
+  return { status: 'ready', productIdentity: KI_BUDDY_PRODUCT_RUNTIME, runtime, error: null };
 }
 
-export { resolveKiBuddyProtocolScheme, shouldEnsureDefaultCoreUser } from './runtimeIdentity';
+export {
+  readKiBuddyRuntimeIdentity,
+  resolveKiBuddyProtocolScheme,
+  shouldEnsureDefaultCoreUser,
+} from './runtimeIdentity';
+export { resolveKiBuddyCoreDataPath } from './coreDataPath';

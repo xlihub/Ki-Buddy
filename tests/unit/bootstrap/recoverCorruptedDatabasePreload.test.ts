@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { KI_BUDDY_PRODUCT_BOOTSTRAP_CHANNEL, KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
+import type { KiBuddyProductBootstrap } from '@/common/types/platform/kiBuddyProduct';
 
 vi.mock('@sentry/electron/preload', () => ({}));
 
@@ -6,10 +8,15 @@ const invoke = vi.fn();
 const send = vi.fn();
 const on = vi.fn();
 const off = vi.fn();
-let productRuntime: string | null = null;
 let productCsrfToken: string | null = null;
+let productBootstrap: KiBuddyProductBootstrap = {
+  status: 'absent',
+  productIdentity: null,
+  capability: null,
+  error: null,
+};
 const sendSync = vi.fn((channel: string) => {
-  if (channel === 'get-product-runtime-identity') return productRuntime;
+  if (channel === KI_BUDDY_PRODUCT_BOOTSTRAP_CHANNEL) return productBootstrap;
   if (channel === 'ki-buddy:core-transport:get-csrf-token') return productCsrfToken;
   if (channel === 'get-backend-port') return 25808;
   if (channel === 'get-initial-language') return null;
@@ -40,8 +47,8 @@ describe('recover corrupted database preload bridge', () => {
     vi.resetModules();
     vi.clearAllMocks();
     invoke.mockResolvedValue(undefined);
-    productRuntime = null;
     productCsrfToken = null;
+    productBootstrap = { status: 'absent', productIdentity: null, capability: null, error: null };
   });
 
   it('exposes a recovery method that invokes the main-process IPC channel', async () => {
@@ -56,8 +63,13 @@ describe('recover corrupted database preload bridge', () => {
   });
 
   it('exposes Ki-Buddy authentication only through the dedicated IPC channels', async () => {
-    productRuntime = 'ki-buddy';
     productCsrfToken = 'core-csrf-token';
+    productBootstrap = {
+      status: 'ready',
+      productIdentity: 'ki-buddy',
+      capability: KI_BUDDY_PRODUCT_CAPABILITY!,
+      error: null,
+    };
     await import('@/preload/main');
 
     const electronApiCall = exposeInMainWorld.mock.calls.find(([key]) => key === 'electronAPI');
@@ -93,10 +105,41 @@ describe('recover corrupted database preload bridge', () => {
     expect(invalidated).toHaveBeenCalledOnce();
     expect(off).toHaveBeenCalledWith('ki-buddy-auth:session-invalidated', subscription?.[1]);
     expect(electronApi?.kiBuddyCoreTransport).toEqual({ csrfToken: 'core-csrf-token' });
-    const productPresentationCall = exposeInMainWorld.mock.calls.find(
-      ([key]) => key === '__getKiBuddyProductPresentation'
-    );
-    expect(productPresentationCall?.[1]()).toMatchObject({ id: 'ki-buddy', schemaVersion: 2 });
+    const productBootstrapCall = exposeInMainWorld.mock.calls.find(([key]) => key === '__getKiBuddyProductBootstrap');
+    expect(productBootstrapCall?.[1]()).toMatchObject({
+      status: 'ready',
+      productIdentity: 'ki-buddy',
+      capability: {
+        id: 'ki-buddy',
+        schemaVersion: 3,
+        experience: { features: { team: 'disabled', scheduledTasks: 'enabled' } },
+      },
+    });
+  });
+
+  it('exposes a recognized Ki-Buddy configuration failure without auth or AionUi capability fallback', async () => {
+    productBootstrap = {
+      status: 'invalid',
+      productIdentity: 'ki-buddy',
+      capability: null,
+      error: 'Ki-Buddy product configuration is invalid: missing team',
+    };
+    await import('@/preload/main');
+
+    const electronApiCall = exposeInMainWorld.mock.calls.find(([key]) => key === 'electronAPI');
+    const electronApi = electronApiCall?.[1] as { kiBuddyAuth?: unknown } | undefined;
+    const productBootstrapCall = exposeInMainWorld.mock.calls.find(([key]) => key === '__getKiBuddyProductBootstrap');
+
+    expect(electronApi?.kiBuddyAuth).toBeUndefined();
+    expect(productBootstrapCall?.[1]()).toMatchObject({
+      status: 'invalid',
+      error: expect.stringContaining('missing team'),
+    });
+    expect(sendSync).not.toHaveBeenCalledWith('ki-buddy:core-transport:get-csrf-token');
+    expect(sendSync).not.toHaveBeenCalledWith('get-backend-port');
+    expect(sendSync).not.toHaveBeenCalledWith('get-initial-language');
+    expect(sendSync).not.toHaveBeenCalledWith('get-backend-startup-failed');
+    expect(sendSync).not.toHaveBeenCalledWith('get-backend-startup-failure');
   });
 
   it('does not expose Ki-Buddy authentication in the ordinary AionUi desktop runtime', async () => {
@@ -107,10 +150,13 @@ describe('recover corrupted database preload bridge', () => {
 
     expect(electronApi?.kiBuddyAuth).toBeUndefined();
     expect(electronApi?.kiBuddyCoreTransport).toBeUndefined();
-    const productPresentationCall = exposeInMainWorld.mock.calls.find(
-      ([key]) => key === '__getKiBuddyProductPresentation'
-    );
-    expect(productPresentationCall?.[1]()).toBeNull();
+    const productBootstrapCall = exposeInMainWorld.mock.calls.find(([key]) => key === '__getKiBuddyProductBootstrap');
+    expect(productBootstrapCall?.[1]()).toEqual({
+      status: 'absent',
+      productIdentity: null,
+      capability: null,
+      error: null,
+    });
     expect(sendSync).not.toHaveBeenCalledWith('ki-buddy:core-transport:get-csrf-token');
   });
 });

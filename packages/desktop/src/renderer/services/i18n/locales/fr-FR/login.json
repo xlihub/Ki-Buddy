@@ -16,6 +16,9 @@
   "footerPrimary": "Transformez votre IA en ligne de commande",
   "footerSecondary": "Moderne et efficace",
   "kiBuddy": {
+    "productExperience": {
+      "invalidPolicyDescription": "La politique d'expérience produit de Ki-Buddy est absente ou non valide. Réinstallez cette version depuis un paquet officiel."
+    },
     "pageTitle": "{{productName}} - Connexion à Agents",
     "brand": "Ki-Buddy",
     "subtitle": "Connectez-vous avec votre compte Agents existant",

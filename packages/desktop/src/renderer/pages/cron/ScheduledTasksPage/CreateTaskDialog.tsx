@@ -27,6 +27,7 @@ import { resolveAssistantAvatar } from '@renderer/utils/model/assistantAvatar';
 import { resolveAssistantName } from '@renderer/utils/model/assistantDisplay';
 import { resolveCronAgentConfig } from './resolveCronAgentConfig';
 import { assistantRuntimeKey, isAionrsAssistant } from '@/common/types/agent/assistantTypes';
+import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
 
 const FormItem = Form.Item;
 const TextArea = Input.TextArea;
@@ -244,6 +245,8 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   const { presetAssistants } = useConversationAssistants();
   const managedAgentRuntimeCatalog = useManagedAgentRuntimeCatalog();
   const { providers, getAvailableModels } = useModelProviderList();
+  const teamScheduledTaskExecutorsEnabled =
+    getProductExperience().behaviorDefaults().scheduledTaskExecutor === 'assistant-or-team';
   const [frequency, setFrequency] = useState<FrequencyType>('manual');
   const [time, setTime] = useState('09:00');
   const [weekday, setWeekday] = useState('MON');
@@ -312,7 +315,7 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   }, [visible, editJob, form]);
 
   useEffect(() => {
-    if (!visible || !editJob?.metadata.conversation_id) {
+    if (!teamScheduledTaskExecutorsEnabled || !visible || !editJob?.metadata.conversation_id) {
       setTeamOwnershipStatus('standalone');
       return;
     }
@@ -338,7 +341,7 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [visible, editJob]);
+  }, [teamScheduledTaskExecutorsEnabled, visible, editJob]);
 
   // Edit mode needs the assistant catalog to map a stored job to its
   // current assistant id. We isolate this in a separate effect so that

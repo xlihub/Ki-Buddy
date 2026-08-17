@@ -5,7 +5,7 @@ import { configService } from '@/common/config/configService';
 import { ipcBridge } from '@/common';
 import i18nConfig from '@/common/config/i18n-config.json';
 import { applyKiBuddyLocaleOverlay, resolveLanguagePreference } from '@/common/platform/ki-buddy';
-import { getKiBuddyProductRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { getKiBuddyProductBootstrapError, getKiBuddyProductRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
 import {
   DEFAULT_LANGUAGE,
   normalizeLanguageCode,
@@ -201,18 +201,21 @@ i18n.on('languageChanged', async (lang: string) => {
 });
 
 // Initialize on module load
-void syncLanguageFromConfig();
+const productIntegrityOnly = Boolean(getKiBuddyProductBootstrapError());
+if (!productIntegrityOnly) void syncLanguageFromConfig();
 
 // Listen for language changes broadcast by the main process (from other renderers).
 // This enables real-time sync between desktop and WebUI — when one changes language,
 // the other updates immediately without requiring a restart.
-ipcBridge.systemSettings.languageChanged.on(async ({ language }) => {
-  const normalized = normalizeLanguageCode(language);
-  // Skip if already on this language (we're the one who triggered the change)
-  if (i18n.language === normalized) return;
-  await ensureAndSwitch(i18n, normalized, loadLocaleModules);
-  setLanguageHint(normalized);
-});
+if (!productIntegrityOnly) {
+  ipcBridge.systemSettings.languageChanged.on(async ({ language }) => {
+    const normalized = normalizeLanguageCode(language);
+    // Skip if already on this language (we're the one who triggered the change)
+    if (i18n.language === normalized) return;
+    await ensureAndSwitch(i18n, normalized, loadLocaleModules);
+    setLanguageHint(normalized);
+  });
+}
 
 /**
  * Change language with lazy loading.

@@ -16,6 +16,9 @@
   "footerPrimary": "コマンドラインAIをモダンに変革",
   "footerSecondary": "効率的でエレガント",
   "kiBuddy": {
+    "productExperience": {
+      "invalidPolicyDescription": "Ki-Buddy の製品エクスペリエンスポリシーが見つからないか無効です。公式パッケージからこのバージョンを再インストールしてください。"
+    },
     "pageTitle": "{{productName}} - Agents にログイン",
     "brand": "Ki-Buddy",
     "subtitle": "既存の Agents アカウントでログインしてください",

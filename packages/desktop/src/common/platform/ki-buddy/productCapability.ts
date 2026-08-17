@@ -1,12 +1,20 @@
 import type { KiBuddyProductCapability } from '@/common/types/platform/kiBuddyProduct';
-import { KI_BUDDY_PRODUCT_CONFIG } from './productConfig';
+import { KI_BUDDY_PRODUCT_CONFIG_RESULT, type KiBuddyProductConfig } from './productConfig';
+import { deepFreeze } from './productExperience';
 
 /** Serializable renderer capability for the configured Ki-Buddy product runtime. */
-export const KI_BUDDY_PRODUCT_CAPABILITY = {
-  id: 'ki-buddy',
-  schemaVersion: 2,
-  brand: KI_BUDDY_PRODUCT_CONFIG.brand,
-  assets: KI_BUDDY_PRODUCT_CONFIG.assets.renderer,
-  locale: KI_BUDDY_PRODUCT_CONFIG.locale,
-  themes: KI_BUDDY_PRODUCT_CONFIG.themes,
-} satisfies KiBuddyProductCapability;
+export function createKiBuddyProductCapability(config: KiBuddyProductConfig): KiBuddyProductCapability {
+  return deepFreeze({
+    id: 'ki-buddy',
+    schemaVersion: 3,
+    brand: config.brand,
+    assets: config.assets.renderer,
+    locale: config.locale,
+    themes: config.themes,
+    experience: config.experience,
+  });
+}
+
+export const KI_BUDDY_PRODUCT_CAPABILITY = KI_BUDDY_PRODUCT_CONFIG_RESULT.config
+  ? createKiBuddyProductCapability(KI_BUDDY_PRODUCT_CONFIG_RESULT.config)
+  : null;

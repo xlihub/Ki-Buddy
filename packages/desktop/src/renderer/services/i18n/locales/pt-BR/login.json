@@ -16,6 +16,9 @@
   "footerPrimary": "Transforme sua IA de linha de comando",
   "footerSecondary": "Moderno e Eficiente",
   "kiBuddy": {
+    "productExperience": {
+      "invalidPolicyDescription": "A política de experiência do produto Ki-Buddy está ausente ou é inválida. Reinstale esta versão usando um pacote oficial."
+    },
     "pageTitle": "{{productName}} - Entrar no Agents",
     "brand": "Ki-Buddy",
     "subtitle": "Entre com sua conta existente do Agents",

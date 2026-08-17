@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { ipcBridge } from '@/common';
-import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 import ConversationSearchPopover from '@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover';
 import MobileConversationBrand from './MobileConversationBrand';
 import WindowControls from '../WindowControls';
@@ -19,6 +18,7 @@ import { isElectronDesktop, isMacOS } from '@/renderer/utils/platform';
 import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import MigrationInviteCapsule from './MigrationInviteCapsule';
 import { getRendererBrand } from '@/renderer/services/runtime/productBrandRuntime';
+import { isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
 import './titlebar.css';
 
 interface TitlebarProps {
@@ -98,6 +98,7 @@ const SidebarIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({ size =
 );
 
 const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
+  const teamEnabled = isProductFeatureEnabled('team');
   const { t } = useTranslation();
   const appTitle = getRendererBrand().productName;
   const [workspaceCollapsed, setWorkspaceCollapsed] = useState(true);
@@ -213,7 +214,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
     }
 
     // Team mode: show team name
-    if (TEAM_MODE_ENABLED) {
+    if (teamEnabled) {
       const teamMatch = location.pathname.match(/^\/team\/([^/]+)/);
       const team_id = teamMatch?.[1];
       if (team_id) {
@@ -257,7 +258,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
     return () => {
       cancelled = true;
     };
-  }, [appTitle, layout?.isMobile, location.pathname]);
+  }, [appTitle, layout?.isMobile, location.pathname, teamEnabled]);
 
   useEffect(() => {
     if (!layout?.isMobile) {
@@ -395,7 +396,7 @@ const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
             if (conversation_id) {
               return <MobileConversationBrand conversation_id={conversation_id} fallbackTitle={mobileCenterTitle} />;
             }
-            const isTeamRoute = TEAM_MODE_ENABLED && /^\/team\/[^/]+/.test(location.pathname);
+            const isTeamRoute = teamEnabled && /^\/team\/[^/]+/.test(location.pathname);
             return (
               <span className='app-titlebar__brand-mobile'>
                 {isTeamRoute && (

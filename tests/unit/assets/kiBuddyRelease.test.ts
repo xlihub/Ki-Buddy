@@ -56,13 +56,45 @@ describe('Ki-Buddy product release identity', () => {
 
   it('keeps the Ki-Buddy defaults in the product configuration', () => {
     const config = readProductConfig(projectRoot);
+    expect(config.schemaVersion).toBe(3);
     expect(config.defaults).toEqual({
       agentsBaseUrl: 'https://ksapi.kingsware.cn',
       language: 'zh-CN',
     });
+    expect(config.experience.features.team).toBe('disabled');
+    expect(config.experience.behaviorDefaults.scheduledTaskExecutor).toBe('assistant');
     expect(config.brand.cliName).toBe('Ki CLI');
     expect(config.locale).toEqual({ namespace: 'kiBuddy' });
     expect(config.themes).toEqual({ light: 'ki-buddy-light', dark: 'ki-buddy-dark' });
+  });
+
+  it('rejects incomplete or invalid product experience policy at the build boundary', () => {
+    const source = JSON.parse(readFileSync(join(projectRoot, 'ki-buddy-product.json'), 'utf8'));
+    for (const mutate of [
+      (config: typeof source) => {
+        delete config.experience.features.team;
+      },
+      (config: typeof source) => {
+        config.experience.features.team = 'preview';
+      },
+      (config: typeof source) => {
+        config.experience.resources.skill.unexpected = 'manage';
+      },
+      (config: typeof source) => {
+        config.experience.features.guid = 'disabled';
+        config.experience.features.guidFeedback = 'enabled';
+      },
+    ]) {
+      const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-product-config-'));
+      try {
+        const config = structuredClone(source);
+        mutate(config);
+        writeFileSync(join(tempDir, 'ki-buddy-product.json'), JSON.stringify(config));
+        expect(() => readProductConfig(tempDir)).toThrow();
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    }
   });
 
   it('declares existing independent platform and renderer brand resources', () => {

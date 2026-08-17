@@ -4,10 +4,13 @@ import {
   createKiBuddyUpdateBridgeConfiguration,
   createKiBuddyUpdateFeedConfiguration,
 } from '@/process/ki-buddy/update/updateFeed';
+import { KI_BUDDY_PRODUCT_CONFIG_RESULT } from '@/common/platform/ki-buddy';
+
+const productConfig = KI_BUDDY_PRODUCT_CONFIG_RESULT.config!;
 
 describe('Ki-Buddy update feed', () => {
   it('uses the product-owned custom provider and tag namespace', () => {
-    expect(createKiBuddyUpdateFeedConfiguration()).toEqual({
+    expect(createKiBuddyUpdateFeedConfiguration(productConfig)).toEqual({
       feedOptions: {
         owner: 'xlihub',
         provider: 'custom',
@@ -21,7 +24,7 @@ describe('Ki-Buddy update feed', () => {
   });
 
   it('uses the same product tag namespace for manual checks', () => {
-    expect(createKiBuddyUpdateBridgeConfiguration()).toMatchObject({
+    expect(createKiBuddyUpdateBridgeConfiguration(productConfig)).toMatchObject({
       allowRepositoryOverride: false,
       repository: 'xlihub/Ki-Buddy',
       tagPrefix: 'ki-buddy-v',

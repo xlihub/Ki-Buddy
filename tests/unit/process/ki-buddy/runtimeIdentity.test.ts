@@ -45,6 +45,7 @@ describe('Ki-Buddy product runtime identity', () => {
       );
 
       expect(resolveKiBuddyProtocolScheme(productAppPath)).toBe('ki-buddy');
+      expect(resolveKiBuddyProtocolScheme(productAppPath, { config: null, error: 'missing team' })).toBeNull();
       expect(resolveKiBuddyProtocolScheme(resolve(productAppPath, 'missing'))).toBeNull();
     } finally {
       rmSync(productAppPath, { recursive: true });

@@ -1,9 +1,80 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "runtimeIdentity": "ki-buddy",
   "defaults": {
     "agentsBaseUrl": "https://ksapi.kingsware.cn",
     "language": "zh-CN"
+  },
+  "experience": {
+    "schemaVersion": 1,
+    "features": {
+      "account": "enabled",
+      "agents": "enabled",
+      "appearance": "enabled",
+      "assistants": "enabled",
+      "channels": "disabled",
+      "componentShowcase": "disabled",
+      "conversation": "enabled",
+      "desktopPet": "disabled",
+      "extensionMarketplace": "disabled",
+      "extensionRuntime": "disabled",
+      "extensionSettings": "disabled",
+      "guid": "enabled",
+      "guidFeedback": "disabled",
+      "guidGithubStar": "disabled",
+      "guidWebUi": "disabled",
+      "models": "enabled",
+      "scheduledTasks": "enabled",
+      "skills": "enabled",
+      "system": "enabled",
+      "team": "disabled",
+      "themeCustomEditor": "disabled",
+      "themeMarketplace": "disabled",
+      "themePresets": "disabled",
+      "tools": "enabled",
+      "webUi": "disabled"
+    },
+    "resources": {
+      "agent": {
+        "productBuiltin": "use",
+        "upstreamBuiltin": "hidden",
+        "custom": "manage",
+        "extension": "hidden",
+        "unclassified": "hidden"
+      },
+      "assistant": {
+        "productBuiltin": "use",
+        "upstreamBuiltin": "hidden",
+        "custom": "manage",
+        "extension": "hidden",
+        "unclassified": "hidden"
+      },
+      "model": {
+        "productBuiltin": "manage",
+        "upstreamBuiltin": "manage",
+        "custom": "manage",
+        "extension": "hidden",
+        "unclassified": "hidden"
+      },
+      "skill": {
+        "productBuiltin": "use",
+        "upstreamBuiltin": "hidden",
+        "custom": "manage",
+        "extension": "hidden",
+        "unclassified": "hidden"
+      },
+      "mcp": {
+        "productBuiltin": "use",
+        "upstreamBuiltin": "hidden",
+        "custom": "manage",
+        "extension": "hidden",
+        "unclassified": "hidden"
+      }
+    },
+    "behaviorDefaults": {
+      "scheduledTaskExecutor": "assistant",
+      "autoInjectedSkillExclusions": ["aionui-config"]
+    }
   },
   "locale": {
     "namespace": "kiBuddy"

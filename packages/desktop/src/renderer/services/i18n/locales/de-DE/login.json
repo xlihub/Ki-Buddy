@@ -16,6 +16,9 @@
   "footerPrimary": "Verwandle deine Kommandozeilen-KI",
   "footerSecondary": "Modern & Effizient",
   "kiBuddy": {
+    "productExperience": {
+      "invalidPolicyDescription": "Die Produkterlebnisrichtlinie von Ki-Buddy fehlt oder ist ungültig. Installieren Sie diese Version aus einem offiziellen Paket neu."
+    },
     "pageTitle": "{{productName}} - Bei Agents anmelden",
     "brand": "Ki-Buddy",
     "subtitle": "Mit einem vorhandenen Agents-Konto anmelden",

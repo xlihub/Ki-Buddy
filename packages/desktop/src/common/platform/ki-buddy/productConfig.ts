@@ -1,8 +1,16 @@
 import rawProductConfig from '../../../../../../ki-buddy-product.json';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/common/config/i18n';
 import { normalizeAgentsBaseUrl } from './deploymentUrl';
+import {
+  deepFreeze,
+  parseProductExperiencePolicy,
+  type DeepReadonly,
+  type ProductExperienceSnapshot,
+} from './productExperience';
 
-export type KiBuddyProductConfig = {
+export const KI_BUDDY_PRODUCT_RUNTIME = 'ki-buddy' as const;
+
+export type KiBuddyProductConfig = DeepReadonly<{
   assets: {
     packaged: {
       icon: string;
@@ -38,11 +46,12 @@ export type KiBuddyProductConfig = {
     appId: string;
     protocolScheme: string;
   };
+  experience: ProductExperienceSnapshot;
   locale: {
     namespace: string;
   };
-  runtimeIdentity: string;
-  schemaVersion: 2;
+  runtimeIdentity: typeof KI_BUDDY_PRODUCT_RUNTIME;
+  schemaVersion: 3;
   themes: {
     dark: string;
     light: string;
@@ -53,7 +62,11 @@ export type KiBuddyProductConfig = {
     repository: string;
     tagPrefix: string;
   };
-};
+}>;
+
+export type KiBuddyProductConfigLoadResult =
+  | Readonly<{ config: KiBuddyProductConfig; error: null }>
+  | Readonly<{ config: null; error: string }>;
 
 const PRODUCT_CONFIG_TOP_LEVEL_KEYS = [
   'schemaVersion',
@@ -69,6 +82,7 @@ const PRODUCT_CONFIG_TOP_LEVEL_KEYS = [
   'webCli',
   'updates',
   'kiCore',
+  'experience',
 ] as const;
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
@@ -106,10 +120,14 @@ function requireString(value: unknown, label: string): string {
   return value;
 }
 
-function requireSupportedString(value: unknown, expected: string, label: string): string {
+function requireSupportedString<const Expected extends string>(
+  value: unknown,
+  expected: Expected,
+  label: string
+): Expected {
   const result = requireString(value, label);
   if (result !== expected) throw new Error(`${label} must be ${expected}`);
-  return result;
+  return expected;
 }
 
 function requireProtocolScheme(value: unknown): string {
@@ -155,14 +173,17 @@ export function parseKiBuddyProductConfig(value: unknown): KiBuddyProductConfig 
       'assets',
       'electronBuilder',
       'updates',
+      'experience',
     ],
     PRODUCT_CONFIG_TOP_LEVEL_KEYS,
     'Ki-Buddy product configuration'
   );
-  if (config.schemaVersion !== 2) throw new Error('Unsupported Ki-Buddy product configuration schema');
-  if (typeof config.runtimeIdentity !== 'string' || config.runtimeIdentity.trim() === '') {
-    throw new Error('Ki-Buddy runtime identity must be a non-empty string');
-  }
+  if (config.schemaVersion !== 3) throw new Error('Unsupported Ki-Buddy product configuration schema');
+  const runtimeIdentity = requireSupportedString(
+    config.runtimeIdentity,
+    KI_BUDDY_PRODUCT_RUNTIME,
+    'Ki-Buddy runtime identity'
+  );
   const defaults = requireRecord(config.defaults, 'Ki-Buddy product defaults');
   requireExactKeys(defaults, ['agentsBaseUrl', 'language'], 'Ki-Buddy product defaults');
   if (typeof defaults.agentsBaseUrl !== 'string' || defaults.agentsBaseUrl.trim() === '') {
@@ -209,9 +230,9 @@ export function parseKiBuddyProductConfig(value: unknown): KiBuddyProductConfig 
   if (updateProvider !== 'github' || updateRepository !== brandRepositoryPath) {
     throw new Error('Ki-Buddy update source must match the configured GitHub repository');
   }
-  return {
-    schemaVersion: 2,
-    runtimeIdentity: config.runtimeIdentity,
+  return deepFreeze({
+    schemaVersion: 3,
+    runtimeIdentity,
     brand: {
       cliName: requireString(brand.cliName, 'Ki-Buddy CLI name'),
       productName: requireString(brand.productName, 'Ki-Buddy product name'),
@@ -254,13 +275,26 @@ export function parseKiBuddyProductConfig(value: unknown): KiBuddyProductConfig 
       light: requireSupportedString(themes.light, 'ki-buddy-light', 'Ki-Buddy light theme'),
       dark: requireSupportedString(themes.dark, 'ki-buddy-dark', 'Ki-Buddy dark theme'),
     },
+    experience: parseProductExperiencePolicy(config.experience),
     updates: {
       provider: updateProvider,
       repository: updateRepository,
       tagPrefix: updateTagPrefix,
       releasePageUrl: updateReleasePageUrl,
     },
-  };
+  });
 }
 
-export const KI_BUDDY_PRODUCT_CONFIG = parseKiBuddyProductConfig(rawProductConfig);
+/** Captures packaged configuration failures without aborting main or preload module evaluation. */
+export function loadKiBuddyProductConfig(value: unknown): KiBuddyProductConfigLoadResult {
+  try {
+    return deepFreeze({ config: parseKiBuddyProductConfig(value), error: null });
+  } catch (error) {
+    return deepFreeze({
+      config: null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export const KI_BUDDY_PRODUCT_CONFIG_RESULT = loadKiBuddyProductConfig(rawProductConfig);

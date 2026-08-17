@@ -16,6 +16,9 @@
   "footerPrimary": "명령줄 AI의 혁신",
   "footerSecondary": "현대적이고 효율적인",
   "kiBuddy": {
+    "productExperience": {
+      "invalidPolicyDescription": "Ki-Buddy 제품 경험 정책이 없거나 유효하지 않습니다. 공식 패키지에서 이 버전을 다시 설치하세요."
+    },
     "pageTitle": "{{productName}} - Agents 로그인",
     "brand": "Ki-Buddy",
     "subtitle": "기존 Agents 계정으로 로그인하세요",

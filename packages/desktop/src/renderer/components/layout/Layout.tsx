@@ -5,7 +5,6 @@
  */
 
 import { ipcBridge } from '@/common';
-import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 import PwaPullToRefresh from '@/renderer/components/layout/PwaPullToRefresh';
 import Titlebar from '@/renderer/components/layout/Titlebar';
 import { Layout as ArcoLayout, Tooltip } from '@arco-design/web-react';
@@ -41,6 +40,7 @@ import { IS_DISCONTINUED_BUILD } from '@/renderer/utils/discontinuedBuild';
 import UpdateMigrationDialog from '@/renderer/components/settings/UpdateMigrationDialog';
 import { getRendererBrand } from '@/renderer/services/runtime/productBrandRuntime';
 import '@renderer/styles/layout.css';
+import { isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
 
 const SidebarIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({ size = 18, strokeWidth = 4 }) => (
   <svg
@@ -134,8 +134,9 @@ const Layout: React.FC<{
   const location = useLocation();
   const brand = getRendererBrand();
   const productName = brand.productName;
+  const teamEnabled = isProductFeatureEnabled('team');
   const workspaceAvailable =
-    location.pathname.startsWith('/conversation/') || (TEAM_MODE_ENABLED && location.pathname.startsWith('/team/'));
+    location.pathname.startsWith('/conversation/') || (teamEnabled && location.pathname.startsWith('/team/'));
   const toggleSider = useCallback(() => {
     setCollapsed((previous) => !previous);
   }, []);
