@@ -110,7 +110,7 @@ const GITHUB_RELEASES = [
   },
 ];
 
-const getCheckHandler = async (configuration?: UpdateBridgeConfiguration) => {
+const getCheckHandler = async (configuration?: UpdateBridgeConfiguration | null) => {
   vi.resetModules();
   const { configureUpdateBridge, initUpdateBridge } = await import('@process/bridge/updateBridge');
   const { ipcBridge } = await import('@/common');
@@ -154,6 +154,20 @@ describe('update.check CDN-first', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('does not select an AionUi update source when product configuration is invalid', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const handler = await getCheckHandler(null);
+
+    const res = await handler({});
+
+    expect(res).toEqual({
+      success: false,
+      msg: 'Update service is unavailable because the product configuration is invalid.',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('reports an update from the CDN manifest and attaches GitHub notes', async () => {

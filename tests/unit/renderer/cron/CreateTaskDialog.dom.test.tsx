@@ -11,6 +11,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
 import type { TChatConversation } from '@/common/config/storage';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 let currentAssistants: Assistant[] = [];
 
@@ -145,6 +146,8 @@ describe('CreateTaskDialog', () => {
     vi.mocked(ipcBridge.cron.updateJob.invoke).mockResolvedValue(job());
     vi.mocked(ipcBridge.cron.createJob.invoke).mockResolvedValue(job());
     vi.mocked(ipcBridge.conversation.get.invoke).mockRejectedValue(new Error('not found'));
+    window.__kiBuddyProductBootstrapError = null;
+    window.__kiBuddyProductPresentation = null;
   });
 
   it('does not render the task description field', async () => {
@@ -314,6 +317,16 @@ describe('CreateTaskDialog', () => {
         extra: {},
       });
     });
+  });
+
+  it('uses the Ki-Buddy assistant-only default without resolving Team task ownership', async () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+
+    render(<CreateTaskDialog visible onClose={() => {}} editJob={teamOwnedJob()} />);
+
+    await screen.findByDisplayValue('original prompt');
+    expect(ipcBridge.conversation.get.invoke).not.toHaveBeenCalled();
+    expect(screen.queryByText('cron.page.form.teamTaskExecutionModeLockedReason')).not.toBeInTheDocument();
   });
 
   it('locks execution mode and assistant when editing a team-owned task', async () => {

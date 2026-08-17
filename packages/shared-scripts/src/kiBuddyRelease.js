@@ -13,6 +13,46 @@ const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const PACKAGE_VERSION_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const SHA40_PATTERN = /^[0-9a-f]{40}$/;
+const PRODUCT_FEATURE_IDS = [
+  'account',
+  'agents',
+  'appearance',
+  'assistants',
+  'channels',
+  'componentShowcase',
+  'conversation',
+  'desktopPet',
+  'extensionMarketplace',
+  'extensionRuntime',
+  'extensionSettings',
+  'guid',
+  'guidFeedback',
+  'guidGithubStar',
+  'guidWebUi',
+  'models',
+  'scheduledTasks',
+  'skills',
+  'system',
+  'team',
+  'themeCustomEditor',
+  'themeMarketplace',
+  'themePresets',
+  'tools',
+  'webUi',
+];
+const PRODUCT_RESOURCE_KINDS = ['agent', 'assistant', 'model', 'skill', 'mcp'];
+const PRODUCT_RESOURCE_ORIGINS = ['productBuiltin', 'upstreamBuiltin', 'custom', 'extension', 'unclassified'];
+const PRODUCT_FEATURE_DEPENDENCIES = [
+  ['extensionMarketplace', 'extensionRuntime'],
+  ['extensionSettings', 'extensionRuntime'],
+  ['guidFeedback', 'guid'],
+  ['guidGithubStar', 'guid'],
+  ['guidWebUi', 'guid'],
+  ['guidWebUi', 'webUi'],
+  ['themeCustomEditor', 'appearance'],
+  ['themeMarketplace', 'appearance'],
+  ['themePresets', 'appearance'],
+];
 
 function requireExactKeys(value, keys, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -22,6 +62,55 @@ function requireExactKeys(value, keys, label) {
   const expected = keys.toSorted();
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(`${label} has unexpected or missing fields`);
+  }
+}
+
+function requireEnum(value, allowed, label) {
+  if (typeof value !== 'string' || !allowed.includes(value)) {
+    throw new Error(`${label} must be one of ${allowed.join(', ')}`);
+  }
+}
+
+function validateProductExperiencePolicy(policy) {
+  requireExactKeys(policy, ['schemaVersion', 'features', 'resources', 'behaviorDefaults'], 'Product experience policy');
+  if (policy.schemaVersion !== 1) throw new Error('Unsupported product experience policy schema');
+
+  requireExactKeys(policy.features, PRODUCT_FEATURE_IDS, 'Product experience features');
+  for (const featureId of PRODUCT_FEATURE_IDS) {
+    requireEnum(policy.features[featureId], ['enabled', 'disabled'], `Product feature ${featureId}`);
+  }
+  for (const [child, parent] of PRODUCT_FEATURE_DEPENDENCIES) {
+    if (policy.features[child] === 'enabled' && policy.features[parent] !== 'enabled') {
+      throw new Error(`Product feature ${child} requires enabled parent ${parent}`);
+    }
+  }
+
+  requireExactKeys(policy.resources, PRODUCT_RESOURCE_KINDS, 'Product experience resources');
+  for (const kind of PRODUCT_RESOURCE_KINDS) {
+    const access = policy.resources[kind];
+    requireExactKeys(access, PRODUCT_RESOURCE_ORIGINS, `Product resource ${kind}`);
+    for (const origin of PRODUCT_RESOURCE_ORIGINS) {
+      requireEnum(access[origin], ['hidden', 'use', 'manage'], `Product resource ${kind}.${origin}`);
+    }
+  }
+
+  requireExactKeys(
+    policy.behaviorDefaults,
+    ['scheduledTaskExecutor', 'autoInjectedSkillExclusions'],
+    'Product experience behavior defaults'
+  );
+  requireEnum(
+    policy.behaviorDefaults.scheduledTaskExecutor,
+    ['assistant', 'assistant-or-team'],
+    'Product scheduled task executor'
+  );
+  const exclusions = policy.behaviorDefaults.autoInjectedSkillExclusions;
+  if (
+    !Array.isArray(exclusions) ||
+    exclusions.some((item) => typeof item !== 'string' || item.trim() === '') ||
+    new Set(exclusions).size !== exclusions.length
+  ) {
+    throw new Error('Product auto-injected skill exclusions must contain unique non-empty strings');
   }
 }
 
@@ -64,6 +153,7 @@ function readProductConfig(projectRoot) {
       'schemaVersion',
       'runtimeIdentity',
       'defaults',
+      'experience',
       'locale',
       'themes',
       'runtimeDependencies',
@@ -77,7 +167,7 @@ function readProductConfig(projectRoot) {
     ],
     'Ki-Buddy product configuration'
   );
-  if (config.schemaVersion !== 2) throw new Error('Unsupported Ki-Buddy product configuration schema');
+  if (config.schemaVersion !== 3) throw new Error('Unsupported Ki-Buddy product configuration schema');
   if (typeof config.runtimeIdentity !== 'string' || config.runtimeIdentity.trim() === '') {
     throw new Error('Ki-Buddy runtime identity must be a non-empty string');
   }
@@ -94,6 +184,7 @@ function readProductConfig(projectRoot) {
   if (typeof config.defaults.language !== 'string' || config.defaults.language.trim() === '') {
     throw new Error('Ki-Buddy default language must be a non-empty string');
   }
+  validateProductExperiencePolicy(config.experience);
   requireExactKeys(config.locale, ['namespace'], 'Ki-Buddy locale');
   if (typeof config.locale.namespace !== 'string' || config.locale.namespace.trim() === '') {
     throw new Error('Ki-Buddy locale namespace must be a non-empty string');

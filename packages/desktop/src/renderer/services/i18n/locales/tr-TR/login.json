@@ -16,6 +16,9 @@
   "footerPrimary": "Komut satırı AI'nızı dönüştürün",
   "footerSecondary": "Modern ve Verimli",
   "kiBuddy": {
+    "productExperience": {
+      "invalidPolicyDescription": "Ki-Buddy ürün deneyimi ilkesi eksik veya geçersiz. Bu sürümü resmi bir paketten yeniden yükleyin."
+    },
     "pageTitle": "{{productName}} - Agents oturumu aç",
     "brand": "Ki-Buddy",
     "subtitle": "Mevcut Agents hesabınızla oturum açın",

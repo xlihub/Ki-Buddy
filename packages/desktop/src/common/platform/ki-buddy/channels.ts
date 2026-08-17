@@ -1,4 +1,5 @@
 export const KI_BUDDY_CORE_TRANSPORT_CHANNEL = 'ki-buddy:core-transport:get-csrf-token';
+export const KI_BUDDY_PRODUCT_BOOTSTRAP_CHANNEL = 'ki-buddy:product-bootstrap:get';
 
 const KI_BUDDY_CORE_SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 

@@ -52,7 +52,11 @@ import type { TFunction } from 'i18next';
 // Context providers
 import { AuthProvider } from './hooks/context/AuthContext';
 import { installKiBuddyRendererCoreTransport, KiBuddyAuthProvider } from './pages/ki-buddy/Auth';
-import { getKiBuddyProductRuntime, getKiBuddyRendererRuntime } from './services/runtime/kiBuddyRuntime';
+import {
+  getKiBuddyProductBootstrapError,
+  getKiBuddyProductRuntime,
+  getKiBuddyRendererRuntime,
+} from './services/runtime/kiBuddyRuntime';
 import { initializeRendererBrand, installProductAssistantCatalogAdapter } from './services/runtime/productBrandRuntime';
 import { FeedbackProvider } from './hooks/context/FeedbackContext';
 import { ThemeProvider } from './hooks/context/ThemeContext';
@@ -82,12 +86,15 @@ import './styles/markdown.css';
 import { configService } from '@/common/config/configService';
 const kiBuddyRuntime = getKiBuddyRendererRuntime();
 const kiBuddyProductRuntime = getKiBuddyProductRuntime();
-if (kiBuddyRuntime) installKiBuddyRendererCoreTransport();
-installProductAssistantCatalogAdapter();
-initializeRendererBrand();
-configService.initialize().catch((err) => {
-  console.error('Failed to initialize config:', err);
-});
+const kiBuddyProductBootstrapError = getKiBuddyProductBootstrapError();
+if (!kiBuddyProductBootstrapError) {
+  if (kiBuddyRuntime) installKiBuddyRendererCoreTransport();
+  installProductAssistantCatalogAdapter();
+  initializeRendererBrand();
+  configService.initialize().catch((err) => {
+    console.error('Failed to initialize config:', err);
+  });
+}
 
 // i18n
 import './services/i18n';
@@ -100,6 +107,7 @@ import { bootstrapRendererConfig } from '@renderer/services/bootstrapRenderer';
 // Components and utilities
 import BackendStartingView from './components/layout/BackendStartingView';
 import BackendStartupGate from './components/layout/BackendStartupGate';
+import KiBuddyProductIntegrityGate from './pages/ki-buddy/KiBuddyProductIntegrityGate';
 import GpuAutoDisableNotice from './components/layout/GpuAutoDisableNotice';
 import Layout from './components/layout/Layout';
 import Router from './components/layout/Router';
@@ -457,25 +465,31 @@ const BackendStartupFailureDialog: React.FC<{ failure: BackendStartupFailureInfo
   );
 };
 
-void registerPwa();
+if (!kiBuddyProductBootstrapError) void registerPwa();
 
 const root = createRoot(document.getElementById('root')!);
 root.render(
-  <BackendStartupGate
-    renderStarting={() => (
-      <Config>
-        <BackendStartingView />
-      </Config>
-    )}
-    renderFailure={(failure) => (
-      <Config>
-        <BackendStartupFailureDialog failure={failure} />
-      </Config>
-    )}
-    renderApp={() => (
-      <AppProviders>
-        <App />
-      </AppProviders>
-    )}
-  />
+  kiBuddyProductBootstrapError ? (
+    <Config>
+      <KiBuddyProductIntegrityGate failure={kiBuddyProductBootstrapError} />
+    </Config>
+  ) : (
+    <BackendStartupGate
+      renderStarting={() => (
+        <Config>
+          <BackendStartingView />
+        </Config>
+      )}
+      renderFailure={(failure) => (
+        <Config>
+          <BackendStartupFailureDialog failure={failure} />
+        </Config>
+      )}
+      renderApp={() => (
+        <AppProviders>
+          <App />
+        </AppProviders>
+      )}
+    />
+  )
 );

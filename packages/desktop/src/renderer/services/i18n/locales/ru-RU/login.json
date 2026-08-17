@@ -16,6 +16,9 @@
   "footerPrimary": "Преобразуйте свой ИИ командной строки",
   "footerSecondary": "Современно и эффективно",
   "kiBuddy": {
+    "productExperience": {
+      "invalidPolicyDescription": "Политика продукта Ki-Buddy отсутствует или недействительна. Переустановите эту версию из официального пакета."
+    },
     "pageTitle": "{{productName}} — Вход в Agents",
     "brand": "Ki-Buddy",
     "subtitle": "Войдите с существующей учётной записью Agents",

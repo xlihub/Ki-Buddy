@@ -115,6 +115,16 @@ describe('showNotification', () => {
     expect(FakeElectronNotification.instances).toHaveLength(0);
   });
 
+  it('does not use the AionUi notification path when product configuration is invalid', async () => {
+    configureNotificationBrandIcon(null);
+    setNotificationMainWindow(makeWindow(false) as never);
+
+    await showNotification({ title: 'Configuration error', body: 'invalid product configuration' });
+
+    expect(FakeElectronNotification.instances).toHaveLength(0);
+    expect(platformSend).not.toHaveBeenCalled();
+  });
+
   it('focuses the window and emits notification.clicked on click', async () => {
     const win = makeWindow(false);
     setNotificationMainWindow(win as never);

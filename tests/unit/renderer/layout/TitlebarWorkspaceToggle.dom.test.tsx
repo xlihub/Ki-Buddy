@@ -1,18 +1,22 @@
 import { act, render, screen } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 const platform = vi.hoisted(() => ({ desktop: true, mac: false }));
+const route = vi.hoisted(() => ({ pathname: '/conversation/test' }));
+const layout = vi.hoisted(() => ({ mobile: false }));
+const teamGet = vi.hoisted(() => vi.fn().mockResolvedValue({ name: 'Team One' }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 vi.mock('react-router-dom', () => ({
-  useLocation: () => ({ pathname: '/conversation/test', search: '', hash: '' }),
+  useLocation: () => ({ pathname: route.pathname, search: '', hash: '' }),
   useNavigate: () => vi.fn(),
 }));
 vi.mock('@/common', () => ({
-  ipcBridge: { conversation: { get: { invoke: vi.fn() } } },
+  ipcBridge: { conversation: { get: { invoke: vi.fn() } }, team: { get: { invoke: teamGet } } },
 }));
 vi.mock('@/common/config/constants', () => ({ TEAM_MODE_ENABLED: false }));
 vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover', () => ({ default: () => null }));
@@ -21,7 +25,7 @@ vi.mock('@/renderer/components/layout/WindowControls', () => ({
   default: () => <div data-testid='window-controls' />,
 }));
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
-  useLayoutContext: () => ({ isMobile: false }),
+  useLayoutContext: () => ({ isMobile: layout.mobile }),
 }));
 vi.mock('@/renderer/hooks/context/NavigationHistoryContext', () => ({
   useNavigationHistory: () => null,
@@ -44,6 +48,11 @@ describe('Titlebar workspace toggle', () => {
   beforeEach(() => {
     platform.desktop = true;
     platform.mac = false;
+    route.pathname = '/conversation/test';
+    layout.mobile = false;
+    teamGet.mockClear();
+    window.__kiBuddyProductBootstrapError = null;
+    window.__kiBuddyProductPresentation = null;
   });
 
   it('places the Windows workspace toggle directly after Bug Report', () => {
@@ -86,5 +95,24 @@ describe('Titlebar workspace toggle', () => {
 
     expect(screen.queryByRole('button', { name: 'common.expandMore' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'common.collapse' })).not.toBeInTheDocument();
+  });
+
+  it('does not read Team state from a legacy Team address in Ki-Buddy', () => {
+    route.pathname = '/team/legacy-team';
+    layout.mobile = true;
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+
+    render(<Titlebar workspaceAvailable={false} />);
+
+    expect(teamGet).not.toHaveBeenCalled();
+  });
+
+  it('keeps the AionUi mobile Team title behavior', () => {
+    route.pathname = '/team/team-1';
+    layout.mobile = true;
+
+    render(<Titlebar workspaceAvailable={false} />);
+
+    expect(teamGet).toHaveBeenCalledWith({ id: 'team-1' });
   });
 });

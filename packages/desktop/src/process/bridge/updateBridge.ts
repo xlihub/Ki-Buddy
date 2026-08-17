@@ -76,12 +76,19 @@ const AION_UI_UPDATE_BRIDGE_CONFIGURATION: UpdateBridgeConfiguration = {
   userAgent: 'AionUi',
 };
 
-let updateBridgeConfiguration = AION_UI_UPDATE_BRIDGE_CONFIGURATION;
+let updateBridgeConfiguration: UpdateBridgeConfiguration | null = AION_UI_UPDATE_BRIDGE_CONFIGURATION;
 
-/** Selects the manual update source while preserving AionUi when no product configuration is provided. */
-export function configureUpdateBridge(configuration?: UpdateBridgeConfiguration): void {
-  updateBridgeConfiguration = configuration ?? AION_UI_UPDATE_BRIDGE_CONFIGURATION;
+/** Selects the manual update source, or disables updates while product configuration is invalid. */
+export function configureUpdateBridge(configuration?: UpdateBridgeConfiguration | null): void {
+  updateBridgeConfiguration = configuration === undefined ? AION_UI_UPDATE_BRIDGE_CONFIGURATION : configuration;
 }
+
+const getUpdateBridgeConfiguration = (): UpdateBridgeConfiguration => {
+  if (!updateBridgeConfiguration) {
+    throw new Error('Update service is unavailable because the product configuration is invalid.');
+  }
+  return updateBridgeConfiguration;
+};
 
 const ALLOWED_ASSET_EXTS = new Set(['.exe', '.msi', '.dmg', '.zip', '.deb', '.rpm']);
 const CDN_HOST = 'static.aionui.com';
@@ -102,7 +109,7 @@ const isAllowedAssetName = (name: string) => {
 
 const normalizeTagToSemver = (tag: string): string | null => {
   const trimmed = tag.trim();
-  const tagPrefix = updateBridgeConfiguration.tagPrefix;
+  const tagPrefix = getUpdateBridgeConfiguration().tagPrefix;
   if (!trimmed.startsWith(tagPrefix)) return null;
   const withoutV = trimmed.slice(tagPrefix.length);
   // Ensure it looks like a semver prefix at least.
@@ -261,7 +268,8 @@ export const parseCdnManifest = (raw: string): CdnLatestManifest | null => {
 export const mapCdnManifestToRelease = (manifest: CdnLatestManifest, repo: string): UpdateReleaseInfo | null => {
   const version = semver.valid(manifest.version);
   if (!version) return null;
-  const tagPrefix = repo === updateBridgeConfiguration.repository ? updateBridgeConfiguration.tagPrefix : 'v';
+  const configuration = getUpdateBridgeConfiguration();
+  const tagPrefix = repo === configuration.repository ? configuration.tagPrefix : 'v';
   const assets: GitHubReleaseAsset[] = [];
   for (const file of manifest.files) {
     const name = path.basename(file.url.trim());
@@ -324,10 +332,11 @@ const selectLatestGitHubRelease = (
 };
 
 const resolveRepo = (requestRepo?: string): string => {
-  if (!updateBridgeConfiguration.allowRepositoryOverride) return updateBridgeConfiguration.repository;
+  const configuration = getUpdateBridgeConfiguration();
+  if (!configuration.allowRepositoryOverride) return configuration.repository;
   const envRepo = process.env.AIONUI_GITHUB_REPO?.trim();
-  const repo = (requestRepo || envRepo || updateBridgeConfiguration.repository).trim();
-  return repo || updateBridgeConfiguration.repository;
+  const repo = (requestRepo || envRepo || configuration.repository).trim();
+  return repo || configuration.repository;
 };
 
 const assertAllowedUrl = async (rawUrl: string) => {
@@ -356,7 +365,7 @@ const fetchWithAllowlistedRedirects = async (rawUrl: string, signal: AbortSignal
       signal,
       redirect: 'manual',
       headers: {
-        'User-Agent': updateBridgeConfiguration.userAgent,
+        'User-Agent': getUpdateBridgeConfiguration().userAgent,
       },
     });
 
@@ -386,7 +395,7 @@ const fetchGitHubReleases = async (repo: string, timeoutMs = 30000): Promise<Git
     const res = await fetch(url, {
       headers: {
         Accept: 'application/vnd.github+json',
-        'User-Agent': updateBridgeConfiguration.userAgent,
+        'User-Agent': getUpdateBridgeConfiguration().userAgent,
       },
       signal: controller.signal,
     });
@@ -419,7 +428,7 @@ const fetchCdnManifest = async (): Promise<CdnLatestManifest> => {
   const timeoutId = setTimeout(() => controller.abort(), CDN_MANIFEST_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
-      headers: { 'User-Agent': updateBridgeConfiguration.userAgent },
+      headers: { 'User-Agent': getUpdateBridgeConfiguration().userAgent },
       signal: controller.signal,
     });
     if (!res.ok) throw new Error((await getI18n()).t('update.errors.cdnManifestFailed', { status: res.status }));
@@ -467,7 +476,7 @@ const sanitizeFileName = (name: string): string => {
   // Keep only base name and trim weird whitespace.
   const base = path.basename(name).trim();
   // Avoid empty names.
-  return base || `${updateBridgeConfiguration.userAgent}-update-${Date.now()}`;
+  return base || `${getUpdateBridgeConfiguration().userAgent}-update-${Date.now()}`;
 };
 
 const ensureUniquePath = (target: string): string => {
@@ -726,7 +735,8 @@ export function initUpdateBridge(): void {
         // 注入为带 prerelease 的 semver（如 `1.7.2-dev.1234+sha.abcdef0`），以保证比较顺序正确。
 
         let latest: UpdateReleaseInfo | null;
-        if (updateBridgeConfiguration.source === 'github' && repo === updateBridgeConfiguration.repository) {
+        const configuration = getUpdateBridgeConfiguration();
+        if (configuration.source === 'github' && repo === configuration.repository) {
           const releases = await fetchGitHubReleases(repo);
           latest = selectLatestGitHubRelease(releases, Boolean(params?.includePrerelease));
         } else {

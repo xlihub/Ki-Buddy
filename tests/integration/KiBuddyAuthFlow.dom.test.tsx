@@ -56,6 +56,7 @@ vi.mock('@/renderer/hooks/system/useExtI18n', () => ({
 
 vi.mock('@renderer/pages/guid', () => ({ default: () => <div>guid-page</div> }));
 vi.mock('@renderer/pages/conversation', () => ({ default: () => <div>conversation-page</div> }));
+vi.mock('@renderer/pages/team', () => ({ default: () => <div>team-page</div> }));
 vi.mock('@/renderer/components/settings/SettingsModal/contents/AboutModalContent', () => ({
   default: () => <div>about-content</div>,
 }));
@@ -448,5 +449,34 @@ describe('Ki-Buddy Agents authentication gate', () => {
     expect(await screen.findByText('Agents User')).toBeInTheDocument();
     expect(screen.getByText('agents-user-42')).toBeInTheDocument();
     expect(screen.getByText('login.kiBuddy.onboarding.replayTitle')).toBeInTheDocument();
+  });
+
+  it('replaces an authenticated legacy Team address with Guid without mounting Team', async () => {
+    getSessionMock.mockResolvedValue({ status: 'authenticated', user: authenticatedUser });
+    window.location.hash = '#/team/legacy-team';
+
+    render(
+      <AuthProvider>
+        <PanelRoute layout={<TestLayout />} />
+      </AuthProvider>
+    );
+
+    expect(await screen.findByText('guid-page')).toBeInTheDocument();
+    expect(screen.queryByText('team-page')).not.toBeInTheDocument();
+    await waitFor(() => expect(window.location.hash).toBe('#/guid'));
+  });
+
+  it('replaces an unauthenticated legacy Team address with login', async () => {
+    window.location.hash = '#/team/legacy-team';
+
+    render(
+      <AuthProvider>
+        <PanelRoute layout={<TestLayout />} />
+      </AuthProvider>
+    );
+
+    expect(await screen.findByText('login.kiBuddy.agentsDeployment')).toBeInTheDocument();
+    expect(screen.queryByText('team-page')).not.toBeInTheDocument();
+    await waitFor(() => expect(window.location.hash).toBe('#/login'));
   });
 });

@@ -16,6 +16,9 @@
   "footerPrimary": "Transform your command-line AI",
   "footerSecondary": "Modern & Efficient",
   "kiBuddy": {
+    "productExperience": {
+      "invalidPolicyDescription": "Ki-Buddy's product experience policy is missing or invalid. Reinstall this version from an official package."
+    },
     "pageTitle": "{{productName}} - Sign in to Agents",
     "brand": "Ki-Buddy",
     "subtitle": "Sign in with your existing Agents account",

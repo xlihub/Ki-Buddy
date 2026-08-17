@@ -9,15 +9,34 @@ const rendererHtml = readFileSync(
   'utf8'
 );
 
-function renderBootstrap(options?: { capability?: typeof KI_BUDDY_PRODUCT_CAPABILITY; appearance?: 'light' | 'dark' }) {
+function renderBootstrap(options?: {
+  appearance?: 'light' | 'dark';
+  bootstrapError?: string;
+  capability?: typeof KI_BUDDY_PRODUCT_CAPABILITY;
+}) {
   return new JSDOM(rendererHtml, {
     runScripts: 'dangerously',
     url: 'https://desktop.local',
     beforeParse(window) {
       if (options?.appearance) window.localStorage.setItem('__aionui_theme', options.appearance);
-      Object.defineProperty(window, '__getKiBuddyProductPresentation', {
+      Object.defineProperty(window, '__getKiBuddyProductBootstrap', {
         configurable: true,
-        value: () => options?.capability ?? null,
+        value: () =>
+          options?.bootstrapError
+            ? {
+                status: 'invalid',
+                productIdentity: 'ki-buddy',
+                capability: null,
+                error: options.bootstrapError,
+              }
+            : options?.capability
+              ? {
+                  status: 'ready',
+                  productIdentity: 'ki-buddy',
+                  capability: options.capability,
+                  error: null,
+                }
+              : { status: 'absent', productIdentity: null, capability: null, error: null },
       });
     },
   });
@@ -53,6 +72,7 @@ describe('renderer product bootstrap', () => {
       logo: 'configured-logo',
       mascot: 'configured-mascot',
     });
+    expect(dom.window.__kiBuddyProductPresentation?.experience.features.team).toBe('disabled');
   });
 
   it('keeps the AionUi document unchanged when the product capability is absent', () => {
@@ -74,5 +94,13 @@ describe('renderer product bootstrap', () => {
     expect(dom.window.__kiBuddyProductBootstrapError).toContain('Invalid Ki-Buddy product presentation capability');
     expect(dom.window.document.documentElement).not.toHaveAttribute('data-product');
     expect(dom.window.document.title).toBe('AionUi');
+  });
+
+  it('preserves a preload configuration failure before reading a product capability', () => {
+    const dom = renderBootstrap({ bootstrapError: 'Ki-Buddy product configuration is invalid: missing team' });
+
+    expect(dom.window.__kiBuddyProductPresentation).toBeNull();
+    expect(dom.window.__kiBuddyProductBootstrapError).toContain('missing team');
+    expect(dom.window.document.documentElement).not.toHaveAttribute('data-product');
   });
 });

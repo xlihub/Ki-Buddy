@@ -16,6 +16,9 @@
   "footerPrimary": "命令行 AI 的现代化体验",
   "footerSecondary": "高效且优雅",
   "kiBuddy": {
+    "productExperience": {
+      "invalidPolicyDescription": "Ki-Buddy 的产品体验策略缺失或无效。请使用官方安装包重新安装当前版本。"
+    },
     "pageTitle": "{{productName}} - 登录 Agents",
     "brand": "Ki-Buddy",
     "subtitle": "使用现有 Agents 平台账户登录",

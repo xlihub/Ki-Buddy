@@ -1,6 +1,6 @@
-import { KI_BUDDY_PRODUCT_CONFIG } from './productConfig';
+import { KI_BUDDY_PRODUCT_RUNTIME } from './productConfig';
 
-export const KI_BUDDY_PRODUCT_RUNTIME = KI_BUDDY_PRODUCT_CONFIG.runtimeIdentity;
+export { KI_BUDDY_PRODUCT_RUNTIME } from './productConfig';
 
 /** Returns whether packaged product metadata explicitly selects the Ki-Buddy runtime. */
 export function resolveKiBuddyRuntimeIdentity(metadata: unknown): boolean {

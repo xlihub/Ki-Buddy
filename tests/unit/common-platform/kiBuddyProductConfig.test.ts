@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { KI_BUDDY_DEFAULT_AGENTS_BASE_URL, parseKiBuddyProductConfig } from '@/common/platform/ki-buddy';
+import {
+  KI_BUDDY_DEFAULT_AGENTS_BASE_URL,
+  loadKiBuddyProductConfig,
+  parseKiBuddyProductConfig,
+} from '@/common/platform/ki-buddy';
 
 const validConfig = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   runtimeIdentity: 'ki-buddy',
   defaults: { agentsBaseUrl: 'https://agents.example.com', language: 'zh-CN' },
   electronBuilder: {
@@ -39,6 +43,77 @@ const validConfig = {
     packaged: { icon: 'ki-buddy/app.png' },
     renderer: { logo: 'ki-buddy-app', mascot: 'ki-buddy-mascot' },
   },
+  experience: {
+    schemaVersion: 1,
+    features: {
+      account: 'enabled',
+      agents: 'enabled',
+      appearance: 'enabled',
+      assistants: 'enabled',
+      channels: 'disabled',
+      componentShowcase: 'disabled',
+      conversation: 'enabled',
+      desktopPet: 'disabled',
+      extensionMarketplace: 'disabled',
+      extensionRuntime: 'disabled',
+      extensionSettings: 'disabled',
+      guid: 'enabled',
+      guidFeedback: 'disabled',
+      guidGithubStar: 'disabled',
+      guidWebUi: 'disabled',
+      models: 'enabled',
+      scheduledTasks: 'enabled',
+      skills: 'enabled',
+      system: 'enabled',
+      team: 'disabled',
+      themeCustomEditor: 'disabled',
+      themeMarketplace: 'disabled',
+      themePresets: 'disabled',
+      tools: 'enabled',
+      webUi: 'disabled',
+    },
+    resources: {
+      agent: {
+        productBuiltin: 'use',
+        upstreamBuiltin: 'hidden',
+        custom: 'manage',
+        extension: 'hidden',
+        unclassified: 'hidden',
+      },
+      assistant: {
+        productBuiltin: 'use',
+        upstreamBuiltin: 'hidden',
+        custom: 'manage',
+        extension: 'hidden',
+        unclassified: 'hidden',
+      },
+      model: {
+        productBuiltin: 'manage',
+        upstreamBuiltin: 'manage',
+        custom: 'manage',
+        extension: 'hidden',
+        unclassified: 'hidden',
+      },
+      skill: {
+        productBuiltin: 'use',
+        upstreamBuiltin: 'hidden',
+        custom: 'manage',
+        extension: 'hidden',
+        unclassified: 'hidden',
+      },
+      mcp: {
+        productBuiltin: 'use',
+        upstreamBuiltin: 'hidden',
+        custom: 'manage',
+        extension: 'hidden',
+        unclassified: 'hidden',
+      },
+    },
+    behaviorDefaults: {
+      scheduledTaskExecutor: 'assistant',
+      autoInjectedSkillExclusions: ['aionui-config'],
+    },
+  },
 } as const;
 
 describe('Ki-Buddy product configuration', () => {
@@ -72,7 +147,7 @@ describe('Ki-Buddy product configuration', () => {
 
   it('exposes the validated brand and assets', () => {
     expect(parseKiBuddyProductConfig(validConfig)).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       brand: {
         productName: 'Ki-Buddy',
         cliName: 'Ki CLI',
@@ -85,11 +160,47 @@ describe('Ki-Buddy product configuration', () => {
       electronBuilder: { appId: 'com.xlihub.ki-buddy', protocolScheme: 'ki-buddy' },
       locale: { namespace: 'kiBuddy' },
       themes: { light: 'ki-buddy-light', dark: 'ki-buddy-dark' },
+      experience: {
+        schemaVersion: 1,
+        features: { team: 'disabled', scheduledTasks: 'enabled' },
+      },
     });
+  });
+
+  it('deeply freezes the validated product configuration', () => {
+    const config = parseKiBuddyProductConfig(validConfig);
+
+    expect(Object.isFrozen(config)).toBe(true);
+    expect(Object.isFrozen(config.brand)).toBe(true);
+    expect(Object.isFrozen(config.brand.links)).toBe(true);
+    expect(Object.isFrozen(config.assets.renderer)).toBe(true);
+    expect(Object.isFrozen(config.experience.resources.assistant)).toBe(true);
   });
 
   it('rejects unknown runtime product fields', () => {
     expect(() => parseKiBuddyProductConfig({ ...validConfig, unexpected: true })).toThrow('unexpected unexpected');
+  });
+
+  it('rejects schema v2 instead of migrating the product policy at runtime', () => {
+    expect(() => parseKiBuddyProductConfig({ ...validConfig, schemaVersion: 2 })).toThrow('schema');
+  });
+
+  it('rejects a runtime identity that conflicts with the Ki-Buddy package marker', () => {
+    expect(() => parseKiBuddyProductConfig({ ...validConfig, runtimeIdentity: 'other-product' })).toThrow(
+      'runtime identity'
+    );
+  });
+
+  it('captures packaged policy errors so startup can show installation integrity', () => {
+    const result = loadKiBuddyProductConfig({
+      ...validConfig,
+      experience: { ...validConfig.experience, features: { team: 'disabled' } },
+    });
+
+    expect(result).toEqual({
+      config: null,
+      error: expect.stringContaining('missing'),
+    });
   });
 
   it('rejects missing theme resources at startup', () => {

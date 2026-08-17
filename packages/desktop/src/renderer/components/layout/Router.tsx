@@ -2,8 +2,7 @@ import React, { Suspense } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
-import { TEAM_MODE_ENABLED } from '@/common/config/constants';
-import { getKiBuddyRouteComponents } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { getKiBuddyRouteComponents, isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
@@ -57,6 +56,7 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
 const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
   const kiBuddyRoutes = getKiBuddyRouteComponents();
+  const teamEnabled = isProductFeatureEnabled('team');
   const LoginPage = kiBuddyRoutes?.LoginPage ?? AionUiLoginPage;
 
   const routes = (
@@ -78,10 +78,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route index element={<Navigate to='/guid' replace />} />
           <Route path='/guid' element={withRouteFallback(Guid)} />
           <Route path='/conversation/:id' element={withRouteFallback(Conversation)} />
-          <Route
-            path='/team/:id'
-            element={TEAM_MODE_ENABLED ? withRouteFallback(TeamIndex) : <Navigate to='/guid' replace />}
-          />
+          {teamEnabled && <Route path='/team/:id' element={withRouteFallback(TeamIndex)} />}
           <Route path='/settings/model' element={withRouteFallback(ModeSettings)} />
           <Route path='/assistants' element={withRouteFallback(AssistantSettings)} />
           {/* Assistants moved out of Settings to a top-level entry; keep a redirect

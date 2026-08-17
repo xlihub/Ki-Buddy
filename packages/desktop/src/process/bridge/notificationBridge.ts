@@ -21,10 +21,10 @@ import fs from 'fs';
 
 // Main window reference, used to gate on focus and to focus + navigate on click.
 let mainWindowRef: BrowserWindow | null = null;
-let notificationBrandIconPath = 'app.png';
+let notificationBrandIconPath: string | null = 'app.png';
 
-/** Selects the packaged icon used by system notifications for the active product. */
-export function configureNotificationBrandIcon(iconPath: string): void {
+/** Selects the packaged icon used by system notifications, or disables notifications on integrity failure. */
+export function configureNotificationBrandIcon(iconPath: string | null): void {
   notificationBrandIconPath = iconPath;
 }
 
@@ -36,6 +36,7 @@ export const setNotificationMainWindow = (win: BrowserWindow): void => {
  * Get app icon path for notifications
  */
 const getNotificationIcon = (): string | undefined => {
+  if (!notificationBrandIconPath) return undefined;
   try {
     const resourcesPath = getPlatformServices().paths.isPackaged()
       ? process.resourcesPath
@@ -70,6 +71,8 @@ export async function showNotification({
   body: string;
   conversation_id?: string;
 }): Promise<void> {
+  if (!notificationBrandIconPath) return;
+
   // Check if notification is enabled
   const notificationEnabled = await ProcessConfig.get('system.notificationEnabled');
   if (notificationEnabled === false) {

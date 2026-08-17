@@ -11,6 +11,7 @@ import { SiderToolbar, SiderSearchEntry, SiderScheduledEntry, SiderAssistantEntr
 import SiderFooter, { shouldShowAionUiSiderLogout } from './SiderFooter';
 import TeamSiderSection from './TeamSiderSection';
 import siderStyles from './Sider.module.css';
+import { isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
 
 const WorkspaceGroupedHistory = React.lazy(() => import('@renderer/pages/conversation/GroupedHistory'));
 const SettingsSider = React.lazy(() => import('@renderer/pages/settings/components/SettingsSider'));
@@ -37,6 +38,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     authenticated: status === 'authenticated',
     electronDesktop: typeof window !== 'undefined' && Boolean(window.electronAPI),
   });
+  const teamEnabled = isProductFeatureEnabled('team');
 
   useEffect(() => {
     if (!pathname.startsWith('/settings')) {
@@ -232,12 +234,14 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                   {...workspaceHistoryProps}
                   afterPinnedContent={
                     <>
-                      <TeamSiderSection
-                        collapsed={collapsed}
-                        pathname={pathname}
-                        siderTooltipProps={siderTooltipProps}
-                        onSessionClick={onSessionClick}
-                      />
+                      {teamEnabled && (
+                        <TeamSiderSection
+                          collapsed={collapsed}
+                          pathname={pathname}
+                          siderTooltipProps={siderTooltipProps}
+                          onSessionClick={onSessionClick}
+                        />
+                      )}
                     </>
                   }
                 />

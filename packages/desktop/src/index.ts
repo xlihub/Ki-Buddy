@@ -19,7 +19,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initMainAdapterWithWindow } from './common/adapter/main';
 import { ipcBridge } from './common';
-import { initializeProcess } from './process';
 import { startBackendOrExit } from './process/startup/backendStartup';
 import { assertStartupArchitectureCompatible } from './process/startup/architectureCompatibility';
 import { classifyBackendStartupFailure } from './process/startup/backendStartupFailure';
@@ -30,7 +29,6 @@ import type { BackendStartupFailureInfo } from './common/types/platform/electron
 import { registerWindowMaximizeListeners } from '@process/bridge';
 import { BackendLifecycleManager } from '@aionui/web-host';
 import { resolveBinaryPath } from '@process/backend';
-import './process/bridge/feedbackBridge';
 import { configureNotificationBrandIcon } from '@process/bridge/notificationBridge';
 import { configureUpdateBridge } from '@process/bridge/updateBridge';
 import { wasLaunchedAtLogin } from '@process/bridge/applicationBridge';
@@ -77,7 +75,17 @@ import {
   setIsQuitting,
 } from './process/utils/tray';
 import { readCloseToTraySetting } from './process/utils/closeToTraySetting';
-import { createKiBuddyRuntime, resolveKiBuddyProtocolScheme, shouldEnsureDefaultCoreUser } from '@process/ki-buddy';
+import { KI_BUDDY_PRODUCT_BOOTSTRAP_CHANNEL } from '@/common/platform/ki-buddy';
+import {
+  createKiBuddyProductBootstrap,
+  createKiBuddyProductIntegrityWindow,
+  createKiBuddyRuntime,
+  readKiBuddyRuntimeIdentity,
+  resolveKiBuddyCoreDataPath,
+  resolveKiBuddyProtocolScheme,
+  shouldEnsureDefaultCoreUser,
+  shouldStartProductBusinessLifecycle,
+} from '@process/ki-buddy';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
 
@@ -87,9 +95,11 @@ import electronSquirrelStartup from 'electron-squirrel-startup';
 // to the first instance via second-instance event, then quits.
 const isE2ETestMode = process.env.AIONUI_E2E_TEST === '1';
 const skipSingleInstanceLock = isE2ETestMode || process.env.AIONUI_MULTI_INSTANCE === '1';
-const protocolScheme = configureDeepLinkProtocol(
-  resolveKiBuddyProtocolScheme(app.getAppPath()) ?? AION_UI_PROTOCOL_SCHEME
-);
+const packagedKiBuddyRuntime = readKiBuddyRuntimeIdentity(app.getAppPath());
+const selectedProtocolScheme = packagedKiBuddyRuntime
+  ? resolveKiBuddyProtocolScheme(app.getAppPath())
+  : AION_UI_PROTOCOL_SCHEME;
+const protocolScheme = selectedProtocolScheme ? configureDeepLinkProtocol(selectedProtocolScheme) : null;
 const deepLinkFromArgv = findDeepLinkUrl(process.argv);
 const gotTheLock = skipSingleInstanceLock ? true : app.requestSingleInstanceLock({ deepLinkUrl: deepLinkFromArgv });
 if (!gotTheLock) {
@@ -115,7 +125,7 @@ if (!gotTheLock) {
         mainWindow,
         createWindow: () => {
           console.log('[AionUi] second-instance received with no active main window, recreating main window');
-          createWindow();
+          createWindowForSelectedProduct();
         },
       });
     }
@@ -188,19 +198,24 @@ const isWebUIMode = hasSwitch('webui');
 const isRemoteMode = hasSwitch('remote');
 const isResetPasswordMode = hasCommand('--resetpass');
 const isVersionMode = hasCommand('--version') || hasCommand('-v');
-const kiBuddyRuntime = createKiBuddyRuntime({
+const kiBuddyRuntimeSelection = createKiBuddyRuntime({
   appPath: app.getAppPath(),
   resetPassword: isResetPasswordMode,
   webUi: isWebUIMode,
 });
-configureUpdateBridge(kiBuddyRuntime?.updateBridge);
+const kiBuddyRuntime = kiBuddyRuntimeSelection.runtime;
+const kiBuddyProductBootstrap = createKiBuddyProductBootstrap(kiBuddyRuntimeSelection);
+const kiBuddyProductInvalid = kiBuddyRuntimeSelection.status === 'invalid';
+const productBusinessLifecycleEnabled = shouldStartProductBusinessLifecycle(kiBuddyRuntimeSelection);
+configureUpdateBridge(kiBuddyProductInvalid ? null : kiBuddyRuntime?.updateBridge);
+configureNotificationBrandIcon(kiBuddyProductInvalid ? null : (kiBuddyRuntime?.brand.iconPath ?? 'app.png'));
 if (kiBuddyRuntime) {
   configureTrayBrand(kiBuddyRuntime.brand);
-  configureNotificationBrandIcon(kiBuddyRuntime.brand.iconPath);
 }
 const kiBuddyCoreAuthOptions = kiBuddyRuntime?.coreAuthOptions ?? null;
-const ensureDefaultCoreUser = shouldEnsureDefaultCoreUser(Boolean(kiBuddyRuntime));
-const resolveBackendDataPath = (dataPath: string): string => kiBuddyRuntime?.resolveDataPath(dataPath) ?? dataPath;
+const ensureDefaultCoreUser = shouldEnsureDefaultCoreUser(kiBuddyRuntimeSelection.status !== 'absent');
+const resolveBackendDataPath = (dataPath: string): string =>
+  kiBuddyRuntimeSelection.status !== 'absent' ? resolveKiBuddyCoreDataPath(dataPath) : dataPath;
 
 // Flag to distinguish intentional quit from unexpected exit in WebUI mode
 let isExplicitQuit = false;
@@ -233,85 +248,88 @@ let rendererInitialLanguage: string | null = null;
 let backendMigrationsScheduled = false;
 let ensureAdminUserPromise: Promise<void> | null = null;
 
-ipcMain.on('get-backend-port', (event) => {
-  event.returnValue = backendManager.port;
+ipcMain.on(KI_BUDDY_PRODUCT_BOOTSTRAP_CHANNEL, (event) => {
+  event.returnValue = kiBuddyProductBootstrap;
 });
 
-ipcMain.on('get-product-runtime-identity', (event) => {
-  event.returnValue = kiBuddyRuntime?.productIdentity ?? null;
-});
+if (productBusinessLifecycleEnabled) {
+  ipcMain.on('get-backend-port', (event) => {
+    event.returnValue = backendManager.port;
+  });
 
-ipcMain.on('get-initial-language', (event) => {
-  event.returnValue = rendererInitialLanguage;
-});
+  ipcMain.on('get-initial-language', (event) => {
+    event.returnValue = rendererInitialLanguage;
+  });
 
-if (kiBuddyRuntime) {
-  ipcMain.on(kiBuddyRuntime.coreTransportChannel, (event) => {
-    event.returnValue = kiBuddyRuntime.coreAuthOptions.coreCsrfToken;
+  if (kiBuddyRuntime) {
+    ipcMain.on(kiBuddyRuntime.coreTransportChannel, (event) => {
+      event.returnValue = kiBuddyRuntime.coreAuthOptions.coreCsrfToken;
+    });
+  }
+
+  ipcMain.on('get-backend-startup-failed', (event) => {
+    event.returnValue = backendStartupFailed;
+  });
+
+  ipcMain.on('get-backend-startup-failure', (event) => {
+    event.returnValue = backendStartupFailureInfo;
+  });
+
+  ipcMain.handle('backend:recover-corrupted-database', async () => {
+    const { recoverCorruptedDatabaseAfterUserConfirmation } =
+      await import('./process/startup/recoverCorruptedDatabase');
+
+    await recoverCorruptedDatabaseAfterUserConfirmation({
+      getFailure: () => backendStartupFailureInfo,
+      stopBackend: () => backendManager.stop(),
+      startBackendWithRecovery: async () => {
+        try {
+          const { getDataPath } = await import('./process/utils/utils');
+          const { getSystemDir } = await import('./process/utils/initStorage');
+          const sysDir = getSystemDir();
+          return await backendManager.start(
+            resolveBackendDataPath(getDataPath()),
+            sysDir.logDir,
+            {
+              cacheDir: sysDir.cacheDir,
+              workDir: sysDir.workDir,
+              logDir: sysDir.logDir,
+            },
+            {
+              allowPendingOnHealthTimeout: false,
+              ...kiBuddyCoreAuthOptions,
+              onHealthTimeout: async (error) => {
+                markBackendStartupFailed(error);
+                await captureBackendStartupFailure(error);
+              },
+              onPendingExit: async (error) => {
+                markBackendStartupFailed(error);
+                await captureBackendStartupFailure(error);
+              },
+              onReady: (backendPort) => {
+                markBackendReady(backendPort, 'backendManager.recoverCorruptedDatabase.lateReady');
+              },
+            },
+            undefined,
+            { recoverCorruptedDatabase: true }
+          );
+        } catch (error) {
+          markBackendStartupFailed(error);
+          await captureBackendStartupFailure(error);
+          throw error;
+        }
+      },
+      markReady: markBackendReady,
+      reloadMainWindow: () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.reload();
+        }
+      },
+      logInfo: console.info,
+      logWarn: console.warn,
+    });
   });
 }
-
-ipcMain.on('get-backend-startup-failed', (event) => {
-  event.returnValue = backendStartupFailed;
-});
-
-ipcMain.on('get-backend-startup-failure', (event) => {
-  event.returnValue = backendStartupFailureInfo;
-});
-
-ipcMain.handle('backend:recover-corrupted-database', async () => {
-  const { recoverCorruptedDatabaseAfterUserConfirmation } = await import('./process/startup/recoverCorruptedDatabase');
-
-  await recoverCorruptedDatabaseAfterUserConfirmation({
-    getFailure: () => backendStartupFailureInfo,
-    stopBackend: () => backendManager.stop(),
-    startBackendWithRecovery: async () => {
-      try {
-        const { getDataPath } = await import('./process/utils/utils');
-        const { getSystemDir } = await import('./process/utils/initStorage');
-        const sysDir = getSystemDir();
-        return await backendManager.start(
-          resolveBackendDataPath(getDataPath()),
-          sysDir.logDir,
-          {
-            cacheDir: sysDir.cacheDir,
-            workDir: sysDir.workDir,
-            logDir: sysDir.logDir,
-          },
-          {
-            allowPendingOnHealthTimeout: false,
-            ...kiBuddyCoreAuthOptions,
-            onHealthTimeout: async (error) => {
-              markBackendStartupFailed(error);
-              await captureBackendStartupFailure(error);
-            },
-            onPendingExit: async (error) => {
-              markBackendStartupFailed(error);
-              await captureBackendStartupFailure(error);
-            },
-            onReady: (backendPort) => {
-              markBackendReady(backendPort, 'backendManager.recoverCorruptedDatabase.lateReady');
-            },
-          },
-          undefined,
-          { recoverCorruptedDatabase: true }
-        );
-      } catch (error) {
-        markBackendStartupFailed(error);
-        await captureBackendStartupFailure(error);
-        throw error;
-      }
-    },
-    markReady: markBackendReady,
-    reloadMainWindow: () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.reload();
-      }
-    },
-    logInfo: console.info,
-    logWarn: console.warn,
-  });
-});
 
 // Push the latest backend startup state to the renderer so it can either show
 // the "starting" view, switch to the honest-failure view, or return to the App.
@@ -551,7 +569,7 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   initMainAdapterWithWindow(mainWindow);
   bindMainWindowReferences(mainWindow);
 
-  setupApplicationMenu();
+  if (!kiBuddyProductInvalid) setupApplicationMenu();
 
   setupZoomForWindow(mainWindow);
   registerWindowMaximizeListeners(mainWindow);
@@ -561,7 +579,10 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   // 初始化自动更新服务（通过环境变量禁用时跳过，例如 E2E / CI 场景）
   const isCiRuntime = process.env.CI === 'true' || process.env.CI === '1' || process.env.GITHUB_ACTIONS === 'true';
   const disableAutoUpdater =
-    process.env.AIONUI_DISABLE_AUTO_UPDATE === '1' || process.env.AIONUI_E2E_TEST === '1' || isCiRuntime;
+    kiBuddyProductInvalid ||
+    process.env.AIONUI_DISABLE_AUTO_UPDATE === '1' ||
+    process.env.AIONUI_E2E_TEST === '1' ||
+    isCiRuntime;
   if (!disableAutoUpdater) {
     Promise.all([import('@process/services/autoUpdaterService'), import('@process/bridge/updateBridge')])
       .then(([{ autoUpdaterService }, { createAutoUpdateStatusBroadcast }]) => {
@@ -664,10 +685,33 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   });
 };
 
+const createProductIntegrityWindow = (): void => {
+  mainWindow = createKiBuddyProductIntegrityWindow({
+    isPackaged: app.isPackaged,
+    preloadPath: path.join(__dirname, '../preload/index.js'),
+    rendererFile: path.join(__dirname, '../renderer/index.html'),
+    rendererUrl: process.env['ELECTRON_RENDERER_URL'],
+  });
+};
+
+const createWindowForSelectedProduct = (): void => {
+  if (productBusinessLifecycleEnabled) createWindow();
+  else createProductIntegrityWindow();
+};
+
 const handleAppReady = async (): Promise<void> => {
   const t0 = performance.now();
   const mark = (label: string) => console.log(`[AionUi:ready] ${label} +${Math.round(performance.now() - t0)}ms`);
   mark('start');
+
+  if (!productBusinessLifecycleEnabled) {
+    setCloseToTrayEnabled(false);
+    destroyTray();
+    createProductIntegrityWindow();
+    appReadyDone = true;
+    mark('createProductIntegrityWindow');
+    return;
+  }
 
   if (!app.isPackaged) {
     try {
@@ -705,6 +749,8 @@ const handleAppReady = async (): Promise<void> => {
   setSentryDeviceId();
 
   try {
+    await import('./process/bridge/feedbackBridge');
+    const { initializeProcess } = await import('./process');
     await initializeProcess();
     const savedLanguage = ProcessConfig.getSync('language');
     rendererInitialLanguage = kiBuddyRuntime?.resolveLanguage(savedLanguage, app.getLocale()) ?? savedLanguage ?? null;
@@ -970,7 +1016,7 @@ const handleAppReady = async (): Promise<void> => {
     });
   } else {
     // 初始化关闭到托盘设置 / Initialize close-to-tray setting
-    if (isE2ETestMode) {
+    if (isE2ETestMode || kiBuddyProductInvalid) {
       setCloseToTrayEnabled(false);
       destroyTray();
     } else {
@@ -992,23 +1038,25 @@ const handleAppReady = async (): Promise<void> => {
     mark('createWindow');
 
     // Initialize desktop pet (delayed to not block main window)
-    setTimeout(() => {
-      void (async () => {
-        try {
-          const petEnabled = await ProcessConfig.get('pet.enabled');
-          if (petEnabled === true) {
-            // Read pet sub-settings before creating the pet so flags are honored
-            // on the first createPetWindow() call (which is sync).
-            const confirmEnabled = (await ProcessConfig.get('pet.confirmEnabled')) ?? true;
-            const { createPetWindow, setPetConfirmEnabled } = await import('./process/pet/petManager');
-            setPetConfirmEnabled(confirmEnabled);
-            createPetWindow();
+    if (!kiBuddyProductInvalid) {
+      setTimeout(() => {
+        void (async () => {
+          try {
+            const petEnabled = await ProcessConfig.get('pet.enabled');
+            if (petEnabled === true) {
+              // Read pet sub-settings before creating the pet so flags are honored
+              // on the first createPetWindow() call (which is sync).
+              const confirmEnabled = (await ProcessConfig.get('pet.confirmEnabled')) ?? true;
+              const { createPetWindow, setPetConfirmEnabled } = await import('./process/pet/petManager');
+              setPetConfirmEnabled(confirmEnabled);
+              createPetWindow();
+            }
+          } catch (error) {
+            console.error('[Pet] Failed to initialize:', error);
           }
-        } catch (error) {
-          console.error('[Pet] Failed to initialize:', error);
-        }
-      })();
-    }, 3000);
+        })();
+      }, 3000);
+    }
 
     // 读取语言设置并初始化主进程 i18n，然后刷新托盘菜单
     // Read language setting and initialize main process i18n, then refresh tray menu
@@ -1017,17 +1065,19 @@ const handleAppReady = async (): Promise<void> => {
       const language = kiBuddyRuntime?.resolveLanguage(savedLanguage, app.getLocale()) ?? savedLanguage;
       await setInitialLanguage(language);
       // After language is set, refresh tray menu if it exists
-      await refreshTrayMenu();
+      if (!kiBuddyProductInvalid) await refreshTrayMenu();
     } catch (error) {
       console.error('[index] Failed to initialize i18n language:', error);
     }
 
     // 监听语言变更，刷新托盘菜单文案 / Listen for language changes to refresh tray menu labels
-    onLanguageChanged(() => {
-      void refreshTrayMenu();
-    });
+    if (!kiBuddyProductInvalid) {
+      onLanguageChanged(() => {
+        void refreshTrayMenu();
+      });
+    }
 
-    if (!isE2ETestMode) {
+    if (!isE2ETestMode && !kiBuddyProductInvalid) {
       // 窗口创建后异步恢复 WebUI，不阻塞 UI / Restore WebUI async after window creation, non-blocking
       restoreDesktopWebUIFromPreferences().catch((error) => {
         console.error('[WebUI] Failed to auto-restore:', error);
@@ -1047,10 +1097,10 @@ const handleAppReady = async (): Promise<void> => {
 
 // ============ Protocol Registration ============
 // Register the selected desktop product protocol.
-if (process.defaultApp) {
+if (protocolScheme && process.defaultApp) {
   // Dev mode: need to pass execPath explicitly
   app.setAsDefaultProtocolClient(protocolScheme, process.execPath, [path.resolve(process.argv[1])]);
-} else {
+} else if (protocolScheme) {
   app.setAsDefaultProtocolClient(protocolScheme);
 }
 
@@ -1062,11 +1112,11 @@ app.on('open-url', (event, url) => {
     return;
   }
   // Focus existing window so user sees the result
-  showOrCreateMainWindow({ mainWindow, createWindow });
+  showOrCreateMainWindow({ mainWindow, createWindow: createWindowForSelectedProduct });
 });
 
 // 监听 GPU 子进程崩溃，连续多次后下次启动自动关闭硬件加速（参见 ELECTRON-9A / ELECTRON-9D）。
-installGpuCrashHandler();
+if (productBusinessLifecycleEnabled) installGpuCrashHandler();
 
 // Register the backend startup flow only when this process owns the single
 // instance lock. A lock-losing instance must NOT spawn a competing aioncore
@@ -1112,7 +1162,7 @@ app.on('activate', () => {
         void app.dock.show();
       }
     } else {
-      createWindow();
+      createWindowForSelectedProduct();
     }
   }
 });
@@ -1131,11 +1181,13 @@ installQuitCleanup({
   },
   // Stop aioncore subprocess — backend shutdown kills all agent children
   // transitively (no separate frontend workerTaskManager remains).
-  stopBackend: () => backendManager.stop(),
-  destroyPetWindow: async () => {
-    const { destroyPetWindow } = await import('./process/pet/petManager');
-    destroyPetWindow();
-  },
+  stopBackend: () => (productBusinessLifecycleEnabled ? backendManager.stop() : Promise.resolve()),
+  destroyPetWindow: productBusinessLifecycleEnabled
+    ? async () => {
+        const { destroyPetWindow } = await import('./process/pet/petManager');
+        destroyPetWindow();
+      }
+    : () => Promise.resolve(),
   logInfo: console.log,
   logWarn: console.warn,
   logError: console.error,

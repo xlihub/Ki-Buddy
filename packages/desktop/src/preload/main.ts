@@ -11,40 +11,34 @@
 import '@sentry/electron/preload';
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import { ADAPTER_BRIDGE_EVENT_KEY } from '../common/adapter/constant';
-import {
-  KI_BUDDY_CORE_TRANSPORT_CHANNEL,
-  KI_BUDDY_PRODUCT_CAPABILITY,
-  KI_BUDDY_PRODUCT_RUNTIME,
-} from '@/common/platform/ki-buddy';
+import { KI_BUDDY_CORE_TRANSPORT_CHANNEL, KI_BUDDY_PRODUCT_BOOTSTRAP_CHANNEL } from '@/common/platform/ki-buddy';
+import type { KiBuddyProductBootstrap } from '@/common/types/platform/kiBuddyProduct';
 import { KI_BUDDY_AUTH_CHANNELS } from '@/common/platform/kiBuddyAuth';
 import type { KiBuddyAuthApi } from '@/common/types/platform/kiBuddyAuth';
 
-const productRuntimeIdentity = ipcRenderer.sendSync('get-product-runtime-identity') as string | null;
-const coreCsrfToken =
-  productRuntimeIdentity === KI_BUDDY_PRODUCT_RUNTIME
-    ? (ipcRenderer.sendSync(KI_BUDDY_CORE_TRANSPORT_CHANNEL) as string | null)
-    : null;
-const kiBuddyAuthCapability =
-  productRuntimeIdentity === KI_BUDDY_PRODUCT_RUNTIME
-    ? {
-        kiBuddyAuth: {
-          getSession: () => ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.getSession),
-          login: (request: Parameters<KiBuddyAuthApi['login']>[0]) =>
-            ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.login, request),
-          logout: () => ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.logout),
-          onSessionInvalidated: (listener: () => void) => {
-            const handler = () => listener();
-            ipcRenderer.on(KI_BUDDY_AUTH_CHANNELS.sessionInvalidated, handler);
-            return () => ipcRenderer.off(KI_BUDDY_AUTH_CHANNELS.sessionInvalidated, handler);
-          },
-        } satisfies KiBuddyAuthApi,
-        ...(coreCsrfToken ? { kiBuddyCoreTransport: { csrfToken: coreCsrfToken } } : {}),
-      }
-    : {};
-const productPresentationCapability =
-  productRuntimeIdentity === KI_BUDDY_PRODUCT_RUNTIME ? KI_BUDDY_PRODUCT_CAPABILITY : null;
-
-contextBridge.exposeInMainWorld('__getKiBuddyProductPresentation', () => productPresentationCapability);
+const productBootstrap = ipcRenderer.sendSync(KI_BUDDY_PRODUCT_BOOTSTRAP_CHANNEL) as KiBuddyProductBootstrap;
+const productIntegrityOnly = productBootstrap.status === 'invalid';
+const kiBuddyRuntimeReady = productBootstrap.status === 'ready';
+const coreCsrfToken = kiBuddyRuntimeReady
+  ? (ipcRenderer.sendSync(KI_BUDDY_CORE_TRANSPORT_CHANNEL) as string | null)
+  : null;
+const kiBuddyAuthCapability = kiBuddyRuntimeReady
+  ? {
+      kiBuddyAuth: {
+        getSession: () => ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.getSession),
+        login: (request: Parameters<KiBuddyAuthApi['login']>[0]) =>
+          ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.login, request),
+        logout: () => ipcRenderer.invoke(KI_BUDDY_AUTH_CHANNELS.logout),
+        onSessionInvalidated: (listener: () => void) => {
+          const handler = () => listener();
+          ipcRenderer.on(KI_BUDDY_AUTH_CHANNELS.sessionInvalidated, handler);
+          return () => ipcRenderer.off(KI_BUDDY_AUTH_CHANNELS.sessionInvalidated, handler);
+        },
+      } satisfies KiBuddyAuthApi,
+      ...(coreCsrfToken ? { kiBuddyCoreTransport: { csrfToken: coreCsrfToken } } : {}),
+    }
+  : {};
+contextBridge.exposeInMainWorld('__getKiBuddyProductBootstrap', () => productBootstrap);
 
 /**
  * @description 注入到renderer进程中, 用于与main进程通信
@@ -88,10 +82,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
 // Synchronously fetch the aioncore port and expose it to the renderer
 // via contextBridge (direct window assignment is invisible under contextIsolation).
-const backendPort = ipcRenderer.sendSync('get-backend-port') as number;
-const initialLanguage = ipcRenderer.sendSync('get-initial-language') as string | null;
-const backendStartupFailed = ipcRenderer.sendSync('get-backend-startup-failed') as boolean;
-const backendStartupFailure = ipcRenderer.sendSync('get-backend-startup-failure') as unknown;
+const backendPort = productIntegrityOnly ? 0 : (ipcRenderer.sendSync('get-backend-port') as number);
+const initialLanguage = productIntegrityOnly ? null : (ipcRenderer.sendSync('get-initial-language') as string | null);
+const backendStartupFailed = productIntegrityOnly
+  ? false
+  : (ipcRenderer.sendSync('get-backend-startup-failed') as boolean);
+const backendStartupFailure = productIntegrityOnly
+  ? null
+  : (ipcRenderer.sendSync('get-backend-startup-failure') as unknown);
 contextBridge.exposeInMainWorld('__backendPort', backendPort > 0 ? backendPort : 0);
 contextBridge.exposeInMainWorld('__initialLanguage', initialLanguage ?? null);
 contextBridge.exposeInMainWorld('__aionuiE2ETest', process.env.AIONUI_E2E_TEST === '1');
@@ -103,8 +101,9 @@ contextBridge.exposeInMainWorld('__backendStartupFailure', backendStartupFailure
 // `subscribe` receives subsequent ready/exit pushes on the backend-startup-state
 // channel. All communication stays behind the preload contextBridge.
 contextBridge.exposeInMainWorld('__backendStartupBridge', {
-  getState: () => ipcRenderer.sendSync('get-backend-startup-failure'),
+  getState: () => (productIntegrityOnly ? null : ipcRenderer.sendSync('get-backend-startup-failure')),
   subscribe: (callback: (state: unknown) => void) => {
+    if (productIntegrityOnly) return () => {};
     const handler = (_event: unknown, value: unknown) => callback(value);
     ipcRenderer.on('backend-startup-state', handler);
     return () => {
@@ -123,8 +122,10 @@ const trayEvents = [
   'tray:check-update',
 ];
 
-for (const channel of trayEvents) {
-  ipcRenderer.on(channel, (_event, ...args) => {
-    window.dispatchEvent(new CustomEvent(channel, { detail: args[0] }));
-  });
+if (!productIntegrityOnly) {
+  for (const channel of trayEvents) {
+    ipcRenderer.on(channel, (_event, ...args) => {
+      window.dispatchEvent(new CustomEvent(channel, { detail: args[0] }));
+    });
+  }
 }

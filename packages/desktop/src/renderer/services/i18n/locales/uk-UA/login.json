@@ -16,6 +16,9 @@
   "footerPrimary": "Трансформуйте свій ШІ у командному рядку",
   "footerSecondary": "Сучасно та ефективно",
   "kiBuddy": {
+    "productExperience": {
+      "invalidPolicyDescription": "Політика продукту Ki-Buddy відсутня або недійсна. Перевстановіть цю версію з офіційного пакета."
+    },
     "pageTitle": "{{productName}} — Вхід до Agents",
     "brand": "Ki-Buddy",
     "subtitle": "Увійдіть за допомогою наявного облікового запису Agents",

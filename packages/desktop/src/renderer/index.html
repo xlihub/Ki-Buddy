@@ -23,14 +23,19 @@
         try {
           window.__kiBuddyProductPresentation = null;
           window.__kiBuddyProductBootstrapError = null;
-          var candidate =
-            typeof window.__getKiBuddyProductPresentation === 'function'
-              ? window.__getKiBuddyProductPresentation()
-              : null;
+          var bootstrap =
+            typeof window.__getKiBuddyProductBootstrap === 'function'
+              ? window.__getKiBuddyProductBootstrap()
+              : { status: 'absent', productIdentity: null, capability: null, error: null };
+          if (!bootstrap || !['absent', 'invalid', 'ready'].includes(bootstrap.status)) {
+            throw new Error('Invalid Ki-Buddy product bootstrap snapshot');
+          }
+          if (bootstrap.status === 'invalid') throw new Error(bootstrap.error);
+          var candidate = bootstrap.status === 'ready' ? bootstrap.capability : null;
           var product =
             candidate &&
             candidate.id === 'ki-buddy' &&
-            candidate.schemaVersion === 2 &&
+            candidate.schemaVersion === 3 &&
             candidate.brand &&
             typeof candidate.brand.productName === 'string' &&
             candidate.assets &&
@@ -44,7 +49,12 @@
             typeof candidate.themes.light === 'string' &&
             candidate.themes.light.length > 0 &&
             typeof candidate.themes.dark === 'string' &&
-            candidate.themes.dark.length > 0
+            candidate.themes.dark.length > 0 &&
+            candidate.experience &&
+            candidate.experience.schemaVersion === 1 &&
+            candidate.experience.features &&
+            candidate.experience.resources &&
+            candidate.experience.behaviorDefaults
               ? candidate
               : null;
           if (candidate && !product) throw new Error('Invalid Ki-Buddy product presentation capability');
