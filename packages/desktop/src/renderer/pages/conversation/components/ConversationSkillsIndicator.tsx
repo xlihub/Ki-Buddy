@@ -4,8 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/config/storage';
+import {
+  filterProductVisibleSkillNames,
+  loadProductSkillCatalog,
+} from '@/renderer/services/runtime/kiBuddySkillCatalog';
 import { iconColors } from '@/renderer/styles/colors';
 import { Popover } from '@arco-design/web-react';
 import { Lightning } from '@icon-park/react';
@@ -27,11 +30,12 @@ const ConversationSkillsIndicator: React.FC<ConversationSkillsIndicatorProps> = 
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const names = (conversation?.extra as { skills?: string[] } | undefined)?.skills ?? [];
+  const loadedNames = (conversation?.extra as { skills?: string[] } | undefined)?.skills ?? [];
 
-  const { data: skillIndex } = useSWR(names.length > 0 ? 'skills-index' : null, () =>
-    ipcBridge.fs.listAvailableSkills.invoke()
+  const { data: skillIndex } = useSWR(loadedNames.length > 0 ? 'product-skills-index' : null, () =>
+    loadProductSkillCatalog().then(({ visibleSkills }) => visibleSkills)
   );
+  const names = filterProductVisibleSkillNames(loadedNames, skillIndex);
 
   if (names.length === 0) return null;
 

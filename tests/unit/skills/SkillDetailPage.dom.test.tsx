@@ -10,6 +10,7 @@ import React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 const mocks = vi.hoisted(() => ({
   listAvailableSkills: vi.fn(),
@@ -137,6 +138,8 @@ describe('getAssistantsUsingSkill', () => {
 describe('SkillDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.__kiBuddyProductPresentation = null;
+    window.__kiBuddyProductBootstrapError = null;
     mocks.params.skillName = 'demo-skill';
     mocks.locationState.skillsTab = 'custom';
     mocks.listAvailableSkills.mockResolvedValue([
@@ -258,6 +261,7 @@ describe('SkillDetailPage', () => {
   });
 
   it('opens the skill editing flow in chat with the skill name prefilled', async () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
     render(<SkillDetailPage />);
 
     const button = await screen.findByTestId('btn-edit-skill-via-chat');
@@ -267,5 +271,28 @@ describe('SkillDetailPage', () => {
       prompt:
         "I'd like to improve this Skill: demo-skill\n\nPlease review its content and help me make improvements. My suggestions are:",
     });
+  });
+
+  it('keeps a Ki-Buddy Office Skill usable without exposing definition editing', async () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    mocks.params.skillName = 'officecli-docx';
+    mocks.locationState.skillsTab = 'official';
+    mocks.listAvailableSkills.mockResolvedValue([
+      {
+        name: 'officecli-docx',
+        description: 'Word documents.',
+        location: '/tmp/builtin-skills/officecli-docx/SKILL.md',
+        relative_location: 'officecli-docx/SKILL.md',
+        is_auto_inject: false,
+        is_custom: false,
+        source: 'builtin',
+      },
+    ]);
+
+    render(<SkillDetailPage />);
+
+    await waitFor(() => expect(screen.getByTestId('skill-detail-info')).toBeInTheDocument());
+    expect(screen.getByTestId('btn-add-assistant')).toBeInTheDocument();
+    expect(screen.queryByTestId('btn-edit-skill-via-chat')).not.toBeInTheDocument();
   });
 });

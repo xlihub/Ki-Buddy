@@ -10,6 +10,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
+const loadProductSkillCatalogMock = vi.hoisted(() => vi.fn());
+
 // Mock @/common
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -51,6 +53,10 @@ vi.mock('@/renderer/hooks/mcp/catalog', () => ({
     builtinServers: [],
     allServers: [{ id: 'mcp-a', name: 'Server A', enabled: true }],
   })),
+}));
+
+vi.mock('@/renderer/services/runtime/kiBuddySkillCatalog', () => ({
+  loadProductSkillCatalog: loadProductSkillCatalogMock,
 }));
 
 import { useAssistantEditor } from '@/renderer/hooks/assistant/useAssistantEditor';
@@ -129,6 +135,8 @@ describe('useAssistantEditor', () => {
     vi.clearAllMocks();
     (ipcBridge.assistants.get.invoke as any).mockResolvedValue(mockAssistantDetail);
     (ipcBridge.fs.listAvailableSkills.invoke as any).mockResolvedValue([]);
+    loadProductSkillCatalogMock.mockReset();
+    loadProductSkillCatalogMock.mockResolvedValue({ entries: [], hiddenResources: [], visibleSkills: [] });
     (ipcBridge.mcpService.listServers.invoke as any).mockResolvedValue([
       { id: 'mcp-a', name: 'Server A', enabled: true },
     ]);
@@ -324,6 +332,32 @@ describe('useAssistantEditor', () => {
     expect(result.current.defaultPermissionMode).toBe('auto');
     expect((result.current as any).defaultThoughtLevelMode).toBe('auto');
     expect(result.current.defaultMcpMode).toBe('auto');
+  });
+
+  it('loads only product-projected Skills for assistant management', async () => {
+    const projectedSkill = {
+      name: 'officecli-docx',
+      description: 'Word documents',
+      location: '/skills/officecli-docx/SKILL.md',
+      relative_location: 'officecli-docx/SKILL.md',
+      is_auto_inject: false,
+      is_custom: false,
+      source: 'builtin',
+    };
+    loadProductSkillCatalogMock.mockResolvedValue({
+      entries: [],
+      hiddenResources: [],
+      visibleSkills: [projectedSkill],
+    });
+
+    const { result } = renderHook(() => useAssistantEditor(defaultParams));
+
+    await act(async () => {
+      await result.current.handleCreate();
+    });
+
+    expect(result.current.availableSkills).toEqual([projectedSkill]);
+    expect(loadProductSkillCatalogMock).toHaveBeenCalledTimes(1);
   });
 
   it('calls handleSave for creating new assistant', async () => {

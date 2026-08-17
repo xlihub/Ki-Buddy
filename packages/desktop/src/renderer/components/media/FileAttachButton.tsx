@@ -5,7 +5,6 @@
  */
 
 import type { IConversationMcpStatus, IConversationMcpStatusKind } from '@/common/config/storage';
-import { ipcBridge } from '@/common';
 import { Button, Message, Trigger } from '@arco-design/web-react';
 import { FolderOpen, Lightning, Paperclip, Plus, Right, Shield } from '@icon-park/react';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
@@ -14,6 +13,10 @@ import { isElectronDesktop } from '@/renderer/utils/platform';
 import { FileService } from '@/renderer/services/FileService';
 import type { FileMetadata } from '@/renderer/services/FileService';
 import { emitter } from '@/renderer/utils/emitter';
+import {
+  filterProductVisibleSkillNames,
+  loadProductSkillCatalog,
+} from '@/renderer/services/runtime/kiBuddySkillCatalog';
 import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -87,15 +90,15 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
 
-  const skillNames = loadedSkills ?? conversationContext?.loadedSkills ?? [];
+  const loadedSkillNames = loadedSkills ?? conversationContext?.loadedSkills ?? [];
   const mcpStatuses = buildLoadedMcpStatuses(
     loadedMcpStatuses ?? conversationContext?.loadedMcpStatuses,
     conversationContext?.loadedMcpServers
   );
-  const { data: skillIndex } = useSWR(skillNames.length > 0 ? 'skills-index' : null, () =>
-    ipcBridge.fs.listAvailableSkills.invoke()
+  const { data: skillIndex } = useSWR(loadedSkillNames.length > 0 ? 'product-skills-index' : null, () =>
+    loadProductSkillCatalog().then(({ visibleSkills }) => visibleSkills)
   );
-  const descriptionByName = new Map((skillIndex ?? []).map((s) => [s.name, s.description]));
+  const skillNames = filterProductVisibleSkillNames(loadedSkillNames, skillIndex);
 
   const handleSkillClick = useCallback((name: string) => {
     setOpen(false);

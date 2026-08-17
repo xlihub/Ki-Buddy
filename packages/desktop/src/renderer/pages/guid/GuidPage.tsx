@@ -28,6 +28,7 @@ import { useGuidModelSelection } from './hooks/useGuidModelSelection';
 import { useGuidSend } from './hooks/useGuidSend';
 import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
+import { loadProductSkillCatalog } from '@/renderer/services/runtime/kiBuddySkillCatalog';
 import { resolveGuidAssistantDefaults } from './utils/assistantDefaults';
 import SpeechInputButton from '@/renderer/components/chat/SpeechInputButton';
 import { chatFileRefPath, uploadFileRef } from '@/common/types/chatFile';
@@ -83,11 +84,10 @@ const GuidPage: React.FC = () => {
   const [guidSelectedMcpServerIds, setGuidSelectedMcpServerIds] = useState<string[] | undefined>(undefined);
 
   useEffect(() => {
-    ipcBridge.fs.listAvailableSkills
-      .invoke()
-      .then((availableSkills) => {
+    loadProductSkillCatalog()
+      .then(({ visibleSkills }) => {
         setAllSkills(
-          availableSkills.map((s) => ({
+          visibleSkills.map((s) => ({
             name: s.name,
             description: s.description,
             isAuto: s.source === 'builtin' && s.is_auto_inject,

@@ -10,6 +10,7 @@ import React from 'react';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 const mocks = vi.hoisted(() => ({
   listAvailableSkills: vi.fn(),
@@ -104,6 +105,8 @@ describe('SkillsHubSettings', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.__kiBuddyProductPresentation = null;
+    window.__kiBuddyProductBootstrapError = null;
     searchParamsMock.current = new URLSearchParams();
     searchParamsMock.pathname = '/settings/capabilities';
     searchParamsMock.state = undefined;
@@ -378,6 +381,78 @@ describe('SkillsHubSettings', () => {
     expect(screen.queryByText('job-generated')).not.toBeInTheDocument();
     // The custom skill is not in the Official tab.
     expect(screen.queryByTestId('my-skill-card-sample-single')).not.toBeInTheDocument();
+  });
+
+  it('uses the Ki-Buddy Skill catalog while keeping Custom Skill management available', async () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    mocks.listAvailableSkills.mockResolvedValue([
+      {
+        name: 'officecli-docx',
+        description: 'Word documents.',
+        location: '/tmp/builtin-skills/officecli-docx/SKILL.md',
+        relative_location: 'officecli-docx/SKILL.md',
+        is_auto_inject: false,
+        is_custom: false,
+        source: 'builtin',
+      },
+      {
+        name: 'mermaid',
+        description: 'Hidden upstream skill.',
+        location: '/tmp/builtin-skills/mermaid/SKILL.md',
+        relative_location: 'mermaid/SKILL.md',
+        is_auto_inject: false,
+        is_custom: false,
+        source: 'builtin',
+      },
+      {
+        name: 'cron',
+        description: 'Visible auto-injected skill.',
+        location: '/tmp/builtin-skills/auto-inject/cron/SKILL.md',
+        relative_location: 'auto-inject/cron/SKILL.md',
+        is_auto_inject: true,
+        is_custom: false,
+        source: 'builtin',
+      },
+      {
+        name: 'aionui-config',
+        description: 'Excluded auto-injected skill.',
+        location: '/tmp/builtin-skills/auto-inject/aionui-config/SKILL.md',
+        relative_location: 'auto-inject/aionui-config/SKILL.md',
+        is_auto_inject: true,
+        is_custom: false,
+        source: 'builtin',
+      },
+      {
+        name: 'extension-skill',
+        description: 'Hidden extension skill.',
+        location: '/tmp/extensions/extension-skill/SKILL.md',
+        is_auto_inject: false,
+        is_custom: false,
+        source: 'extension',
+      },
+      {
+        name: 'team-workflow',
+        description: 'Managed Custom Skill.',
+        location: '/tmp/user-skills/team-workflow/SKILL.md',
+        is_auto_inject: false,
+        is_custom: true,
+        source: 'custom',
+      },
+    ]);
+
+    render(<SkillsHubSettings withWrapper={false} />);
+
+    const customSkill = await screen.findByTestId('my-skill-card-team-workflow');
+    expect(customSkill).toBeInTheDocument();
+    expect(screen.getByTestId('btn-add-skill')).toBeInTheDocument();
+    expect(screen.getByTestId('btn-delete-team-workflow')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('settings-tab-official'));
+    expect(screen.getByTestId('official-skill-card-officecli-docx')).toBeInTheDocument();
+    expect(screen.queryByText('mermaid')).not.toBeInTheDocument();
+    expect(screen.getByTestId('auto-skills-section')).toHaveTextContent('cron');
+    expect(screen.queryByText('aionui-config')).not.toBeInTheDocument();
+    expect(screen.queryByText('extension-skill')).not.toBeInTheDocument();
   });
 
   it('restores the originating tab and preserves it when opening another skill', async () => {

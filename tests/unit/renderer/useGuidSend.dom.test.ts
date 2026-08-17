@@ -11,6 +11,7 @@ import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useG
 
 const createConversationInvokeMock = vi.fn();
 const swrMutateMock = vi.fn();
+const getProductExperienceMock = vi.fn();
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -34,6 +35,10 @@ vi.mock('swr', () => ({
 
 vi.mock('@/renderer/utils/workspace/workspaceHistory', () => ({
   updateWorkspaceTime: vi.fn(),
+}));
+
+vi.mock('@/renderer/services/runtime/kiBuddyRuntime', () => ({
+  getProductExperience: () => getProductExperienceMock(),
 }));
 
 vi.mock('@arco-design/web-react', () => ({
@@ -81,6 +86,42 @@ describe('useGuidSend', () => {
     createConversationInvokeMock.mockResolvedValue({ id: 'conv-1' });
     swrMutateMock.mockReset();
     swrMutateMock.mockResolvedValue(undefined);
+    getProductExperienceMock.mockReset();
+    getProductExperienceMock.mockReturnValue({
+      behaviorDefaults: () => ({ scheduledTaskExecutor: 'assistant-or-team', autoInjectedSkillExclusions: [] }),
+    });
+  });
+
+  it('sends only the Ki-Buddy product exclusion for AionCore auto-injected Skills', async () => {
+    getProductExperienceMock.mockReturnValue({
+      behaviorDefaults: () => ({
+        scheduledTaskExecutor: 'assistant',
+        autoInjectedSkillExclusions: ['aionui-config'],
+      }),
+    });
+    const { result } = renderHook(() => useGuidSend(createDeps()));
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const payload = createConversationInvokeMock.mock.calls[0][0];
+    expect(payload.assistant?.conversation_overrides?.disabled_builtin_skill_ids).toBeUndefined();
+    expect(payload.extra.exclude_auto_inject_skills).toEqual(['aionui-config']);
+    expect(payload.extra.exclude_auto_inject_skills).not.toContain('officecli');
+    expect(payload.extra.exclude_auto_inject_skills).not.toContain('skill-creator');
+    expect(payload.extra.exclude_auto_inject_skills).not.toContain('cron');
+  });
+
+  it('does not add product auto-inject exclusions to AionUi conversation requests', async () => {
+    const { result } = renderHook(() => useGuidSend(createDeps()));
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const payload = createConversationInvokeMock.mock.calls[0][0];
+    expect(payload.extra.exclude_auto_inject_skills).toBeUndefined();
   });
 
   it('passes selected mode into assistant conversation overrides when creating a preset ACP conversation', async () => {
@@ -170,8 +211,14 @@ describe('useGuidSend', () => {
   });
 
   it('forwards local skill overrides through assistant conversation overrides for ACP assistants', async () => {
+    getProductExperienceMock.mockReturnValue({
+      behaviorDefaults: () => ({
+        scheduledTaskExecutor: 'assistant',
+        autoInjectedSkillExclusions: ['aionui-config'],
+      }),
+    });
     const deps = createDeps();
-    deps.guidEnabledSkills = ['pdf-reader'];
+    deps.guidEnabledSkills = ['team-workflow'];
     deps.guidDisabledBuiltinSkills = ['todo-tracker'];
 
     const { result } = renderHook(() => useGuidSend(deps));
@@ -182,8 +229,9 @@ describe('useGuidSend', () => {
 
     const payload = createConversationInvokeMock.mock.calls[0][0];
     expect(payload.assistant?.id).toBe('assistant-1');
-    expect(payload.assistant?.conversation_overrides?.skill_ids).toEqual(['pdf-reader']);
+    expect(payload.assistant?.conversation_overrides?.skill_ids).toEqual(['team-workflow']);
     expect(payload.assistant?.conversation_overrides?.disabled_builtin_skill_ids).toEqual(['todo-tracker']);
+    expect(payload.extra.exclude_auto_inject_skills).toEqual(['aionui-config']);
   });
 
   it('forwards local skill overrides for generated Aion CLI assistants through assistant conversation overrides', async () => {

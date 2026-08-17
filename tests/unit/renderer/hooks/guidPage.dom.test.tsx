@@ -21,6 +21,7 @@ const {
   resolveGuidAssistantDefaultsMock,
   sendMock,
   navigateMock,
+  loadProductSkillCatalogMock,
 } = vi.hoisted(() => ({
   modelSelectionMock: {
     modelList: [],
@@ -123,6 +124,7 @@ const {
     isButtonDisabled: false,
   },
   navigateMock: vi.fn(),
+  loadProductSkillCatalogMock: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -143,6 +145,10 @@ vi.mock('@/common', () => ({
       listAvailableSkills: { invoke: vi.fn().mockResolvedValue([]) },
     },
   },
+}));
+
+vi.mock('@/renderer/services/runtime/kiBuddySkillCatalog', () => ({
+  loadProductSkillCatalog: loadProductSkillCatalogMock,
 }));
 
 vi.mock('@/renderer/hooks/mcp/catalog', () => ({
@@ -305,6 +311,8 @@ describe('GuidPage', () => {
     locationMock.state = null;
     locationMock.key = 'guid-location';
     navigateMock.mockReset();
+    loadProductSkillCatalogMock.mockReset();
+    loadProductSkillCatalogMock.mockResolvedValue({ entries: [], hiddenResources: [], visibleSkills: [] });
     swrMock.useSWRMock.mockReturnValue({ data: null });
     capturedGuidActionRowProps.length = 0;
     capturedAssistantSelectionAreaProps.length = 0;
@@ -346,6 +354,43 @@ describe('GuidPage', () => {
         deletable: false,
       },
     ];
+  });
+
+  it('uses the product-projected Skill catalog on the home page', async () => {
+    loadProductSkillCatalogMock.mockResolvedValue({
+      entries: [],
+      hiddenResources: [],
+      visibleSkills: [
+        {
+          name: 'officecli-docx',
+          description: 'Word documents',
+          location: '/skills/officecli-docx/SKILL.md',
+          relative_location: 'officecli-docx/SKILL.md',
+          is_auto_inject: false,
+          is_custom: false,
+          source: 'builtin',
+        },
+        {
+          name: 'cron',
+          description: 'Scheduled task management',
+          location: '/skills/auto-inject/cron/SKILL.md',
+          relative_location: 'auto-inject/cron/SKILL.md',
+          is_auto_inject: true,
+          is_custom: false,
+          source: 'builtin',
+        },
+      ],
+    });
+
+    render(<GuidPage />);
+
+    await waitFor(() => {
+      expect(capturedGuidActionRowProps.at(-1)?.allSkills).toEqual([
+        { name: 'officecli-docx', description: 'Word documents', isAuto: false },
+        { name: 'cron', description: 'Scheduled task management', isAuto: true },
+      ]);
+    });
+    expect(loadProductSkillCatalogMock).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the existing replace contract for ordinary Guid prefills', () => {

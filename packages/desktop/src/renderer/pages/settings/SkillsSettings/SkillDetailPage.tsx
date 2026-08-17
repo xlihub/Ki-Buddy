@@ -29,15 +29,13 @@ import useSWR, { mutate as swrMutate } from 'swr';
 import SettingsPageWrapper from '../components/SettingsPageWrapper';
 import SkillFileBrowser from './SkillFileBrowser';
 import { getAssistantsUsingSkill } from './SkillUsedByStack';
+import {
+  loadProductSkillCatalog,
+  type AvailableSkill,
+  type ProductSkillCatalog,
+} from '@/renderer/services/runtime/kiBuddySkillCatalog';
 
-interface SkillInfo {
-  name: string;
-  description: string;
-  location: string;
-  is_auto_inject: boolean;
-  is_custom: boolean;
-  source?: 'builtin' | 'custom' | 'cron' | 'extension';
-}
+type SkillInfo = AvailableSkill;
 
 const getAvatarColorClass = (name: string) => {
   if (!name) return 'bg-[#165DFF] text-white';
@@ -81,8 +79,9 @@ const SkillDetailPage: React.FC = () => {
   const decodedName = decodeURIComponent(skillName);
   const [saving, setSaving] = useState(false);
 
-  const { data: skills, isLoading: skillsLoading } = useSWR<SkillInfo[]>('skills.list', () =>
-    ipcBridge.fs.listAvailableSkills.invoke()
+  const { data: skillCatalog, isLoading: skillsLoading } = useSWR<ProductSkillCatalog>(
+    ['product-skills.list', decodedName],
+    () => loadProductSkillCatalog()
   );
   const {
     data: assistants,
@@ -90,7 +89,11 @@ const SkillDetailPage: React.FC = () => {
     mutate: mutateAssistants,
   } = useSWR<Assistant[]>('assistants.list', () => ipcBridge.assistants.list.invoke());
 
-  const skill = useMemo(() => (skills ?? []).find((s) => s.name === decodedName), [skills, decodedName]);
+  const skillEntry = useMemo(
+    () => skillCatalog?.entries.find(({ skill }) => skill.name === decodedName),
+    [decodedName, skillCatalog]
+  );
+  const skill = skillEntry?.skill;
   const usingAssistants = useMemo(
     () => getAssistantsUsingSkill(decodedName, assistants ?? []),
     [assistants, decodedName]
@@ -326,15 +329,17 @@ const SkillDetailPage: React.FC = () => {
               title={t('settings.skillsHub.detailFilesTitle', { defaultValue: 'Skill files' })}
               data-testid='skill-detail-files'
               extra={
-                <Button
-                  size='mini'
-                  type='text'
-                  data-testid='btn-edit-skill-via-chat'
-                  onClick={editViaChat}
-                  className='!h-24px !px-8px !text-12px !text-t-secondary hover:!text-t-primary'
-                >
-                  {t('settings.skillsHub.editViaChat.buttonLabel', { defaultValue: 'Edit via chat' })}
-                </Button>
+                skillEntry.access === 'manage' ? (
+                  <Button
+                    size='mini'
+                    type='text'
+                    data-testid='btn-edit-skill-via-chat'
+                    onClick={editViaChat}
+                    className='!h-24px !px-8px !text-12px !text-t-secondary hover:!text-t-primary'
+                  >
+                    {t('settings.skillsHub.editViaChat.buttonLabel', { defaultValue: 'Edit via chat' })}
+                  </Button>
+                ) : undefined
               }
             >
               <SkillFileBrowser skill={skill} />

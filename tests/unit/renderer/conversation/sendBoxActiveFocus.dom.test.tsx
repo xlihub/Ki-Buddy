@@ -6,10 +6,26 @@
 
 import { act, render, screen, waitFor } from '@testing-library/react';
 import React, { useState } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { layoutState } = vi.hoisted(() => ({
+type ConversationExportResult = ReturnType<
+  typeof import('@/renderer/hooks/file/useConversationExport').useConversationExport
+>;
+
+const { layoutState, conversationState, projectedSkills, catalogError, useSWRMock } = vi.hoisted(() => ({
   layoutState: { isMobile: false },
+  conversationState: {
+    conversation_id: 'sendbox-active-focus-conversation',
+    type: 'acp',
+    loadedSkills: [] as string[],
+  },
+  projectedSkills: { current: [] as Array<{ name: string; description: string }> | undefined },
+  catalogError: { current: undefined as Error | undefined },
+  useSWRMock: vi.fn(),
+}));
+
+vi.mock('swr', () => ({
+  default: (...args: unknown[]) => useSWRMock(...args),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -36,10 +52,7 @@ vi.mock('@/renderer/hooks/chat/useInputFocusRing', () => ({
 }));
 
 vi.mock('@/renderer/hooks/context/ConversationContext', () => ({
-  useConversationContextSafe: () => ({
-    conversation_id: 'sendbox-active-focus-conversation',
-    type: 'acp',
-  }),
+  useConversationContextSafe: () => conversationState,
 }));
 
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
@@ -60,10 +73,10 @@ vi.mock('@/renderer/pages/conversation/Messages/hooks', () => ({
 }));
 
 vi.mock('@/renderer/hooks/file/useConversationExport', () => ({
-  useConversationExport: () => ({
+  useConversationExport: (): ConversationExportResult => ({
     isOpen: false,
-    showMenu: false,
-    step: 'menu',
+    showMenu: vi.fn(),
+    step: 'closed',
     filename: '',
     pathPreview: '',
     menuItems: [],
@@ -124,6 +137,17 @@ vi.mock('@/renderer/components/chat/SpeechInputButton', () => ({ default: () => 
 vi.mock('@/renderer/components/media/UploadProgressBar', () => ({ default: () => null }));
 
 import SendBox from '@/renderer/components/chat/SendBox';
+
+beforeEach(() => {
+  conversationState.loadedSkills = [];
+  projectedSkills.current = [];
+  catalogError.current = undefined;
+  useSWRMock.mockReset();
+  useSWRMock.mockImplementation((key: string | null) => ({
+    data: key ? projectedSkills.current : undefined,
+    error: key ? catalogError.current : undefined,
+  }));
+});
 
 const SendBoxHarness = ({
   active,
@@ -200,6 +224,29 @@ describe('SendBox active-controlled focus', () => {
       textarea.focus();
     });
     expect(onFocused).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SendBox product Skill projection', () => {
+  it('offers slash commands only for loaded Skills visible in the product catalog', async () => {
+    conversationState.loadedSkills = ['officecli-docx', 'aionui-config'];
+    projectedSkills.current = [{ name: 'officecli-docx', description: 'Word documents' }];
+
+    render(<SendBoxHarness active={false} initialValue='/' />);
+
+    expect(await screen.findByText('/officecli-docx')).toBeInTheDocument();
+    expect(screen.queryByText('/aionui-config')).not.toBeInTheDocument();
+  });
+
+  it('keeps loaded Skill slash commands available in AionUi when the catalog request fails', async () => {
+    conversationState.loadedSkills = ['officecli-docx', 'aionui-config'];
+    projectedSkills.current = undefined;
+    catalogError.current = new Error('catalog unavailable');
+
+    render(<SendBoxHarness active={false} initialValue='/' />);
+
+    expect(await screen.findByText('/officecli-docx')).toBeInTheDocument();
+    expect(screen.getByText('/aionui-config')).toBeInTheDocument();
   });
 });
 
