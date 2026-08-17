@@ -34,6 +34,8 @@ import {
 } from '@/renderer/services/clientBusinessSettings';
 import classNames from 'classnames';
 import { getProductDocumentationUrl } from '@/renderer/services/runtime/productBrandRuntime';
+import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
+import type { McpCatalogEntry } from '@/renderer/hooks/mcp/catalog';
 import { useSettingsTabNavigate, useSettingsViewMode } from '../settingsViewContext';
 
 type MessageInstance = ReturnType<typeof Message.useMessage>[0];
@@ -48,16 +50,25 @@ const areEnvRecordsEqual = (a: Record<string, string>, b: Record<string, string>
 const ModalMcpManagementSection: React.FC<{
   message: MessageInstance;
   mcpServers: IMcpServer[];
-  extensionMcpServers: IMcpServer[];
+  mcpCatalogEntries: readonly McpCatalogEntry[];
+  extensionMcpCatalogEntries: readonly McpCatalogEntry[];
   setMcpServers: React.Dispatch<React.SetStateAction<IMcpServer[]>>;
   saveMcpServers: (serversOrUpdater: IMcpServer[] | ((prev: IMcpServer[]) => IMcpServer[])) => Promise<void>;
   isPageMode?: boolean;
-}> = ({ message, mcpServers, extensionMcpServers, setMcpServers, saveMcpServers, isPageMode }) => {
+}> = ({
+  message,
+  mcpServers,
+  mcpCatalogEntries,
+  extensionMcpCatalogEntries,
+  setMcpServers,
+  saveMcpServers,
+  isPageMode,
+}) => {
   const { t } = useTranslation();
   const { oauthStatus, loggingIn, checkOAuthStatus, markLoginRequired, clearLoginRequired, login } = useMcpOAuth();
-  const visibleMcpServers = useMemo(
-    () => mcpServers.filter((server) => !isBuiltinImageGenServer(server)),
-    [mcpServers]
+  const visibleMcpEntries = useMemo(
+    () => mcpCatalogEntries.filter(({ server }) => !isBuiltinImageGenServer(server)),
+    [mcpCatalogEntries]
   );
 
   const handleAuthRequired = useCallback(
@@ -195,7 +206,7 @@ const ModalMcpManagementSection: React.FC<{
       </div>
 
       <div className='flex-1 min-h-0'>
-        {visibleMcpServers.length === 0 && extensionMcpServers.length === 0 ? (
+        {visibleMcpEntries.length === 0 && extensionMcpCatalogEntries.length === 0 ? (
           <div className='py-24px text-center text-t-secondary text-14px border border-dashed border-border-2 rd-12px'>
             {t('settings.mcpNoServersFound')}
           </div>
@@ -205,10 +216,11 @@ const ModalMcpManagementSection: React.FC<{
             disableOverflow={isPageMode}
           >
             <div className='space-y-12px'>
-              {visibleMcpServers.map((server) => (
+              {visibleMcpEntries.map(({ server, access }) => (
                 <McpServerItem
                   key={server.id}
                   server={server}
+                  access={access}
                   isCollapsed={mcpCollapseKey[server.id] || false}
                   isTestingConnection={testingServers[server.id] || false}
                   oauthStatus={oauthStatus[server.id]}
@@ -220,10 +232,11 @@ const ModalMcpManagementSection: React.FC<{
                   onOAuthLogin={handleOAuthLogin}
                 />
               ))}
-              {extensionMcpServers.map((server) => (
+              {extensionMcpCatalogEntries.map(({ server, access }) => (
                 <McpServerItem
                   key={server.id}
                   server={server}
+                  access={access}
                   isCollapsed={mcpCollapseKey[server.id] || false}
                   isTestingConnection={false}
                   onToggleCollapse={() => toggleServerCollapse(server.id)}
@@ -268,6 +281,7 @@ const ModalMcpManagementSection: React.FC<{
 };
 
 const ToolsModalContent: React.FC = () => {
+  const canUseUpstreamBuiltinMcp = getProductExperience().resourceAccess('mcp', 'upstreamBuiltin') !== 'hidden';
   const imageGenerationGuideUrl = getProductDocumentationUrl(
     'https://github.com/iOfficeAI/AionUi/wiki/AionUi-Image-Generation-Tool-Model-Configuration-Guide'
   );
@@ -279,7 +293,14 @@ const ToolsModalContent: React.FC = () => {
   const [imageGenerationModel, setImageGenerationModel] = useState<ImageGenerationModelSetting | undefined>();
   const [isUpdatingImageGeneration, setIsUpdatingImageGeneration] = useState(false);
   const { modelListWithImage: data } = useConfigModelListWithImage();
-  const { mcpServers, extensionMcpServers, saveMcpServers, setMcpServers, isMcpServersLoading } = useMcpServers();
+  const {
+    mcpServers,
+    mcpCatalogEntries,
+    extensionMcpCatalogEntries,
+    saveMcpServers,
+    setMcpServers,
+    isMcpServersLoading,
+  } = useMcpServers();
   const builtinImageGenServer = useMemo(() => mcpServers.find(isBuiltinImageGenServer), [mcpServers]);
   const isImageGenerationServerLoading = isMcpServersLoading && !builtinImageGenServer;
 
@@ -294,6 +315,7 @@ const ToolsModalContent: React.FC = () => {
   }, [data]);
 
   useEffect(() => {
+    if (!canUseUpstreamBuiltinMcp) return;
     const loadConfigs = async () => {
       try {
         const storedModel = await getClientBusinessSetting('tools.imageGenerationModel');
@@ -306,11 +328,12 @@ const ToolsModalContent: React.FC = () => {
     };
 
     void loadConfigs();
-  }, []);
+  }, [canUseUpstreamBuiltinMcp]);
 
   // Sync image generation model config to the built-in MCP server's transport.env
   const syncMcpServerEnv = useCallback(
     async (model: Partial<ImageGenerationModelSetting>) => {
+      if (!canUseUpstreamBuiltinMcp) return;
       const builtinServer = mcpServers.find(isBuiltinImageGenServer);
       if (!builtinServer || builtinServer.transport.type !== 'stdio') return;
 
@@ -375,12 +398,12 @@ const ToolsModalContent: React.FC = () => {
         prevServers.map((server) => (server.id === updatedServer.id ? { ...server, ...updatedServer } : server))
       );
     },
-    [data, mcpServers, saveMcpServers]
+    [canUseUpstreamBuiltinMcp, data, mcpServers, saveMcpServers]
   );
 
   // Keep the saved image model as a provider/model reference. Secrets stay in providers.
   useEffect(() => {
-    if (!imageGenerationModel || !data) return;
+    if (!canUseUpstreamBuiltinMcp || !imageGenerationModel || !data) return;
 
     const currentProvider = data.find((p) => p.id === imageGenerationModel.id);
 
@@ -413,7 +436,7 @@ const ToolsModalContent: React.FC = () => {
     void syncMcpServerEnv(sanitizedModel).catch((error) => {
       console.error('Failed to sync image generation MCP env after provider change:', error);
     });
-  }, [data, imageGenerationModel, syncMcpServerEnv]);
+  }, [canUseUpstreamBuiltinMcp, data, imageGenerationModel, syncMcpServerEnv]);
 
   const handleImageGenerationModelChange = useCallback(
     (value: Partial<ImageGenerationModelSetting>) => {
@@ -504,7 +527,8 @@ const ToolsModalContent: React.FC = () => {
                 <ModalMcpManagementSection
                   message={mcpMessage}
                   mcpServers={mcpServers}
-                  extensionMcpServers={extensionMcpServers}
+                  mcpCatalogEntries={mcpCatalogEntries}
+                  extensionMcpCatalogEntries={extensionMcpCatalogEntries}
                   setMcpServers={setMcpServers}
                   saveMcpServers={saveMcpServers}
                   isPageMode={isPageMode}
@@ -513,7 +537,10 @@ const ToolsModalContent: React.FC = () => {
             </div>
           </div>
           {/* 图像生成 */}
-          <div className='px-[12px] md:px-[32px] py-[24px] bg-2 rd-12px md:rd-16px border border-border-2'>
+          <div
+            hidden={!canUseUpstreamBuiltinMcp}
+            className='px-[12px] md:px-[32px] py-[24px] bg-2 rd-12px md:rd-16px border border-border-2'
+          >
             <div className='flex items-center justify-between mb-16px'>
               <span className='text-14px text-t-primary'>{t('settings.imageGeneration')}</span>
               <Switch

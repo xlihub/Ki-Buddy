@@ -22,6 +22,8 @@ vi.mock('@/common/adapter/ipcBridge', () => ({
 }));
 
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
+import { createKiBuddyProductExperience } from '@/common/platform/ki-buddy';
+import productConfig from '../../../../ki-buddy-product.json';
 
 describe('ensureBackendMcpCatalog', () => {
   beforeEach(() => {
@@ -82,5 +84,94 @@ describe('ensureBackendMcpCatalog', () => {
     expect(result.userServers).toEqual([]);
     expect(result.builtinServers).toEqual([]);
     expect(result.allServers).toEqual([]);
+  });
+
+  it('preserves AionUi cross-source deduplication for the same built-in MCP name', async () => {
+    getClientBusinessSettingMock.mockResolvedValue([
+      {
+        id: 'local-builtin',
+        name: 'shared builtin',
+        enabled: true,
+        transport: { type: 'stdio', command: 'local', args: [] },
+        created_at: 1,
+        updated_at: 1,
+        original_json: '{}',
+        builtin: true,
+      },
+    ]);
+    mcpServiceMock.listServers.invoke.mockResolvedValue([
+      {
+        id: 'backend-builtin',
+        name: 'shared builtin',
+        enabled: true,
+        transport: { type: 'stdio', command: 'backend', args: [] },
+        created_at: 2,
+        updated_at: 2,
+        original_json: '{}',
+        builtin: true,
+      },
+    ]);
+
+    const result = await ensureBackendMcpCatalog();
+
+    expect(result.allServers.map(({ id }) => id)).toEqual(['backend-builtin']);
+  });
+
+  it('keeps custom and product built-in MCP entries while recording disallowed and unknown origins', async () => {
+    getClientBusinessSettingMock.mockResolvedValue([
+      {
+        id: 'upstream-1',
+        name: 'upstream one',
+        enabled: true,
+        transport: { type: 'stdio', command: 'upstream', args: [] },
+        created_at: 1,
+        updated_at: 1,
+        original_json: '{}',
+        builtin: true,
+      },
+    ]);
+    mcpServiceMock.listServers.invoke.mockResolvedValue([
+      {
+        id: 'agents-adapter',
+        name: 'Agents Adapter',
+        enabled: true,
+        transport: { type: 'stdio', command: 'managed-adapter', args: [] },
+        created_at: 2,
+        updated_at: 2,
+        original_json: '{}',
+        product_origin: 'productBuiltin',
+      },
+      {
+        id: 'custom-1',
+        name: 'custom one',
+        enabled: true,
+        transport: { type: 'http', url: 'https://example.com/mcp' },
+        created_at: 3,
+        updated_at: 3,
+        original_json: '{}',
+      },
+      {
+        id: 'unknown-1',
+        name: 'unknown one',
+        enabled: true,
+        transport: { type: 'stdio', command: 'unknown', args: [] },
+        created_at: 4,
+        updated_at: 4,
+        original_json: '{}',
+        product_origin: 'future-origin',
+      },
+    ]);
+
+    const result = await ensureBackendMcpCatalog(createKiBuddyProductExperience(productConfig.experience));
+
+    expect(result.entries.map(({ server, origin, access }) => ({ id: server.id, origin, access }))).toEqual([
+      { id: 'agents-adapter', origin: 'productBuiltin', access: 'use' },
+      { id: 'custom-1', origin: 'custom', access: 'manage' },
+    ]);
+    expect(result.allServers.map(({ id }) => id)).toEqual(['agents-adapter', 'custom-1']);
+    expect(result.hiddenResources).toEqual([
+      expect.objectContaining({ resourceId: 'unknown-1', origin: 'unclassified' }),
+      expect.objectContaining({ resourceId: 'upstream-1', origin: 'upstreamBuiltin' }),
+    ]);
   });
 });

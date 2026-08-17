@@ -162,7 +162,7 @@ describe('Ki-Buddy product configuration', () => {
       themes: { light: 'ki-buddy-light', dark: 'ki-buddy-dark' },
       experience: {
         schemaVersion: 1,
-        features: { team: 'disabled', scheduledTasks: 'enabled' },
+        features: { team: 'disabled', scheduledTasks: 'enabled', tools: 'enabled' },
       },
     });
   });

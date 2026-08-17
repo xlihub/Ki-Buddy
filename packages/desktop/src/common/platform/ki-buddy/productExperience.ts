@@ -66,6 +66,45 @@ export type ProductExperience = Readonly<{
   resourceAccess: (kind: ProductResourceKind, origin: ProductResourceOrigin) => ProductResourceAccess;
 }>;
 
+export type ProductResourceDescriptor = Readonly<{
+  id: string;
+  name?: string;
+  origin: ProductResourceOrigin;
+}>;
+
+export type ProductResourceHiddenRecord = Readonly<{
+  access: 'hidden';
+  code: 'product_resource_hidden';
+  kind: ProductResourceKind;
+  origin: ProductResourceOrigin;
+  resourceId: string;
+  resourceName?: string;
+}>;
+
+export type ProductResourceProjection<Resource extends ProductResourceDescriptor> = Readonly<{
+  hidden: readonly ProductResourceHiddenRecord[];
+  visible: ReadonlyArray<Readonly<{ access: Exclude<ProductResourceAccess, 'hidden'>; resource: Resource }>>;
+}>;
+
+export type ProductBuiltinResourceRequirement = Readonly<{
+  featureId: ProductFeatureId;
+  resourceId: string;
+  resourceName?: string;
+}>;
+
+export type MissingProductBuiltinResourceRecord = Readonly<{
+  code: 'required_product_resource_missing';
+  featureId: ProductFeatureId;
+  kind: ProductResourceKind;
+  origin: 'productBuiltin';
+  resourceId: string;
+  resourceName?: string;
+}>;
+
+export type ProductBuiltinResourceState =
+  | Readonly<{ missing: readonly []; status: 'pending' | 'ready' }>
+  | Readonly<{ missing: readonly MissingProductBuiltinResourceRecord[]; status: 'invalid' }>;
+
 const FEATURE_DEPENDENCIES: ReadonlyArray<readonly [ProductFeatureId, ProductFeatureId]> = [
   ['extensionMarketplace', 'extensionRuntime'],
   ['extensionSettings', 'extensionRuntime'],
@@ -186,6 +225,65 @@ function createProductExperience(snapshot: ProductExperienceSnapshot): ProductEx
     resourceAccess: (kind: ProductResourceKind, origin: ProductResourceOrigin) => snapshot.resources[kind][origin],
     behaviorDefaults: () => snapshot.behaviorDefaults,
   });
+}
+
+/** Projects a resource catalog through the active product policy without retaining resource configuration in diagnostics. */
+export function projectProductResources<Resource extends ProductResourceDescriptor>(
+  experience: ProductExperience,
+  kind: ProductResourceKind,
+  resources: readonly Resource[]
+): ProductResourceProjection<Resource> {
+  const visible: Array<{ access: Exclude<ProductResourceAccess, 'hidden'>; resource: Resource }> = [];
+  const hidden: ProductResourceHiddenRecord[] = [];
+
+  for (const resource of resources) {
+    const access = experience.resourceAccess(kind, resource.origin);
+    if (access === 'hidden') {
+      hidden.push({
+        code: 'product_resource_hidden',
+        kind,
+        resourceId: resource.id,
+        resourceName: resource.name,
+        origin: resource.origin,
+        access,
+      });
+      continue;
+    }
+    visible.push({ resource, access });
+  }
+
+  return { visible, hidden };
+}
+
+/** Evaluates stable product resource requirements once the owning backend catalog becomes available. */
+export function evaluateProductBuiltinResourceState(
+  experience: ProductExperience,
+  kind: ProductResourceKind,
+  options: Readonly<{
+    availableResourceIds: readonly string[];
+    catalogReady: boolean;
+    requirements: readonly ProductBuiltinResourceRequirement[];
+  }>
+): ProductBuiltinResourceState {
+  const activeRequirements = options.requirements.filter(
+    ({ featureId }) => experience.featureState(featureId) === 'enabled'
+  );
+  if (activeRequirements.length === 0) return { status: 'ready', missing: [] };
+  if (!options.catalogReady) return { status: 'pending', missing: [] };
+
+  const availableResourceIds = new Set(options.availableResourceIds);
+  const missing = activeRequirements
+    .filter(({ resourceId }) => !availableResourceIds.has(resourceId))
+    .map(({ featureId, resourceId, resourceName }) => ({
+      code: 'required_product_resource_missing' as const,
+      featureId,
+      kind,
+      origin: 'productBuiltin' as const,
+      resourceId,
+      resourceName,
+    }));
+
+  return missing.length > 0 ? { status: 'invalid', missing } : { status: 'ready', missing: [] };
 }
 
 /** Creates the adapter for the strict, packaged Ki-Buddy policy. */

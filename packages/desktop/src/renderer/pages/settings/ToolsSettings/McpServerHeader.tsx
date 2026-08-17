@@ -6,9 +6,11 @@ import { useTranslation } from 'react-i18next';
 import type { McpOAuthStatus } from '@/renderer/hooks/mcp/useMcpOAuth';
 import FeedbackButton from '@/renderer/components/base/FeedbackButton';
 import { iconColors } from '@/renderer/styles/colors';
+import type { ProductResourceAccess } from '@/common/platform/ki-buddy';
 
 interface McpServerHeaderProps {
   server: IMcpServer;
+  access?: ProductResourceAccess;
   isTestingConnection: boolean;
   oauthStatus?: McpOAuthStatus;
   isLoggingIn?: boolean;
@@ -144,6 +146,7 @@ const supportsOAuth = (server: IMcpServer) =>
 
 const McpServerHeader: React.FC<McpServerHeaderProps> = ({
   server,
+  access = 'manage',
   isTestingConnection,
   oauthStatus,
   isLoggingIn,
@@ -162,6 +165,8 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
   const statusPopoverContent = getStatusPopoverContent(server, t);
 
   const isError = server.last_test_status === 'error';
+  const canManage = access === 'manage' && !isReadOnly;
+  const canTest = access === 'use' || canManage;
 
   return (
     <div className='flex items-center justify-between group'>
@@ -177,7 +182,7 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
           </Tooltip>
         )}
         {isError && <FeedbackButton module='mcp-tools' />}
-        {!isReadOnly && needsLogin && onOAuthLogin && (
+        {canManage && needsLogin && onOAuthLogin && (
           <Button
             size='mini'
             type='primary'
@@ -189,7 +194,7 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
             {t('settings.mcpLogin') || 'Login'}
           </Button>
         )}
-        {!isReadOnly && !needsLogin && (
+        {canTest && (!needsLogin || access === 'use') && (
           <Button
             size='mini'
             icon={<Refresh size={'14'} />}
@@ -199,7 +204,7 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
           />
         )}
       </div>
-      {!isReadOnly && (
+      {canManage && (
         <div className='flex items-center gap-2 invisible group-hover:visible' onClick={(e) => e.stopPropagation()}>
           {!server.builtin && (
             <Dropdown

@@ -12,7 +12,9 @@ import { SettingsTabNavigateProvider } from '@/renderer/components/settings/Sett
 const hooks = vi.hoisted(() => ({
   modelListWithImage: [] as unknown[],
   mcpServers: [] as unknown[],
+  mcpCatalogEntries: [] as unknown[],
   getClientBusinessSetting: vi.fn(() => Promise.resolve(undefined)),
+  resourceAccess: vi.fn(() => 'manage'),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -37,7 +39,9 @@ vi.mock('@/renderer/pages/settings/components/AddMcpServerModal', () => ({
 }));
 
 vi.mock('@/renderer/pages/settings/ToolsSettings/McpServerItem', () => ({
-  default: () => null,
+  default: ({ server, access }: { server: { id: string }; access?: string }) => (
+    <div data-testid={`mcp-server-${server.id}`}>{access ?? 'missing-access'}</div>
+  ),
 }));
 
 vi.mock('@/renderer/hooks/agent/useConfigModelListWithImage', () => ({
@@ -47,7 +51,9 @@ vi.mock('@/renderer/hooks/agent/useConfigModelListWithImage', () => ({
 vi.mock('@/renderer/hooks/mcp', () => ({
   useMcpServers: () => ({
     mcpServers: hooks.mcpServers,
+    mcpCatalogEntries: hooks.mcpCatalogEntries,
     extensionMcpServers: [],
+    extensionMcpCatalogEntries: [],
     saveMcpServers: vi.fn(() => Promise.resolve()),
     setMcpServers: vi.fn(),
     isMcpServersLoading: false,
@@ -89,6 +95,11 @@ vi.mock('@/renderer/services/clientBusinessSettings', () => ({
   removeClientBusinessSetting: vi.fn(() => Promise.resolve()),
 }));
 
+vi.mock('@/renderer/services/runtime/kiBuddyRuntime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/renderer/services/runtime/kiBuddyRuntime')>()),
+  getProductExperience: () => ({ resourceAccess: hooks.resourceAccess }),
+}));
+
 vi.mock('@/common/adapter/ipcBridge', () => ({
   mcpService: {},
 }));
@@ -99,6 +110,9 @@ describe('ToolsModalContent image model guide', () => {
   beforeEach(() => {
     hooks.modelListWithImage = [];
     hooks.mcpServers = [];
+    hooks.mcpCatalogEntries = [];
+    hooks.resourceAccess.mockReset();
+    hooks.resourceAccess.mockReturnValue('manage');
     hooks.getClientBusinessSetting.mockClear();
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -144,5 +158,34 @@ describe('ToolsModalContent image model guide', () => {
       (a) => a.textContent === 'settings.goToModelSettings'
     );
     expect(links).toHaveLength(0);
+  });
+
+  it('passes product built-in use access to the MCP item rendered on the Tools page', async () => {
+    const server = {
+      id: 'agents-adapter',
+      name: 'Agents Adapter',
+      enabled: true,
+      transport: { type: 'stdio', command: 'managed-adapter', args: [] },
+      created_at: 1,
+      updated_at: 1,
+      original_json: '{}',
+    };
+    hooks.mcpServers = [server];
+    hooks.mcpCatalogEntries = [{ server, origin: 'productBuiltin', access: 'use' }];
+
+    render(<ToolsModalContent />);
+
+    expect(await screen.findByTestId('mcp-server-agents-adapter')).toHaveTextContent('use');
+  });
+
+  it('hides upstream built-in MCP configuration when the product policy denies that origin', async () => {
+    hooks.resourceAccess.mockImplementation((_kind: string, origin: string) =>
+      origin === 'upstreamBuiltin' ? 'hidden' : 'manage'
+    );
+
+    render(<ToolsModalContent />);
+
+    expect(screen.getByText('settings.imageGeneration')).not.toBeVisible();
+    expect(hooks.getClientBusinessSetting).not.toHaveBeenCalled();
   });
 });

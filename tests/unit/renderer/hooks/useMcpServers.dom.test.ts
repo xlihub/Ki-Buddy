@@ -7,20 +7,27 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
-const { ensureBackendMcpCatalogMock } = vi.hoisted(() => ({
+const { ensureBackendMcpCatalogMock, getExtensionMcpServersMock, getProductExperienceMock } = vi.hoisted(() => ({
   ensureBackendMcpCatalogMock: vi.fn(),
+  getExtensionMcpServersMock: vi.fn(),
+  getProductExperienceMock: vi.fn(),
 }));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
     extensions: {
-      getMcpServers: { invoke: vi.fn().mockResolvedValue([]) },
+      getMcpServers: { invoke: getExtensionMcpServersMock },
     },
   },
 }));
 
-vi.mock('@/renderer/hooks/mcp/catalog', () => ({
+vi.mock('@/renderer/hooks/mcp/catalog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/renderer/hooks/mcp/catalog')>()),
   ensureBackendMcpCatalog: ensureBackendMcpCatalogMock,
+}));
+
+vi.mock('@/renderer/services/runtime/kiBuddyRuntime', () => ({
+  getProductExperience: getProductExperienceMock,
 }));
 
 import { useMcpServers } from '@/renderer/hooks/mcp/useMcpServers';
@@ -28,10 +35,19 @@ import { useMcpServers } from '@/renderer/hooks/mcp/useMcpServers';
 describe('useMcpServers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getExtensionMcpServersMock.mockResolvedValue([]);
+    getProductExperienceMock.mockReturnValue({
+      behaviorDefaults: () => ({ scheduledTaskExecutor: 'assistant', autoInjectedSkillExclusions: [] }),
+      featureState: () => 'enabled',
+      resourceAccess: (_kind: string, origin: string) =>
+        origin === 'custom' ? 'manage' : origin === 'productBuiltin' ? 'use' : 'hidden',
+    });
     ensureBackendMcpCatalogMock.mockResolvedValue({
       userServers: [],
       builtinServers: [],
       allServers: [],
+      entries: [],
+      hiddenResources: [],
     });
   });
 
@@ -75,5 +91,98 @@ describe('useMcpServers', () => {
     });
 
     await waitFor(() => expect(result.current.mcpServers).toHaveLength(1));
+  });
+
+  it('hides extension MCP servers and retains a structured diagnostic record in Ki-Buddy', async () => {
+    getExtensionMcpServersMock.mockResolvedValue([
+      {
+        id: 'extension-1',
+        name: 'extension server',
+        enabled: true,
+        transport: { type: 'stdio', command: 'extension', args: [] },
+        created_at: 1,
+        updated_at: 1,
+        original_json: '{}',
+      },
+    ]);
+
+    const { result } = renderHook(() => useMcpServers());
+
+    await waitFor(() => expect(getExtensionMcpServersMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(result.current.hiddenResources).toHaveLength(1));
+
+    expect(result.current.extensionMcpServers).toEqual([]);
+    expect(result.current.hiddenResources).toEqual([
+      expect.objectContaining({
+        code: 'product_resource_hidden',
+        kind: 'mcp',
+        resourceId: 'extension-1',
+        origin: 'extension',
+      }),
+    ]);
+  });
+
+  it('keeps extension MCP servers visible under the complete AionUi resource policy', async () => {
+    getProductExperienceMock.mockReturnValue({
+      behaviorDefaults: () => ({ scheduledTaskExecutor: 'assistant-or-team', autoInjectedSkillExclusions: [] }),
+      featureState: () => 'enabled',
+      resourceAccess: () => 'manage',
+    });
+    getExtensionMcpServersMock.mockResolvedValue([
+      {
+        id: 'extension-1',
+        name: 'extension server',
+        enabled: true,
+        transport: { type: 'stdio', command: 'extension', args: [] },
+        created_at: 1,
+        updated_at: 1,
+        original_json: '{}',
+      },
+    ]);
+
+    const { result } = renderHook(() => useMcpServers());
+
+    await waitFor(() => expect(result.current.extensionMcpServers).toHaveLength(1));
+
+    expect(result.current.extensionMcpCatalogEntries).toEqual([
+      expect.objectContaining({ origin: 'extension', access: 'manage' }),
+    ]);
+    expect(result.current.hiddenResources).toEqual([]);
+  });
+
+  it('keeps access decisions separate when backend entries reuse an ID with different names', async () => {
+    const customServer = {
+      id: 'shared-id',
+      name: 'custom server',
+      enabled: true,
+      transport: { type: 'stdio', command: 'custom', args: [] },
+      created_at: 1,
+      updated_at: 1,
+      original_json: '{}',
+    };
+    const productServer = {
+      ...customServer,
+      name: 'product server',
+      transport: { type: 'stdio' as const, command: 'product', args: [] },
+    };
+    ensureBackendMcpCatalogMock.mockResolvedValue({
+      userServers: [customServer, productServer],
+      builtinServers: [],
+      allServers: [customServer, productServer],
+      entries: [
+        { server: customServer, origin: 'custom', access: 'manage' },
+        { server: productServer, origin: 'productBuiltin', access: 'use' },
+      ],
+      hiddenResources: [],
+    });
+
+    const { result } = renderHook(() => useMcpServers());
+
+    await waitFor(() => expect(result.current.mcpCatalogEntries).toHaveLength(2));
+
+    expect(result.current.mcpCatalogEntries.map(({ server, access }) => ({ name: server.name, access }))).toEqual([
+      { name: 'custom server', access: 'manage' },
+      { name: 'product server', access: 'use' },
+    ]);
   });
 });
