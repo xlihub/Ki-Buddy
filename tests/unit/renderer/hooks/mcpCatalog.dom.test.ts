@@ -21,7 +21,7 @@ vi.mock('@/common/adapter/ipcBridge', () => ({
   mcpService: mcpServiceMock,
 }));
 
-import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
+import { ensureBackendMcpCatalog, loadProductBuiltinMcpResourceState } from '@/renderer/hooks/mcp/catalog';
 import { createKiBuddyProductExperience } from '@/common/platform/ki-buddy';
 import productConfig from '../../../../ki-buddy-product.json';
 
@@ -173,5 +173,68 @@ describe('ensureBackendMcpCatalog', () => {
       expect.objectContaining({ resourceId: 'unknown-1', origin: 'unclassified' }),
       expect.objectContaining({ resourceId: 'upstream-1', origin: 'upstreamBuiltin' }),
     ]);
+  });
+});
+
+describe('loadProductBuiltinMcpResourceState', () => {
+  const experience = createKiBuddyProductExperience(productConfig.experience);
+  const requirements = [{ featureId: 'agents' as const, resourceId: 'agents-adapter', resourceName: 'Agents Adapter' }];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not require a product MCP before its owning feature registers one', async () => {
+    const result = await loadProductBuiltinMcpResourceState(experience);
+
+    expect(result).toEqual({ status: 'ready', missing: [] });
+    expect(mcpServiceMock.listServers.invoke).not.toHaveBeenCalled();
+  });
+
+  it('reports an installation-integrity failure after a ready catalog omits a required product MCP', async () => {
+    mcpServiceMock.listServers.invoke.mockResolvedValue([]);
+
+    const result = await loadProductBuiltinMcpResourceState(experience, requirements);
+
+    expect(result).toEqual({
+      status: 'invalid',
+      missing: [
+        {
+          code: 'required_product_resource_missing',
+          featureId: 'agents',
+          kind: 'mcp',
+          origin: 'productBuiltin',
+          resourceId: 'agents-adapter',
+          resourceName: 'Agents Adapter',
+        },
+      ],
+    });
+  });
+
+  it('accepts a required product MCP by stable backend ID instead of display name', async () => {
+    mcpServiceMock.listServers.invoke.mockResolvedValue([
+      {
+        id: 'agents-adapter',
+        name: 'Renamed by backend',
+        enabled: true,
+        transport: { type: 'stdio', command: 'managed-adapter', args: [] },
+        created_at: 1,
+        updated_at: 1,
+        original_json: '{}',
+        product_origin: 'productBuiltin',
+      },
+    ]);
+
+    const result = await loadProductBuiltinMcpResourceState(experience, requirements);
+
+    expect(result).toEqual({ status: 'ready', missing: [] });
+  });
+
+  it('keeps the requirement pending when the backend catalog cannot be read', async () => {
+    mcpServiceMock.listServers.invoke.mockRejectedValue(new Error('catalog unavailable'));
+
+    const result = await loadProductBuiltinMcpResourceState(experience, requirements);
+
+    expect(result).toEqual({ status: 'pending', missing: [] });
   });
 });

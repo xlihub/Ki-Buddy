@@ -2,7 +2,10 @@ import { mcpService } from '@/common/adapter/ipcBridge';
 import type { IMcpServer, IMcpServerTransport, ISessionMcpServer } from '@/common/config/storage';
 import {
   PRODUCT_RESOURCE_ORIGINS,
+  evaluateProductBuiltinResourceState,
   projectProductResources,
+  type ProductBuiltinResourceRequirement,
+  type ProductBuiltinResourceState,
   type ProductExperience,
   type ProductResourceAccess,
   type ProductResourceHiddenRecord,
@@ -48,6 +51,8 @@ const resolveBackendMcpOrigin = (server: ProductAwareMcpServer): ProductResource
 
 const normalizeServerName = (name: string) => name.trim().toLowerCase();
 
+export const PRODUCT_BUILTIN_MCP_REQUIREMENTS: readonly ProductBuiltinResourceRequirement[] = [];
+
 export const getMcpCatalogServerKey = (server: Pick<IMcpServer, 'id' | 'name' | 'builtin'>) => {
   const normalizedName = normalizeServerName(server.name);
   if (server.builtin === true) {
@@ -56,37 +61,26 @@ export const getMcpCatalogServerKey = (server: Pick<IMcpServer, 'id' | 'name' | 
   return `user:${normalizedName || server.id}`;
 };
 
-const dedupeServers = (servers: IMcpServer[]) => {
+const dedupeBy = <Item>(items: readonly Item[], getKey: (item: Item) => string): Item[] => {
   const seen = new Set<string>();
-  const deduped: IMcpServer[] = [];
+  const deduped: Item[] = [];
 
-  for (const server of servers) {
-    const key = getMcpCatalogServerKey(server);
+  for (const item of items) {
+    const key = getKey(item);
     if (seen.has(key)) {
       continue;
     }
     seen.add(key);
-    deduped.push(server);
+    deduped.push(item);
   }
 
   return deduped;
 };
 
-const dedupeCandidates = (candidates: readonly McpCatalogCandidate[]): McpCatalogCandidate[] => {
-  const seen = new Set<string>();
-  const deduped: McpCatalogCandidate[] = [];
+const dedupeServers = (servers: readonly IMcpServer[]) => dedupeBy<IMcpServer>(servers, getMcpCatalogServerKey);
 
-  for (const candidate of candidates) {
-    const key = getMcpCatalogServerKey(candidate.server);
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    deduped.push(candidate);
-  }
-
-  return deduped;
-};
+const dedupeCandidates = (candidates: readonly McpCatalogCandidate[]) =>
+  dedupeBy(candidates, ({ server }) => getMcpCatalogServerKey(server));
 
 const normalizeTransportForBackend = (transport: IMcpServerTransport): BackendMcpTransport => {
   if (transport.type === 'streamable_http') {
@@ -141,6 +135,34 @@ export const reportHiddenMcpResources = (hiddenResources: readonly ProductResour
     resources: hiddenResources,
   });
 };
+
+/** Evaluates registered product MCP requirements once the backend catalog can authoritatively answer. */
+export async function loadProductBuiltinMcpResourceState(
+  experience: ProductExperience = getProductExperience(),
+  requirements: readonly ProductBuiltinResourceRequirement[] = PRODUCT_BUILTIN_MCP_REQUIREMENTS
+): Promise<ProductBuiltinResourceState> {
+  const pendingState = evaluateProductBuiltinResourceState(experience, 'mcp', {
+    availableResourceIds: [],
+    catalogReady: false,
+    requirements,
+  });
+  if (pendingState.status !== 'pending') return pendingState;
+
+  try {
+    const backendServers = await mcpService.listServers.invoke();
+    const availableResourceIds = backendServers
+      .filter((server) => resolveBackendMcpOrigin(server) === 'productBuiltin')
+      .map(({ id }) => id);
+    return evaluateProductBuiltinResourceState(experience, 'mcp', {
+      availableResourceIds,
+      catalogReady: true,
+      requirements,
+    });
+  } catch (error) {
+    console.error('[ProductExperience] Failed to load the MCP catalog for product integrity validation', error);
+    return pendingState;
+  }
+}
 
 export const ensureBackendMcpCatalog = async (
   experience: ProductExperience = getProductExperience()
