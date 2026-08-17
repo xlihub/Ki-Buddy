@@ -51,6 +51,10 @@ import { allSupportedExts } from '@renderer/services/FileService';
 import SpeechInputButton from '@/renderer/components/chat/SpeechInputButton';
 import { appendSpeechTranscript } from '@/renderer/hooks/system/useSpeechInput';
 import { createChainedDispatch, useLiveTranscriptInsertion } from '@/renderer/hooks/system/useLiveTranscriptInsertion';
+import {
+  filterProductVisibleSkillNames,
+  loadProductSkillCatalog,
+} from '@/renderer/services/runtime/kiBuddySkillCatalog';
 import { getConversationInputHistory, isCaretOnFirstLine } from '@/renderer/utils/chat/messageHistory';
 import './sendbox.css';
 
@@ -480,17 +484,16 @@ const SendBox: React.FC<{
     return commands;
   }, [conversationContext?.conversation_id, enableBtw, onSlashBuiltinCommand, t]);
 
-  // Skills loaded into this conversation are also invokable via slash. We reuse
-  // the global skills index (shared SWR key `skills-index`) purely to attach a
-  // human-readable description; the loadedSkills snapshot decides which appear.
+  // Skills loaded into this conversation are invokable only when the active
+  // product catalog keeps them visible. Runtime injection remains unchanged.
   const loadedSkills = conversationContext?.loadedSkills;
-  const { data: skillIndex } = useSWR(loadedSkills && loadedSkills.length > 0 ? 'skills-index' : null, () =>
-    ipcBridge.fs.listAvailableSkills.invoke()
+  const { data: skillIndex } = useSWR(loadedSkills && loadedSkills.length > 0 ? 'product-skills-index' : null, () =>
+    loadProductSkillCatalog().then(({ visibleSkills }) => visibleSkills)
   );
   const skillSlashCommands = useMemo<SlashCommandItem[]>(() => {
     const descriptionByName = new Map((skillIndex ?? []).map((s) => [s.name, s.description]));
     return buildSkillSlashCommands(
-      loadedSkills,
+      filterProductVisibleSkillNames(loadedSkills, skillIndex),
       descriptionByName,
       t('conversation.skills.slashHint', { defaultValue: 'Skill' })
     );

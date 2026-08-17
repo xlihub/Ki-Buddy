@@ -224,6 +224,20 @@ describe('GuidActionRow skill/MCP submenu search', () => {
     expect(screen.getByText('server-4')).toBeInTheDocument();
   });
 
+  it('checks auto-injected skills by default while leaving opt-in skills unchecked', () => {
+    renderActionRow({
+      allSkills: [
+        { name: 'cron', description: '', isAuto: true },
+        { name: 'officecli-docx', description: '', isAuto: false },
+      ],
+      disabledBuiltinSkills: [],
+      enabledSkills: [],
+    });
+
+    expect(screen.getByLabelText('cron')).toBeChecked();
+    expect(screen.getByLabelText('officecli-docx')).not.toBeChecked();
+  });
+
   it('filters skills case-insensitively and keeps other items hidden', () => {
     renderActionRow();
 

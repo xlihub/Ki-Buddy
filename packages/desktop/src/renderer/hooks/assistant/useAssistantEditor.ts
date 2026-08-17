@@ -9,6 +9,7 @@ import type {
   SkillInfo,
 } from '@/renderer/pages/settings/AssistantSettings/types';
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
+import { loadProductSkillCatalog } from '@/renderer/services/runtime/kiBuddySkillCatalog';
 import { getSkillImportErrorMessage } from '@/renderer/pages/settings/SkillsSettings/skillImportMessages';
 import { emitter } from '@/renderer/utils/emitter';
 import { assistantOrderAfterToggle, selectableAssistants } from '@/renderer/utils/model/assistantSelection';
@@ -131,7 +132,7 @@ export const useAssistantEditor = ({
     async (assistantId: string) => {
       const [detail, skillsList, mcpServers] = await Promise.all([
         loadAssistantDetail(assistantId),
-        ipcBridge.fs.listAvailableSkills.invoke(),
+        loadProductSkillCatalog().then(({ visibleSkills }) => [...visibleSkills]),
         ensureBackendMcpCatalog().then(({ allServers }) => allServers),
       ]);
       return { detail, skillsList, autoSkills: deriveBuiltinAutoSkills(skillsList), mcpServers };
@@ -297,7 +298,7 @@ export const useAssistantEditor = ({
 
     try {
       const [skillsList, mcpServers] = await Promise.all([
-        ipcBridge.fs.listAvailableSkills.invoke(),
+        loadProductSkillCatalog().then(({ visibleSkills }) => [...visibleSkills]),
         ensureBackendMcpCatalog().then(({ allServers }) => allServers),
       ]);
       setAvailableSkills(skillsList);
@@ -421,8 +422,8 @@ export const useAssistantEditor = ({
         }
 
         if (skillsToImport.length > 0) {
-          const skillsList = await ipcBridge.fs.listAvailableSkills.invoke();
-          setAvailableSkills(skillsList);
+          const { visibleSkills } = await loadProductSkillCatalog();
+          setAvailableSkills([...visibleSkills]);
         }
       }
 

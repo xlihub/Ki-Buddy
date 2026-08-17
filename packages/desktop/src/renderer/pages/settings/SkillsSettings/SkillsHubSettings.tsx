@@ -13,22 +13,10 @@ import SettingsPageHeader from '../components/SettingsPageHeader';
 import TalkToButlerButton from '@/renderer/components/base/TalkToButlerButton';
 import { AionSearchInput } from '@/renderer/components/base';
 import { buildSkillImportNotice, getSkillImportErrorMessage } from './skillImportMessages';
+import { loadProductSkillCatalog, type AvailableSkill } from '@/renderer/services/runtime/kiBuddySkillCatalog';
 
 // Skill 信息类型 / Skill info type
-interface SkillInfo {
-  name: string;
-  description: string;
-  location: string;
-  /**
-   * Relative location under the builtin-skills corpus (e.g.
-   * `auto-inject/cron/SKILL.md`). Present only for built-in sources; the
-   * export-to-external-source flow still uses absolute `location` paths.
-   */
-  relative_location?: string;
-  is_auto_inject: boolean;
-  is_custom: boolean;
-  source?: 'builtin' | 'custom' | 'cron' | 'extension';
-}
+type SkillInfo = AvailableSkill;
 
 const isAutoInjectedBuiltinSkill = (skill: SkillInfo) => skill.source === 'builtin' && skill.is_auto_inject;
 
@@ -201,8 +189,8 @@ const SkillsHubSettings: React.FC<SkillsHubSettingsProps> = ({ withWrapper = tru
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const skills = await ipcBridge.fs.listAvailableSkills.invoke();
-      setAvailableSkills(skills);
+      const { visibleSkills } = await loadProductSkillCatalog();
+      setAvailableSkills([...visibleSkills]);
 
       const history = await ipcBridge.fs.listSkillImportHistory.invoke();
       setImportHistory(history as SkillImportRecord[]);

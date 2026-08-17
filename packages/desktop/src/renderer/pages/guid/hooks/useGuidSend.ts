@@ -16,6 +16,7 @@ import { type TFunction } from 'i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { mutate as swrMutate } from 'swr';
 import { getConversationCreateErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
+import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
 import type { AcpModelInfo } from '../types';
 
 export type GuidSendDeps = {
@@ -114,6 +115,14 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     const assistantBackend = selectedAssistantBackend;
     const enabled_skills_to_send = guidEnabledSkills ?? assistantDefaultSkillIds;
     const excludeBuiltinSkills = guidDisabledBuiltinSkills ?? assistantDefaultDisabledBuiltinSkillIds;
+    const productAutoInjectExclusions = getProductExperience().behaviorDefaults().autoInjectedSkillExclusions;
+    const productAutoInjectExclusionsToSend =
+      productAutoInjectExclusions.length > 0 ? [...productAutoInjectExclusions] : undefined;
+    // Product exclusions are merged by AionCore with current Guid choices.
+    // Omission preserves the Assistant's normal default resolution.
+    const disabledBuiltinSkillsToSend = productAutoInjectExclusionsToSend
+      ? guidDisabledBuiltinSkills
+      : excludeBuiltinSkills;
     const selectedAllMcpServerIds = selectedMcpServerIds ?? [];
     const selectedMcpServerIdSet = new Set(selectedAllMcpServerIds);
     const selectedUserMcpServerIds = availableMcpServers
@@ -162,7 +171,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       permission: selectedMode || undefined,
       thought_level: selectedThoughtLevelValue || undefined,
       skill_ids: enabled_skills_to_send,
-      disabled_builtin_skill_ids: excludeBuiltinSkills,
+      disabled_builtin_skill_ids: disabledBuiltinSkillsToSend,
       mcp_ids: assistantOverrideMcpIds,
     };
 
@@ -186,6 +195,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
             custom_workspace: isCustomWorkspace,
             selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
             selected_session_mcp_servers: selectedSessionMcpServersToSend,
+            exclude_auto_inject_skills: productAutoInjectExclusionsToSend,
           },
         });
 
@@ -236,6 +246,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
           selected_mcp_server_ids: selectedUserMcpServerIdsToSend,
           selected_session_mcp_servers:
             selectedMcpServerIds !== undefined ? selectedSessionMcpServers : selectedSessionMcpServersToSend,
+          exclude_auto_inject_skills: productAutoInjectExclusionsToSend,
         },
       });
       if (!conversation || !conversation.id) {
