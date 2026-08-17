@@ -54,7 +54,7 @@ const LocalAgents: React.FC = () => {
     (a) => a.agent_source !== 'custom' && !isDeprecatedRuntimeAgentType(a.agent_type)
   );
 
-  const customAgents: ManagedAgent[] = allAgents.filter((a) => a.agent_source === 'custom');
+  const customAgents = allAgents.filter((a) => a.agent_source === 'custom');
 
   const [editorVisible, setEditorVisible] = useState(false);
   const [editingAgent, setEditingAgent] = useState<ManagedAgent | null>(null);
@@ -285,6 +285,7 @@ const LocalAgents: React.FC = () => {
             <AgentCard
               key={agent.id}
               type='official'
+              readOnly={agent.productAccess !== 'manage'}
               agent={agent}
               boundAssistants={getBoundAssistants(agent, assistants)}
               onTestConnection={() => void handleTestConnection(agent.id)}
@@ -357,6 +358,7 @@ const LocalAgents: React.FC = () => {
             <AgentCard
               key={agent.id}
               type='custom'
+              readOnly={agent.productAccess !== 'manage'}
               agent={agent}
               boundAssistants={getBoundAssistants(agent, assistants)}
               onTestConnection={() => void handleTestConnection(agent.id)}

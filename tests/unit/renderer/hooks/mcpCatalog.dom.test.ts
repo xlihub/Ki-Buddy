@@ -174,6 +174,38 @@ describe('ensureBackendMcpCatalog', () => {
       expect.objectContaining({ resourceId: 'upstream-1', origin: 'upstreamBuiltin' }),
     ]);
   });
+
+  it('emits structured diagnostics for MCP resources hidden by the active product policy', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    getClientBusinessSettingMock.mockResolvedValue([
+      {
+        id: 'upstream-1',
+        name: 'upstream one',
+        enabled: true,
+        transport: { type: 'stdio', command: 'upstream', args: [] },
+        created_at: 1,
+        updated_at: 1,
+        original_json: '{}',
+        builtin: true,
+      },
+    ]);
+    mcpServiceMock.listServers.invoke.mockResolvedValue([]);
+
+    const catalog = await ensureBackendMcpCatalog(createKiBuddyProductExperience(productConfig.experience));
+
+    expect(info).toHaveBeenCalledWith(
+      '[ProductExperience] MCP resources hidden by product policy',
+      expect.objectContaining({ code: 'product_resource_projection', resources: catalog.hiddenResources })
+    );
+    info.mockRestore();
+  });
+
+  it('preserves the backend rejection when the MCP catalog cannot be loaded', async () => {
+    const error = new Error('catalog unavailable');
+    mcpServiceMock.listServers.invoke.mockRejectedValue(error);
+
+    await expect(ensureBackendMcpCatalog()).rejects.toBe(error);
+  });
 });
 
 describe('loadProductBuiltinMcpResourceState', () => {

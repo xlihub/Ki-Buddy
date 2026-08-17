@@ -1,7 +1,17 @@
 import type { TFunction } from 'i18next';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
-import { formatManagedAgentDiagnosticMessage } from '@/renderer/utils/model/agentTypes';
+import { formatManagedAgentDiagnosticMessage, requestManagedAgents } from '@/renderer/utils/model/agentTypes';
+
+const { getManagedAgentsMock } = vi.hoisted(() => ({ getManagedAgentsMock: vi.fn() }));
+
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    acpConversation: {
+      getManagedAgents: { invoke: getManagedAgentsMock },
+    },
+  },
+}));
 
 const t = ((key: string, options?: Record<string, unknown>) => {
   switch (key) {
@@ -56,5 +66,14 @@ describe('formatManagedAgentDiagnosticMessage', () => {
     );
 
     expect(message).toBe('raw backend message');
+  });
+});
+
+describe('requestManagedAgents', () => {
+  it('preserves a transport failure for authoritative catalog consumers', async () => {
+    const error = new Error('backend unavailable');
+    getManagedAgentsMock.mockRejectedValue(error);
+
+    await expect(requestManagedAgents()).rejects.toBe(error);
   });
 });

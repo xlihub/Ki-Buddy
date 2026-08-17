@@ -32,6 +32,27 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
+const jsonResponse = (data: unknown) =>
+  new Response(JSON.stringify({ data }), {
+    headers: { 'Content-Type': 'application/json' },
+    status: 200,
+  });
+
+const stubAssistantAndAgentCatalogs = (
+  assistants: readonly Record<string, unknown>[],
+  agents: readonly Record<string, unknown>[]
+) => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith('/api/assistants')) return Promise.resolve(jsonResponse(assistants));
+      if (url.endsWith('/api/agents/management')) return Promise.resolve(jsonResponse(agents));
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    })
+  );
+};
+
 describe('renderer product brand adapter', () => {
   beforeEach(() => {
     vi.stubGlobal('__APP_VERSION__', '2.1.47');
@@ -105,25 +126,19 @@ describe('renderer product brand adapter', () => {
 
   it('adapts direct assistant bridge responses after one catalog registration', async () => {
     window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            data: [
-              {
-                id: 'bare-aionrs',
-                source: 'generated',
-                name: 'Aion CLI',
-                name_i18n: { 'en-US': 'Aion CLI' },
-                avatar: '/api/assets/logos/aionui.svg',
-                agent: { type: 'aionrs', source: 'internal' },
-              },
-            ],
-          }),
-          { headers: { 'Content-Type': 'application/json' }, status: 200 }
-        )
-      )
+    stubAssistantAndAgentCatalogs(
+      [
+        {
+          id: 'bare-aionrs',
+          source: 'generated',
+          name: 'Aion CLI',
+          name_i18n: { 'en-US': 'Aion CLI' },
+          avatar: '/api/assets/logos/aionui.svg',
+          agent_id: '632f31d2',
+          agent: { type: 'aionrs', source: 'internal' },
+        },
+      ],
+      [{ id: '632f31d2', name: 'Aion CLI', agent_source: 'internal', agent_type: 'aionrs' }]
     );
     installProductAssistantCatalogAdapter();
 
@@ -131,6 +146,110 @@ describe('renderer product brand adapter', () => {
 
     expect(assistants[0]).toMatchObject({ name: 'Ki CLI', name_i18n: { 'en-US': 'Ki CLI' } });
     expect(assistants[0]?.avatar).toMatch(/^data:image\/png;base64,/);
+  });
+
+  it('hides assistant candidates whose Agent is hidden by the product directory', async () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    stubAssistantAndAgentCatalogs(
+      [
+        {
+          id: 'ki-cli-assistant',
+          source: 'generated',
+          name: 'Aion CLI',
+          agent_id: '632f31d2',
+          agent: { type: 'aionrs', source: 'internal' },
+        },
+        {
+          id: 'upstream-assistant',
+          source: 'generated',
+          name: 'Claude Code',
+          agent_id: 'builtin-claude',
+          agent: { type: 'acp', source: 'builtin' },
+        },
+      ],
+      [
+        { id: '632f31d2', name: 'Aion CLI', agent_source: 'internal', agent_type: 'aionrs' },
+        { id: 'builtin-claude', name: 'Claude Code', agent_source: 'builtin', agent_type: 'acp' },
+      ]
+    );
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    installProductAssistantCatalogAdapter();
+
+    const assistants = await ipcBridge.assistants.list.invoke();
+
+    expect(assistants.map(({ id }) => id)).toEqual(['ki-cli-assistant']);
+    expect(info).toHaveBeenCalledWith(
+      '[ProductExperience] Agent resources hidden by product policy',
+      expect.objectContaining({ code: 'product_resource_projection' })
+    );
+    info.mockRestore();
+  });
+
+  it('hides a stale Assistant snapshot when its custom Agent is absent from the authoritative directory', async () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    stubAssistantAndAgentCatalogs(
+      [
+        {
+          id: 'stale-custom-assistant',
+          source: 'generated',
+          name: 'Removed custom Agent',
+          agent_id: 'custom-removed',
+          agent: { type: 'acp', source: 'custom' },
+        },
+      ],
+      []
+    );
+    installProductAssistantCatalogAdapter();
+
+    await expect(ipcBridge.assistants.list.invoke()).resolves.toEqual([]);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not expose Assistant candidates when the authoritative Agent directory is unavailable', async () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string | URL | Request) => {
+        const url = String(input);
+        if (url.endsWith('/api/assistants')) return Promise.resolve(jsonResponse([]));
+        if (url.endsWith('/api/agents/management')) return Promise.reject(new Error('Agent directory unavailable'));
+        return Promise.reject(new Error(`Unexpected request: ${url}`));
+      })
+    );
+    installProductAssistantCatalogAdapter();
+
+    await expect(ipcBridge.assistants.list.invoke()).rejects.toThrow('Agent directory unavailable');
+  });
+
+  it('recovers Assistant candidates after the authoritative Agent directory becomes available', async () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    let agentDirectoryRequests = 0;
+    const customAssistant = {
+      id: 'custom-assistant',
+      source: 'generated',
+      name: 'Custom Assistant',
+      agent_id: 'custom-1',
+      agent: { type: 'acp', source: 'custom' },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string | URL | Request) => {
+        const url = String(input);
+        if (url.endsWith('/api/assistants')) return Promise.resolve(jsonResponse([customAssistant]));
+        if (url.endsWith('/api/agents/management')) {
+          agentDirectoryRequests += 1;
+          if (agentDirectoryRequests === 1) return Promise.reject(new Error('Agent directory unavailable'));
+          return Promise.resolve(
+            jsonResponse([{ id: 'custom-1', name: 'Custom Agent', agent_source: 'custom', agent_type: 'acp' }])
+          );
+        }
+        return Promise.reject(new Error(`Unexpected request: ${url}`));
+      })
+    );
+    installProductAssistantCatalogAdapter();
+
+    await expect(ipcBridge.assistants.list.invoke()).rejects.toThrow('Agent directory unavailable');
+    await expect(ipcBridge.assistants.list.invoke()).resolves.toEqual([customAssistant]);
   });
 
   it('keeps direct assistant bridge responses unchanged without the product capability', async () => {

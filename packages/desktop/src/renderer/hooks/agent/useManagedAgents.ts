@@ -5,23 +5,26 @@
  */
 
 import { ipcBridge } from '@/common';
-import type { ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import { MANAGED_AGENTS_SWR_KEY } from '@/renderer/utils/model/agentTypes';
 import { fetchProductManagedAgents } from '@/renderer/services/runtime/productBrandRuntime';
+import type { ProductManagedAgent } from '@/renderer/services/runtime/kiBuddyAgentCatalog';
 import useSWR, { mutate } from 'swr';
 
 export type UseManagedAgentsResult = {
-  agents: ManagedAgent[];
+  agents: ProductManagedAgent[];
   isLoading: boolean;
   isRefreshing: boolean;
   error: unknown;
-  revalidate: () => Promise<ManagedAgent[] | undefined>;
-  refreshCatalog: () => Promise<ManagedAgent[] | undefined>;
+  revalidate: () => Promise<ProductManagedAgent[] | undefined>;
+  refreshCatalog: () => Promise<ProductManagedAgent[] | undefined>;
   refreshCustomAgents: () => Promise<void>;
 };
 
-export async function refreshManagedAgentCatalogAndAssistants(): Promise<ManagedAgent[] | undefined> {
-  const [agents] = await Promise.all([mutate<ManagedAgent[]>(MANAGED_AGENTS_SWR_KEY), mutate('assistants.list')]);
+export async function refreshManagedAgentCatalogAndAssistants(): Promise<ProductManagedAgent[] | undefined> {
+  const [agents] = await Promise.all([
+    mutate<ProductManagedAgent[]>(MANAGED_AGENTS_SWR_KEY),
+    mutate('assistants.list'),
+  ]);
   return agents;
 }
 
@@ -42,12 +45,12 @@ export async function refreshManagedAgentCatalogAndAssistants(): Promise<Managed
  * Do not use this anywhere other than `AgentSettings`.
  */
 export const useManagedAgents = (): UseManagedAgentsResult => {
-  const { data, isLoading, isValidating, error } = useSWR<ManagedAgent[]>(
+  const { data, isLoading, isValidating, error } = useSWR<ProductManagedAgent[]>(
     MANAGED_AGENTS_SWR_KEY,
     fetchProductManagedAgents
   );
 
-  const revalidateManaged = () => mutate<ManagedAgent[]>(MANAGED_AGENTS_SWR_KEY);
+  const revalidateManaged = () => mutate<ProductManagedAgent[]>(MANAGED_AGENTS_SWR_KEY);
 
   return {
     agents: data ?? [],
@@ -68,8 +71,8 @@ export const useManagedAgents = (): UseManagedAgentsResult => {
  * Uses the same `/api/agents/management` payload because that endpoint is
  * backed by `agent_metadata`, where ACP catalog snapshots are persisted.
  */
-export const useManagedAgentRuntimeCatalog = (): ManagedAgent[] => {
-  const { data } = useSWR<ManagedAgent[]>(MANAGED_AGENTS_SWR_KEY, fetchProductManagedAgents);
+export const useManagedAgentRuntimeCatalog = (): ProductManagedAgent[] => {
+  const { data } = useSWR<ProductManagedAgent[]>(MANAGED_AGENTS_SWR_KEY, fetchProductManagedAgents);
   return data ?? [];
 };
 
@@ -80,7 +83,7 @@ export const useManagedAgentRuntimeCatalog = (): ManagedAgent[] => {
  * actually mutate the agent directory should invalidate the detected-agent
  * cache separately.
  */
-export async function getManagedAgents(): Promise<ManagedAgent[]> {
+export async function getManagedAgents(): Promise<ProductManagedAgent[]> {
   const data = await fetchProductManagedAgents();
   await mutate(MANAGED_AGENTS_SWR_KEY, data, { revalidate: false });
   return data;

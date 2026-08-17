@@ -161,7 +161,7 @@ export const shell = {
 
 type AssistantPresentationMapper = {
   detail: (detail: AssistantDetail) => AssistantDetail;
-  list: (assistants: Assistant[]) => Assistant[];
+  list: (assistants: Assistant[]) => Assistant[] | Promise<Assistant[]>;
 };
 
 const IDENTITY_ASSISTANT_PRESENTATION_MAPPER: AssistantPresentationMapper = {

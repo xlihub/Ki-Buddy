@@ -12,6 +12,7 @@ import {
   type ProductResourceOrigin,
 } from '@/common/platform/ki-buddy';
 import { getClientBusinessSetting } from '@/renderer/services/clientBusinessSettings';
+import { reportHiddenProductResources } from '@/renderer/services/runtime/kiBuddyProductResourceDiagnostics';
 import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
 
 type BackendMcpTransport = Exclude<IMcpServerTransport, { type: 'streamable_http' }>;
@@ -133,15 +134,6 @@ export const projectMcpCatalogCandidates = (
   };
 };
 
-/** Emits non-sensitive diagnostics for MCP resources hidden by the product policy. */
-export const reportHiddenMcpResources = (hiddenResources: readonly ProductResourceHiddenRecord[]): void => {
-  if (hiddenResources.length === 0) return;
-  console.info('[ProductExperience] MCP resources hidden by product policy', {
-    code: 'product_resource_projection',
-    resources: hiddenResources,
-  });
-};
-
 /** Evaluates registered product MCP requirements once the backend catalog can authoritatively answer. */
 export async function loadProductBuiltinMcpResourceState(
   experience: ProductExperience = getProductExperience(),
@@ -191,7 +183,7 @@ export const ensureBackendMcpCatalog = async (
     ]),
     experience
   );
-  reportHiddenMcpResources(projection.hiddenResources);
+  reportHiddenProductResources('mcp', projection.hiddenResources);
 
   const visibleServers = new Set(projection.entries.map(({ server }) => server));
   const userServers = allBackendServers.filter((server) => visibleServers.has(server));

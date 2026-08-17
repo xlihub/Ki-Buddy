@@ -6,10 +6,13 @@ import {
 } from '@/renderer/components/layout/InstallationIntegrityDialog';
 import type { ProductBuiltinResourceState } from '@/common/platform/ki-buddy';
 import { loadProductBuiltinMcpResourceState } from '@/renderer/hooks/mcp/catalog';
+import { loadProductBuiltinAgentResourceState } from '@/renderer/services/runtime/kiBuddyAgentCatalog';
 
 type KiBuddyProductIntegrityGateProps = {
   failure: string;
 };
+
+const PRODUCT_RESOURCE_VALIDATION_RETRY_MS = 1_000;
 
 /** Blocks the business host when a recognized Ki-Buddy installation has an invalid packaged policy. */
 const KiBuddyProductIntegrityGate: React.FC<KiBuddyProductIntegrityGateProps> = ({ failure }) => {
@@ -35,8 +38,8 @@ const KiBuddyProductIntegrityGate: React.FC<KiBuddyProductIntegrityGateProps> = 
   );
 };
 
-/** Validates product-owned MCP requirements after Ki-Buddy authentication and catalog startup. */
-export const KiBuddyMcpProductIntegrityGate: React.FC<PropsWithChildren<{ enabled: boolean }>> = ({
+/** Validates product-owned resource requirements after Ki-Buddy authentication and catalog startup. */
+export const KiBuddyProductResourceIntegrityGate: React.FC<PropsWithChildren<{ enabled: boolean }>> = ({
   children,
   enabled,
 }) => {
@@ -46,15 +49,41 @@ export const KiBuddyMcpProductIntegrityGate: React.FC<PropsWithChildren<{ enable
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    void loadProductBuiltinMcpResourceState()
-      .then((state) => {
-        if (active) setResourceState(state);
-      })
-      .catch((error) => {
-        console.error('[Ki-Buddy] Failed to validate product MCP resources:', error);
+    let retryTimer: number | undefined;
+    const validateResources = async (): Promise<void> => {
+      const results = await Promise.allSettled([
+        loadProductBuiltinAgentResourceState(),
+        loadProductBuiltinMcpResourceState(),
+      ]);
+      if (!active) return;
+      const labels = ['Agent', 'MCP'] as const;
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error(`[Ki-Buddy] Failed to validate product ${labels[index]} resources:`, result.reason);
+        }
       });
+      const states = results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
+      const missing = states.flatMap((state) => (state.status === 'invalid' ? state.missing : []));
+      if (missing.length > 0) {
+        setResourceState({ status: 'invalid', missing });
+        return;
+      }
+      if (
+        results.some((result) => result.status === 'rejected') ||
+        states.some((state) => state.status === 'pending')
+      ) {
+        setResourceState({ status: 'pending', missing: [] });
+        retryTimer = window.setTimeout((): void => {
+          void validateResources();
+        }, PRODUCT_RESOURCE_VALIDATION_RETRY_MS);
+        return;
+      }
+      setResourceState({ status: 'ready', missing: [] });
+    };
+    void validateResources();
     return () => {
       active = false;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
   }, [enabled]);
 
@@ -75,7 +104,7 @@ export const KiBuddyMcpProductIntegrityGate: React.FC<PropsWithChildren<{ enable
           runtime: {
             failureKind: missingResource.code,
             message: missingResource.code,
-            resource: 'product-builtin-mcp',
+            resource: `product-builtin-${missingResource.kind}`,
             resourceId: missingResource.resourceId,
             scopeKind: 'application',
           },

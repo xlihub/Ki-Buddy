@@ -261,7 +261,7 @@ type ProviderLike<Data, Params> = {
 
 export function withResponseMap<Raw, Mapped, Params>(
   inner: ProviderLike<Raw, Params>,
-  map: (data: Raw) => Mapped
+  map: (data: Raw) => Mapped | Promise<Mapped>
 ): ProviderLike<Mapped, Params> {
   return {
     provider: () => {},
