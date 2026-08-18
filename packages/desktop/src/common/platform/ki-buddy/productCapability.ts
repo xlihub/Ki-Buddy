@@ -1,6 +1,6 @@
 import type { KiBuddyProductCapability } from '@/common/types/platform/kiBuddyProduct';
 import { KI_BUDDY_PRODUCT_CONFIG_RESULT, type KiBuddyProductConfig } from './productConfig';
-import { deepFreeze } from './productExperience';
+import { deepFreeze } from './experience';
 
 /** Serializable renderer capability for the configured Ki-Buddy product runtime. */
 export function createKiBuddyProductCapability(config: KiBuddyProductConfig): KiBuddyProductCapability {

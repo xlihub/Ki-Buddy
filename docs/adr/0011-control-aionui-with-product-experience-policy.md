@@ -14,6 +14,31 @@ AionUi 与 Ki-Buddy 分别提供 adapter。产品 capability 完全缺失时使�
 
 路由、导航、资源 catalog 和生命周期分别根据同一策略生成投影。导航 registry 保持稳定顺序，产品策略不复制菜单和路由结构。停用功能的代码继续随上游基线打包，使后续 Ki-Buddy 版本可以通过更新策略重新开放能力；产品功能状态只约束客户端产品行为，不替代 Agents 平台或 AionCore 的安全授权。
 
+## 新增功能与资源
+
+`packages/desktop/src/common/platform/ki-buddy/experience/registry.json` 是 feature ID、依赖关系、必选状态、resource kind 和 resource origin 的单一 contract。Runtime 解析和发布校验均从该文件派生，不得在其他模块复制这些名单。`ki-buddy-product.json` 只声明当前产品版本采用的状态；新增 feature 时，先在 contract 中登记稳定领域 ID，再在产品策略中明确设为 `enabled` 或 `disabled`。
+
+新增可访问页面时，按页面类型登记后再实现调用方：
+
+1. 主工作区页面在 `WORKSPACE_FEATURE_REGISTRY` 中同时登记 route 和 navigation；没有导航入口的直接路由把 `navigation` 留空。
+2. 设置页在 `SETTINGS_REGISTRY` 中登记 `featureId`、导航顺序和全部 `routePaths`；Extension 设置路由使用 `EXTENSION_SETTINGS_ROUTE_REGISTRY`。
+3. Router 和 Sider 只消费 registry 投影，不依据路径、组件名、菜单标题或品牌文本决定状态。
+4. legacy redirect 也必须登记到所属 feature，停用 feature 时只能跳转到可用页面，不得挂载原页面及其 hook。
+
+新增产品内置 Agent、Assistant、Skill 或 MCP 时，在 `KI_BUDDY_PRODUCT_RESOURCE_REGISTRY` 中登记稳定后端 ID、所属 feature 和来源识别字段，再由对应 catalog 派生 requirement 与 `productBuiltin` 分类。显示名称只用于诊断，不参与产品状态或资源身份判断。Model 当前没有产品内置身份；需要增加时应先为 registry 增加对应分类，再接入 Model catalog。
+
+Electron main 的产品专属启动、migration、bridge 和清理行为使用 `MAIN_PRODUCT_LIFECYCLE_REGISTRY`。单项判断通过 `isMainProductLifecycleEnabled` 访问，阶段批处理消费 registry 投影，不得直接调用 `featureState` 维护另一份生命周期名单。Renderer 专属订阅继续通过 `isProductFeatureEnabled` 或已有页面投影访问。
+
+提交前运行：
+
+```bash
+bun run check:product-experience
+```
+
+该轻量 TypeScript 检查通过 Bun 执行，同时由 `bun run lint` 和完整单元测试调用。它只检查稳定的所有权边界，并拒绝：产品策略与 contract 的 feature/resource 不一致、重复 feature 名单、main 进程在 lifecycle policy 模块外直接读取 feature 状态、catalog 外直接读取 resource policy、renderer 绕过 adapter 读取原始 capability，以及用 `Ki-Buddy` 品牌字符串控制功能的条件判断。它不分析函数调用图，也不推断打包客户端的运行行为。
+
+路由、导航、resource catalog 和 lifecycle 的投影行为由单元测试及 renderer/main 集成测试验证。打包后的首帧、登录前后、刷新、重启、窗口、Tray、端口监听和扩展贡献以 [Ki-Buddy #52](https://github.com/xlihub/Ki-Buddy/issues/52) 的 packaged Electron E2E 为最终产品验收；E2E 使用实际随包策略作为输入，并依据首发产品矩阵维护独立预期，不能从同一策略动态生成断言结果。
+
 ## 上游接缝与同步维护
 
 现有 AionUi 扩展点只能分别控制页面或运行模块，不能在首个业务画面前向 main、preload 和 renderer 提供同一份产品能力快照，也不能保证导航、直接路由和生命周期同时停用。因此当前版本保留以下显式接缝：
@@ -24,12 +49,14 @@ AionUi 与 Ki-Buddy 分别提供 adapter。产品 capability 完全缺失时使�
 | `packages/desktop/src/preload/main.ts`、`packages/desktop/src/common/types/platform/electron.ts`                                                                                                                                          | 通过单一 getter 转发不可变 bootstrap snapshot；完整性启动不读取业务 IPC                                        | AionUi preload 继续暴露原有 backend 与 renderer bridge                                           |
 | `packages/desktop/src/renderer/index.html`、`packages/desktop/src/renderer/main.tsx`、`packages/desktop/src/renderer/services/i18n/index.ts`                                                                                              | 在首个业务画面前应用产品 capability；配置损坏时停止业务初始化；登录后目录缺少已注册产品资源时显示完整性错误    | capability 缺失时继续使用 AionUi 标题、主题、i18n 与应用 host                                    |
 | `packages/desktop/src/renderer/components/layout/Layout.tsx`、`Router.tsx`、`Sider/index.tsx`、`Titlebar/index.tsx`                                                                                                                       | 从同一 feature ID 投影 Team 入口、直接路由、订阅和 workspace 控件                                              | `ProductExperience` 的 AionUi adapter 保持 Team 入口、路由与生命周期可用                         |
+| `packages/desktop/src/renderer/components/layout/Sider/SiderNav/workspaceRegistry.ts`、`packages/desktop/src/renderer/pages/settings/components/SettingsSider.tsx`                                                                        | 分别维护 workspace 与 settings 的稳定 route/navigation registry，并从同一 feature ID 同步投影                  | AionUi adapter 投影全部 registry 项，保留现有路由和导航顺序                                      |
 | `packages/desktop/src/renderer/components/layout/Router.tsx`、`Sider/index.tsx`、`packages/desktop/src/renderer/pages/settings/components/SettingsSider.tsx`、`SettingsPageWrapper.tsx`                                                   | 从统一设置 registry 生成菜单、默认页、直接路由和 Extension settings 挂载条件；停用页面不执行 hooks 或请求      | AionUi adapter 注册原有设置页和 Extension settings，旧设置地址继续按原有重定向规则工作           |
 | `packages/desktop/src/renderer/components/settings/SettingsModal/contents/AppearanceModalContent.tsx`、`packages/desktop/src/renderer/pages/settings/AppearanceSettings/CssThemeSettings.tsx`                                             | 分别控制主题预设、主题市场和自定义主题的挂载与数据读取；字体和 UI scale 不受主题能力影响                       | AionUi adapter 保持内置主题、Extension 主题、自定义主题、字体与 UI scale 全部可用                |
 | `packages/desktop/src/renderer/pages/guid/components/QuickActionButtons.tsx`                                                                                                                                                              | 只在 Guid WebUI 与 WebUI 页面同时启用时挂载状态请求、事件订阅和快捷入口                                        | AionUi adapter 保持 WebUI 快捷入口、状态显示和跳转                                               |
 | `packages/desktop/src/renderer/hooks/mcp/catalog.ts`、`useMcpServers.ts`、`packages/desktop/src/renderer/pages/settings/ToolsSettings/`、`packages/desktop/src/renderer/components/settings/SettingsModal/contents/ToolsModalContent.tsx` | 按可信 catalog 通道和后端 `product_origin` 投影 MCP 的 `hidden`、`use`、`manage`；隐藏记录只保留非敏感诊断字段 | AionUi adapter 保持全部 MCP 来源可见；extension 原有只读交互和上游 image-generation 配置保持不变 |
 | `packages/desktop/src/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog.tsx`                                                                                                                                                        | 从 behavior defaults 决定 Scheduled Tasks 是否允许 Team 执行者                                                 | AionUi adapter 继续使用 `assistant-or-team`                                                      |
 | `packages/desktop/src/process/bridge/updateBridge.ts`、`notificationBridge.ts`                                                                                                                                                            | 注入产品更新源和通知资源；完整性失败时禁用对应业务服务                                                         | capability 缺失时继续使用 AionUi 更新源、User-Agent 和通知图标                                   |
+| `packages/desktop/src/process/ki-buddy/index.ts`、`packages/desktop/src/process/bridge/index.ts`、`packages/desktop/src/process/utils/tray.ts`                                                                                            | 从统一 main lifecycle registry 投影启动、bridge、migration、Tray 和清理行为                                    | AionUi adapter 启用 registry 中全部 main lifecycle                                               |
 
 AionUi 原行为由以下测试保护：
 
@@ -42,6 +69,7 @@ AionUi 原行为由以下测试保护：
 - `tests/unit/feedback/McpServerHeaderFeedback.dom.test.tsx`、`tests/unit/settings/ToolsModalContentImageGuide.dom.test.tsx`：`use` 允许连接检测但不提供管理操作；AionUi 的 `manage` 操作和 image-generation 配置保持可用。
 - `tests/unit/renderer/services/runtime/productBootstrap.dom.test.ts` 与 `kiBuddyRuntime.dom.test.ts`：capability 存在、缺失和损坏时使用对应启动路径。
 - `tests/integration/ProductExperienceSettingsHost.dom.test.tsx`：Ki-Buddy 设置 registry、默认页、停用路由、移动端 Extension hooks、Appearance 数据读取和 Guid WebUI 订阅均受策略约束；AionUi 原设置、主题和 WebUI 快捷行为保持可用。
+- `tests/unit/assets/kiBuddyProductExperienceConsistency.test.ts`：验证轻量一致性检查能够发现品牌判断、原始 capability 读取、重复 feature 名单、main lifecycle policy 外的 feature 状态读取，以及 catalog 外 resource policy 读取。
 
 每次同步 AionUi 基线时必须复查：
 

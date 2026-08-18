@@ -1,46 +1,24 @@
-export const PRODUCT_FEATURE_IDS = [
-  'account',
-  'agents',
-  'appearance',
-  'assistants',
-  'channels',
-  'componentShowcase',
-  'conversation',
-  'desktopPet',
-  'extensionMarketplace',
-  'extensionRuntime',
-  'extensionSettings',
-  'guid',
-  'guidFeedback',
-  'guidGithubStar',
-  'guidWebUi',
-  'models',
-  'scheduledTasks',
-  'skills',
-  'system',
-  'team',
-  'themeCustomEditor',
-  'themeMarketplace',
-  'themePresets',
-  'tools',
-  'webUi',
-] as const;
+import productExperienceRegistry from './registry.json';
 
-export const PRODUCT_RESOURCE_KINDS = ['agent', 'assistant', 'model', 'skill', 'mcp'] as const;
-export const PRODUCT_RESOURCE_ORIGINS = [
-  'productBuiltin',
-  'upstreamBuiltin',
-  'custom',
-  'extension',
-  'unclassified',
-] as const;
-
-export type ProductFeatureId = (typeof PRODUCT_FEATURE_IDS)[number];
+export type ProductFeatureId = keyof typeof productExperienceRegistry.features;
 export type ProductFeatureState = 'enabled' | 'disabled';
-export type ProductResourceKind = (typeof PRODUCT_RESOURCE_KINDS)[number];
-export type ProductResourceOrigin = (typeof PRODUCT_RESOURCE_ORIGINS)[number];
+export type ProductResourceKind = keyof typeof productExperienceRegistry.resourceKinds;
+export type ProductResourceOrigin = keyof typeof productExperienceRegistry.resourceOrigins;
 export type ProductResourceAccess = 'hidden' | 'use' | 'manage';
 export type ScheduledTaskExecutorDefault = 'assistant' | 'assistant-or-team';
+
+export const PRODUCT_FEATURE_IDS = Object.freeze(Object.keys(productExperienceRegistry.features) as ProductFeatureId[]);
+export const PRODUCT_RESOURCE_KINDS = Object.freeze(
+  Object.keys(productExperienceRegistry.resourceKinds) as ProductResourceKind[]
+);
+export const PRODUCT_RESOURCE_ORIGINS = Object.freeze(
+  Object.keys(productExperienceRegistry.resourceOrigins) as ProductResourceOrigin[]
+);
+export const PRODUCT_FEATURE_DEPENDENCIES = Object.freeze(
+  Object.entries(productExperienceRegistry.features).flatMap(([featureId, definition]) =>
+    definition.dependsOn.map((parentId) => [featureId as ProductFeatureId, parentId as ProductFeatureId] as const)
+  )
+);
 
 export type DeepReadonly<T> = T extends readonly (infer Item)[]
   ? readonly DeepReadonly<Item>[]
@@ -105,18 +83,6 @@ export type ProductBuiltinResourceState =
   | Readonly<{ missing: readonly []; status: 'pending' | 'ready' }>
   | Readonly<{ missing: readonly MissingProductBuiltinResourceRecord[]; status: 'invalid' }>;
 
-const FEATURE_DEPENDENCIES: ReadonlyArray<readonly [ProductFeatureId, ProductFeatureId]> = [
-  ['extensionMarketplace', 'extensionRuntime'],
-  ['extensionSettings', 'extensionRuntime'],
-  ['guidFeedback', 'guid'],
-  ['guidGithubStar', 'guid'],
-  ['guidWebUi', 'guid'],
-  ['guidWebUi', 'webUi'],
-  ['themeCustomEditor', 'appearance'],
-  ['themeMarketplace', 'appearance'],
-  ['themePresets', 'appearance'],
-];
-
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
@@ -165,13 +131,15 @@ export function parseProductExperiencePolicy(value: unknown): ProductExperienceS
     ])
   ) as Record<ProductFeatureId, ProductFeatureState>;
 
-  for (const [child, parent] of FEATURE_DEPENDENCIES) {
+  for (const [child, parent] of PRODUCT_FEATURE_DEPENDENCIES) {
     if (features[child] === 'enabled' && features[parent] !== 'enabled') {
       throw new Error(`Product feature ${child} requires enabled parent ${parent}`);
     }
   }
-  if (features.guid !== 'enabled') {
-    throw new Error('Product feature guid must be enabled');
+  for (const [featureId, definition] of Object.entries(productExperienceRegistry.features)) {
+    if (definition.requiredState && features[featureId as ProductFeatureId] !== definition.requiredState) {
+      throw new Error(`Product feature ${featureId} must be ${definition.requiredState}`);
+    }
   }
 
   const rawResources = requireRecord(policy.resources, 'Product experience resources');

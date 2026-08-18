@@ -59,6 +59,13 @@ repos:
         files: \.(ts|tsx|js|jsx)$
         pass_filenames: false
 
+      - id: ki-buddy-product-experience-consistency
+        name: Ki-Buddy Product Experience Consistency
+        entry: bun packages/shared-scripts/src/kiBuddyProductExperienceConsistency.ts
+        language: system
+        files: \.(ts|tsx|js|jsx|json)$
+        pass_filenames: false
+
   # Oxfmt (replaces Prettier — auto-fixes staged files only)
   - repo: local
     hooks:

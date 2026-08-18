@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PRODUCT_FEATURE_DEPENDENCIES,
+  PRODUCT_FEATURE_IDS,
+  PRODUCT_RESOURCE_KINDS,
   PRODUCT_RESOURCE_ORIGINS,
   createAionUiProductExperience,
   createKiBuddyProductExperience,
   evaluateProductBuiltinResourceState,
   parseProductExperiencePolicy,
   projectProductResources,
-} from '@/common/platform/ki-buddy/productExperience';
+} from '@/common/platform/ki-buddy/experience';
+import productExperienceRegistry from '../../../packages/desktop/src/common/platform/ki-buddy/experience/registry.json';
 
 const validPolicy = {
   schemaVersion: 1,
@@ -81,6 +85,17 @@ const validPolicy = {
 } as const;
 
 describe('ProductExperience interface', () => {
+  it('uses the shared registry as the single feature and resource contract', () => {
+    expect(PRODUCT_FEATURE_IDS).toEqual(Object.keys(productExperienceRegistry.features));
+    expect(PRODUCT_FEATURE_DEPENDENCIES).toEqual(
+      Object.entries(productExperienceRegistry.features).flatMap(([featureId, definition]) =>
+        definition.dependsOn.map((parentId) => [featureId, parentId])
+      )
+    );
+    expect(PRODUCT_RESOURCE_KINDS).toEqual(Object.keys(productExperienceRegistry.resourceKinds));
+    expect(PRODUCT_RESOURCE_ORIGINS).toEqual(Object.keys(productExperienceRegistry.resourceOrigins));
+  });
+
   it('projects visible MCP resources and records hidden resources without exposing their configuration', () => {
     const experience = createKiBuddyProductExperience(validPolicy);
     const projection = projectProductResources(experience, 'mcp', [

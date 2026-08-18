@@ -1,5 +1,5 @@
 import type { KiBuddyProductConfig } from '@/common/platform/ki-buddy/productConfig';
-import type { DeepReadonly } from '@/common/platform/ki-buddy/productExperience';
+import type { DeepReadonly } from '@/common/platform/ki-buddy/experience';
 
 export type KiBuddyProductCapability = DeepReadonly<{
   assets: KiBuddyProductConfig['assets']['renderer'];

@@ -7,6 +7,7 @@ import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime
 import {
   ensureBackendMcpCatalog,
   getMcpCatalogServerKey,
+  isProductMcpOriginVisible,
   projectMcpCatalogCandidates,
   type McpCatalogEntry,
 } from './catalog';
@@ -16,6 +17,9 @@ import {
  * Combines backend-managed user servers with extension-contributed servers.
  */
 export const useMcpServers = () => {
+  const [canUseUpstreamBuiltinMcp] = useState(() =>
+    isProductMcpOriginVisible(getProductExperience(), 'upstreamBuiltin')
+  );
   const [mcpCatalogEntries, setMcpCatalogEntries] = useState<readonly McpCatalogEntry[]>([]);
   const [extensionMcpCatalogEntries, setExtensionMcpCatalogEntries] = useState<readonly McpCatalogEntry[]>([]);
   const [backendHiddenResources, setBackendHiddenResources] = useState<readonly ProductResourceHiddenRecord[]>([]);
@@ -128,6 +132,7 @@ export const useMcpServers = () => {
     extensionMcpServers,
     extensionMcpCatalogEntries,
     hiddenResources,
+    canUseUpstreamBuiltinMcp,
     setMcpServers,
     saveMcpServers,
   };

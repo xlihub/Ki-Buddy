@@ -32,6 +32,7 @@ vi.mock('@/process/utils/runBackendMigrations', () => ({
 }));
 
 const {
+  MAIN_PRODUCT_LIFECYCLE_REGISTRY,
   createKiBuddyProductBootstrap,
   createKiBuddyProductIntegrityWindow,
   createKiBuddyRuntime,
@@ -62,6 +63,16 @@ describe('Ki-Buddy main-process runtime facade', () => {
     installTransportMock.mockReset();
     vi.mocked(BrowserWindow).mockReset();
     for (const appPath of appPaths.splice(0)) rmSync(appPath, { recursive: true, force: true });
+  });
+
+  it('keeps product-specific main lifecycles in one stable registry', () => {
+    expect(MAIN_PRODUCT_LIFECYCLE_REGISTRY).toEqual({
+      accountCoreTransport: { featureId: 'account' },
+      channelsMigration: { featureId: 'channels' },
+      desktopPet: { featureId: 'desktopPet' },
+      scheduledTasks: { featureId: 'scheduledTasks' },
+      webUi: { featureId: 'webUi' },
+    });
   });
 
   it('runs Channels migration only for product adapters that enable its lifecycle', async () => {

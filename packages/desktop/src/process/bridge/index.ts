@@ -13,6 +13,7 @@ import { initNotificationBridge } from './notificationBridge';
 import { initWebuiBridge } from './webuiBridge';
 import { initThemeBridge } from './themeBridge';
 import type { ProductExperience } from '@/common/platform/ki-buddy';
+import { isMainProductLifecycleEnabled } from '@process/ki-buddy';
 
 export type BridgeDependencies = Readonly<{
   productExperience: ProductExperience;
@@ -26,8 +27,8 @@ export function initAllBridges({ productExperience }: BridgeDependencies): void 
   initSystemSettingsBridge();
   initNotificationBridge();
   initThemeBridge();
-  if (productExperience.featureState('desktopPet') === 'enabled') initPetSettingsBridge();
-  if (productExperience.featureState('webUi') === 'enabled') initWebuiBridge();
+  if (isMainProductLifecycleEnabled(productExperience, 'desktopPet')) initPetSettingsBridge();
+  if (isMainProductLifecycleEnabled(productExperience, 'webUi')) initWebuiBridge();
 }
 
 export {

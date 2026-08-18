@@ -14,6 +14,7 @@ import {
 import { getClientBusinessSetting } from '@/renderer/services/clientBusinessSettings';
 import { reportHiddenProductResources } from '@/renderer/services/runtime/catalogs/kiBuddyProductResourceDiagnostics';
 import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { KI_BUDDY_PRODUCT_RESOURCE_REGISTRY } from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
 
 type BackendMcpTransport = Exclude<IMcpServerTransport, { type: 'streamable_http' }>;
 
@@ -52,8 +53,14 @@ const resolveBackendMcpOrigin = (server: ProductAwareMcpServer): ProductResource
 
 const normalizeServerName = (name: string) => name.trim().toLowerCase();
 
+/** Projects one MCP origin through the catalog policy for consumers that do not load server records. */
+export const isProductMcpOriginVisible = (experience: ProductExperience, origin: ProductResourceOrigin): boolean =>
+  experience.resourceAccess('mcp', origin) !== 'hidden';
+
 /** Product-owned MCP requirements registered by features such as the future Agents Adapter integration. */
-export const PRODUCT_BUILTIN_MCP_REQUIREMENTS: readonly ProductBuiltinResourceRequirement[] = [];
+export const PRODUCT_BUILTIN_MCP_REQUIREMENTS: readonly ProductBuiltinResourceRequirement[] = Object.values(
+  KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp
+);
 
 /** Returns the stable key used to reconcile MCP catalog entries across backend and local sources. */
 export const getMcpCatalogServerKey = (server: Pick<IMcpServer, 'id' | 'name' | 'builtin'>) => {

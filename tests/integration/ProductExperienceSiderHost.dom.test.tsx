@@ -56,6 +56,7 @@ vi.mock('@renderer/components/layout/Sider/TeamSiderSection', () => ({
 }));
 
 import Sider from '@/renderer/components/layout/Sider';
+import { getWorkspaceExperienceProjection } from '@/renderer/components/layout/Sider/SiderNav/workspaceRegistry';
 
 function workspaceNavigationIds(container: HTMLElement): Array<string | null> {
   return Array.from(container.querySelectorAll('[data-workspace-nav-id]')).map((item) =>
@@ -70,6 +71,18 @@ describe('Product experience Sider host', () => {
     window.__kiBuddyProductBootstrapError = null;
     window.__kiBuddyProductPresentation = null;
   });
+
+  it.each(['conversation', 'assistants', 'scheduledTasks', 'team'] as const)(
+    'projects %s routes and navigation from one workspace registry',
+    (featureId) => {
+      activateKiBuddyProduct({ [featureId]: 'disabled' });
+
+      const projection = getWorkspaceExperienceProjection();
+
+      expect(projection.routes.some((route) => route.featureId === featureId)).toBe(false);
+      expect(projection.navigation.some((item) => item.featureId === featureId)).toBe(false);
+    }
+  );
 
   it('does not mount Team navigation or its subscriptions in Ki-Buddy', async () => {
     activateKiBuddyProduct();

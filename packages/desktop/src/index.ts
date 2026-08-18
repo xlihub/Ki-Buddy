@@ -81,6 +81,7 @@ import {
   createKiBuddyProductBootstrap,
   createKiBuddyProductIntegrityWindow,
   createKiBuddyRuntime,
+  isMainProductLifecycleEnabled,
   resolveMainProductExperience,
   runProductBackendMigrations,
   readKiBuddyRuntimeIdentity,
@@ -956,7 +957,7 @@ const handleAppReady = async (): Promise<void> => {
       app.exit(1);
     }
   } else if (isWebUIMode) {
-    if (productExperience?.featureState('webUi') !== 'enabled') {
+    if (!productExperience || !isMainProductLifecycleEnabled(productExperience, 'webUi')) {
       console.error('[AionUi] WebUI is disabled by the selected product experience.');
       app.exit(1);
       return;
@@ -1203,7 +1204,9 @@ installQuitCleanup({
   // transitively (no separate frontend workerTaskManager remains).
   stopBackend: () => (productBusinessLifecycleEnabled ? backendManager.stop() : Promise.resolve()),
   destroyPetWindow:
-    productBusinessLifecycleEnabled && productExperience?.featureState('desktopPet') === 'enabled'
+    productBusinessLifecycleEnabled &&
+    productExperience &&
+    isMainProductLifecycleEnabled(productExperience, 'desktopPet')
       ? async () => {
           const { destroyPetWindow } = await import('./process/pet/petManager');
           destroyPetWindow();

@@ -33,21 +33,104 @@ export type SettingsRegistryEntry = Readonly<{
   id: string;
   path: string;
   productOnly?: boolean;
+  routePaths: readonly string[];
 }>;
 
 /** Stable settings order shared by navigation and route registration. */
 export const SETTINGS_REGISTRY = [
-  { id: 'account', path: 'account', featureId: 'account', productOnly: true, desktopOnly: false },
-  { id: 'agent', path: 'agent', featureId: 'agents', productOnly: false, desktopOnly: false },
-  { id: 'model', path: 'model', featureId: 'models', productOnly: false, desktopOnly: false },
-  { id: 'skills', path: 'skills', featureId: 'skills', productOnly: false, desktopOnly: false },
-  { id: 'tools', path: 'tools', featureId: 'tools', productOnly: false, desktopOnly: false },
-  { id: 'appearance', path: 'appearance', featureId: 'appearance', productOnly: false, desktopOnly: false },
-  { id: 'webui', path: 'webui', featureId: 'webUi', productOnly: false, desktopOnly: false },
-  { id: 'pet', path: 'pet', featureId: 'desktopPet', productOnly: false, desktopOnly: true },
-  { id: 'system', path: 'system', featureId: 'system', productOnly: false, desktopOnly: false },
-  { id: 'about', path: 'about', featureId: 'system', productOnly: false, desktopOnly: false },
+  {
+    id: 'account',
+    path: 'account',
+    featureId: 'account',
+    productOnly: true,
+    desktopOnly: false,
+    routePaths: ['/settings/account'],
+  },
+  {
+    id: 'agent',
+    path: 'agent',
+    featureId: 'agents',
+    productOnly: false,
+    desktopOnly: false,
+    routePaths: ['/settings/agent', '/settings/agent/:id/repair'],
+  },
+  {
+    id: 'model',
+    path: 'model',
+    featureId: 'models',
+    productOnly: false,
+    desktopOnly: false,
+    routePaths: ['/settings/model'],
+  },
+  {
+    id: 'skills',
+    path: 'skills',
+    featureId: 'skills',
+    productOnly: false,
+    desktopOnly: false,
+    routePaths: [
+      '/settings/skills',
+      '/settings/skills/import-history',
+      '/settings/skills/detail/:skillName',
+      '/settings/capabilities',
+      '/settings/capabilities/skills/import-history',
+      '/settings/skills-hub',
+    ],
+  },
+  {
+    id: 'tools',
+    path: 'tools',
+    featureId: 'tools',
+    productOnly: false,
+    desktopOnly: false,
+    routePaths: ['/settings/tools'],
+  },
+  {
+    id: 'appearance',
+    path: 'appearance',
+    featureId: 'appearance',
+    productOnly: false,
+    desktopOnly: false,
+    routePaths: ['/settings/appearance', '/settings/display'],
+  },
+  {
+    id: 'webui',
+    path: 'webui',
+    featureId: 'webUi',
+    productOnly: false,
+    desktopOnly: false,
+    routePaths: ['/settings/webui'],
+  },
+  {
+    id: 'pet',
+    path: 'pet',
+    featureId: 'desktopPet',
+    productOnly: false,
+    desktopOnly: true,
+    routePaths: ['/settings/pet'],
+  },
+  {
+    id: 'system',
+    path: 'system',
+    featureId: 'system',
+    productOnly: false,
+    desktopOnly: false,
+    routePaths: ['/settings/system'],
+  },
+  {
+    id: 'about',
+    path: 'about',
+    featureId: 'system',
+    productOnly: false,
+    desktopOnly: false,
+    routePaths: ['/settings/about'],
+  },
 ] as const satisfies readonly SettingsRegistryEntry[];
+
+export const EXTENSION_SETTINGS_ROUTE_REGISTRY = {
+  featureId: 'extensionSettings',
+  path: '/settings/ext/:tabId',
+} as const satisfies Readonly<{ featureId: ProductFeatureId; path: string }>;
 
 export type BuiltinSettingsId = (typeof SETTINGS_REGISTRY)[number]['id'];
 

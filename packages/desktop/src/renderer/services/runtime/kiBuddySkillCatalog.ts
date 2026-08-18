@@ -8,6 +8,7 @@ import {
 } from '@/common/platform/ki-buddy';
 import { reportHiddenProductResources } from './catalogs/kiBuddyProductResourceDiagnostics';
 import { getProductExperience } from './kiBuddyRuntime';
+import { KI_BUDDY_PRODUCT_SKILL_NAMES } from './catalogs/kiBuddyResourceRegistry';
 
 export type AvailableSkill = Awaited<ReturnType<typeof ipcBridge.fs.listAvailableSkills.invoke>>[number];
 
@@ -24,12 +25,6 @@ export type ProductSkillCatalog = Readonly<{
   visibleSkills: readonly AvailableSkill[];
 }>;
 
-const PRODUCT_OFFICE_SKILL_RELATIVE_LOCATIONS = new Set([
-  'officecli-docx/SKILL.md',
-  'officecli-pptx/SKILL.md',
-  'officecli-xlsx/SKILL.md',
-]);
-
 const resolveSkillIdentity = (
   skill: AvailableSkill
 ): Readonly<{ id: string; name: string; origin: ProductResourceOrigin; skill: AvailableSkill }> => {
@@ -39,11 +34,9 @@ const resolveSkillIdentity = (
   if (skill.source === 'extension') {
     return { id: `extension:${skill.name}`, name: skill.name, origin: 'extension', skill };
   }
-  if (skill.source === 'builtin' && skill.relative_location) {
-    const origin = PRODUCT_OFFICE_SKILL_RELATIVE_LOCATIONS.has(skill.relative_location)
-      ? 'productBuiltin'
-      : 'upstreamBuiltin';
-    return { id: `builtin:${skill.relative_location}`, name: skill.name, origin, skill };
+  if (skill.source === 'builtin') {
+    const origin = KI_BUDDY_PRODUCT_SKILL_NAMES.has(skill.name) ? 'productBuiltin' : 'upstreamBuiltin';
+    return { id: `builtin:${skill.name}`, name: skill.name, origin, skill };
   }
   return { id: `unclassified:${skill.name}`, name: skill.name, origin: 'unclassified', skill };
 };

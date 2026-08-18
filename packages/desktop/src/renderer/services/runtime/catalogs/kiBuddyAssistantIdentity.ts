@@ -1,6 +1,13 @@
 import type { TChatConversation, TConversationAssistantIdentity } from '@/common/config/storage';
 import type { ProductExperience, ProductResourceOrigin } from '@/common/platform/ki-buddy';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
+import {
+  KI_BUDDY_ASSISTANT_IDENTITIES,
+  KI_BUDDY_PRODUCT_ASSISTANT_IDS,
+  KI_CLI_PRODUCT_RESOURCE_ID,
+} from './kiBuddyResourceRegistry';
+
+export { KI_BUDDY_ASSISTANT_IDENTITIES, KI_BUDDY_PRODUCT_ASSISTANT_IDS, KI_CLI_PRODUCT_RESOURCE_ID };
 
 type AssistantOriginIdentity = Readonly<{
   id: string;
@@ -18,44 +25,12 @@ export type KiBuddyConversationRuntimeAccessInput = Readonly<{
   conversation: TChatConversation | undefined;
 }>;
 
-export const KI_CLI_PRODUCT_RESOURCE_ID = '632f31d2';
-
-export const KI_BUDDY_ASSISTANT_IDENTITIES = {
-  word: {
-    assistantId: 'word-creator',
-    assistantSource: 'builtin',
-    resourceName: 'Word Creator',
-  },
-  presentation: {
-    assistantId: 'ppt-creator',
-    assistantSource: 'builtin',
-    resourceName: 'PPT Creator',
-  },
-  spreadsheet: {
-    assistantId: 'excel-creator',
-    assistantSource: 'builtin',
-    resourceName: 'Excel Creator',
-  },
-  kiCli: {
-    assistantId: `bare:${KI_CLI_PRODUCT_RESOURCE_ID}`,
-    assistantSource: 'generated',
-    resourceName: 'Ki CLI',
-    agentId: KI_CLI_PRODUCT_RESOURCE_ID,
-    agentType: 'aionrs',
-    agentSource: 'internal',
-  },
-} as const;
-
-export const KI_BUDDY_PRODUCT_ASSISTANT_IDS = Object.values(KI_BUDDY_ASSISTANT_IDENTITIES).map(
-  ({ assistantId }) => assistantId
-);
-
 /** Identifies the product-owned internal CLI across current and historical snapshot IDs. */
 export function isKiCliConversationAssistant(assistant: TConversationAssistantIdentity): boolean {
   return (
     assistant.backend === 'aionrs' &&
     assistant.source === 'generated' &&
-    (assistant.id === KI_BUDDY_ASSISTANT_IDENTITIES.kiCli.assistantId ||
+    (assistant.id === KI_BUDDY_ASSISTANT_IDENTITIES.kiCli.id ||
       assistant.id === 'bare-aionrs' ||
       assistant.id === 'aionrs')
   );
@@ -67,7 +42,7 @@ export function resolveKiBuddyAssistantOrigin(assistant: AssistantOriginIdentity
   if (assistant.source === 'user') return 'custom';
   if (
     Object.values(KI_BUDDY_ASSISTANT_IDENTITIES).some(
-      (identity) => assistant.id === identity.assistantId && assistant.source === identity.assistantSource
+      (identity) => assistant.id === identity.id && assistant.source === identity.source
     )
   ) {
     return 'productBuiltin';

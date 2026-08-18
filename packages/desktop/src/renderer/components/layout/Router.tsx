@@ -2,7 +2,8 @@ import React, { Suspense } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
-import { getKiBuddyRouteComponents, isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { getKiBuddyRouteComponents } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { getWorkspaceExperienceProjection } from './Sider/SiderNav';
 import { getSettingsExperienceProjection } from '@renderer/pages/settings/components/SettingsSider';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
@@ -63,12 +64,14 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
 const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
   const kiBuddyRoutes = getKiBuddyRouteComponents();
-  const guidEnabled = isProductFeatureEnabled('guid');
-  const conversationEnabled = isProductFeatureEnabled('conversation');
-  const assistantsEnabled = isProductFeatureEnabled('assistants');
-  const scheduledTasksEnabled = isProductFeatureEnabled('scheduledTasks');
-  const teamEnabled = isProductFeatureEnabled('team');
-  const componentShowcaseEnabled = isProductFeatureEnabled('componentShowcase');
+  const workspaceProjection = getWorkspaceExperienceProjection();
+  const enabledWorkspaceRoutes = new Set(workspaceProjection.routes.map(({ id }) => id));
+  const guidEnabled = enabledWorkspaceRoutes.has('guid');
+  const conversationEnabled = enabledWorkspaceRoutes.has('conversation');
+  const assistantsEnabled = enabledWorkspaceRoutes.has('assistants');
+  const scheduledTasksEnabled = enabledWorkspaceRoutes.has('scheduledTasks');
+  const teamEnabled = enabledWorkspaceRoutes.has('team');
+  const componentShowcaseEnabled = enabledWorkspaceRoutes.has('componentShowcase');
   const settingsProjection = getSettingsExperienceProjection({
     includeProductEntries: Boolean(kiBuddyRoutes),
     isDesktop: true,
