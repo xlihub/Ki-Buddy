@@ -343,7 +343,7 @@ const JsonImportModal: React.FC<JsonImportModalProps> = ({ visible, server, onCa
               content={validation.errorMessage || t('settings.mcpJsonFormatError') || 'JSON format error'}
             />
           )}
-          <div className='relative'>
+          <div data-testid='mcp-json-editor' className='relative'>
             <CodeMirror
               value={jsonInput}
               height='300px'

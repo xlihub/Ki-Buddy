@@ -85,6 +85,10 @@ declare global {
   interface Window {
     electronAPI?: ElectronBridgeAPI;
     __getKiBuddyProductBootstrap?: () => import('./kiBuddyProduct').KiBuddyProductBootstrap;
+    __getE2EUiObserverState?: () => {
+      selectors: string[];
+      violations: Array<{ html: string; selector: string }>;
+    };
     __kiBuddyProductBootstrapError?: string | null;
     __kiBuddyProductPresentation?: KiBuddyProductCapability | null;
     __initialLanguage?: string | null;

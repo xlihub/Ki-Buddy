@@ -25,6 +25,21 @@ let cachedActiveCount = 0;
 let trayBrand = { iconPath: 'app.png', productName: 'AionUi' };
 let desktopPetTrayEnabled = true;
 
+export type TrayMenuSnapshotItem = Readonly<{
+  label?: string;
+  submenu?: Readonly<{ items: readonly TrayMenuSnapshotItem[] }> | null;
+}>;
+
+/** Flattens tray labels into paths so packaged tests can attest optional contributions. */
+export function collectTrayMenuLabels(items: readonly TrayMenuSnapshotItem[], parentLabel = ''): string[] {
+  return items.flatMap((item) => {
+    const label = item.label?.trim() ?? '';
+    const pathLabel = label ? (parentLabel ? `${parentLabel} > ${label}` : label) : parentLabel;
+    const nestedLabels = item.submenu ? collectTrayMenuLabels(item.submenu.items, pathLabel) : [];
+    return [...(label ? [pathLabel] : []), ...nestedLabels];
+  });
+}
+
 /** Replaces the upstream product name in tray locale text with the selected product name. */
 export function formatTrayBrandText(text: string, productName: string): string {
   return text.replaceAll('AionUi', productName);
@@ -273,6 +288,13 @@ export const buildTrayContextMenu = async (): Promise<Electron.Menu> => {
 
   return Menu.buildFromTemplate(template);
 };
+
+if (process.env.AIONUI_E2E_TEST === '1') {
+  const e2eGlobal = globalThis as typeof globalThis & {
+    __aionuiE2ETrayMenuLabels?: () => Promise<string[]>;
+  };
+  e2eGlobal.__aionuiE2ETrayMenuLabels = async () => collectTrayMenuLabels((await buildTrayContextMenu()).items);
+}
 
 /**
  * Create system tray (idempotent — no-op if already exists).

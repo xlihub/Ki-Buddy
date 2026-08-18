@@ -425,7 +425,12 @@ const AddPlatformModal = ModalHOC<{
     >
       {messageContext}
       <div>
-        <Form form={form} layout='vertical' className='[&_.arco-form-item]:mb-12px [&_.arco-form-item:last-child]:mb-0'>
+        <Form
+          data-testid='model-provider-create-form'
+          form={form}
+          layout='vertical'
+          className='[&_.arco-form-item]:mb-12px [&_.arco-form-item:last-child]:mb-0'
+        >
           {/* 模型平台选择（第一层）/ Model Platform Selection (first level) */}
           <Form.Item
             initialValue={DEFAULT_PLATFORM_VALUE}
@@ -435,6 +440,7 @@ const AddPlatformModal = ModalHOC<{
             rules={[{ required: true }]}
           >
             <Select
+              data-testid='model-provider-platform'
               showSearch
               filterOption={(inputValue, option) => {
                 const optionValue = (option as React.ReactElement<{ value?: string }>)?.props?.value;
@@ -497,6 +503,7 @@ const AddPlatformModal = ModalHOC<{
             rules={[{ required: isCustom || isNewApi }]}
           >
             <Input
+              data-testid='model-provider-base-url'
               placeholder={
                 isFullUrl
                   ? 'https://your-api-endpoint.com/v1/chat/completions'
@@ -551,6 +558,7 @@ const AddPlatformModal = ModalHOC<{
             }
           >
             <Input
+              data-testid='model-provider-api-key'
               onBlur={() => {
                 void modelListState.mutate();
               }}
@@ -644,6 +652,7 @@ const AddPlatformModal = ModalHOC<{
             }
           >
             <Select
+              data-testid='model-provider-models'
               mode='multiple'
               loading={!isFullUrl && modelListState.isLoading}
               showSearch

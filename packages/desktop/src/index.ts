@@ -38,6 +38,7 @@ import { setupApplicationMenu } from './process/utils/appMenu';
 import { startWebHost } from '@aionui/web-host';
 import { initializeZoomFactor, setupZoomForWindow } from './process/utils/zoom';
 import { hydrateWindowsProcessPath } from './process/startup/windowsPath';
+import { appendRendererQuery, resolveE2ERendererQuery } from './process/startup/rendererLoadTarget';
 import {
   MIN_WINDOW_WIDTH,
   MIN_WINDOW_HEIGHT,
@@ -99,6 +100,17 @@ import electronSquirrelStartup from 'electron-squirrel-startup';
 // When a second instance starts (e.g. from protocol URL), it sends its data
 // to the first instance via second-instance event, then quits.
 const isE2ETestMode = process.env.AIONUI_E2E_TEST === '1';
+const e2eStartedMainProductLifecycles: string[] = [];
+if (isE2ETestMode) {
+  const e2eGlobal = globalThis as typeof globalThis & {
+    __aionuiE2EStartedMainProductLifecycles?: () => string[];
+  };
+  e2eGlobal.__aionuiE2EStartedMainProductLifecycles = () => [...e2eStartedMainProductLifecycles];
+}
+
+const recordE2EStartedMainProductLifecycle = (lifecycleId: string): void => {
+  if (isE2ETestMode) e2eStartedMainProductLifecycles.push(lifecycleId);
+};
 const skipSingleInstanceLock = isE2ETestMode || process.env.AIONUI_MULTI_INSTANCE === '1';
 const packagedKiBuddyRuntime = readKiBuddyRuntimeIdentity(app.getAppPath());
 const selectedProtocolScheme = packagedKiBuddyRuntime
@@ -624,18 +636,25 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
   // Load the renderer: dev server URL in development, built HTML file in production
   const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
   const fallbackFile = path.join(__dirname, '../renderer/index.html');
+  const rendererQuery = resolveE2ERendererQuery(process.env);
+  const loadRendererFile = () =>
+    mainWindow.loadFile(fallbackFile, rendererQuery ? { query: rendererQuery } : undefined);
+  const loadRenderer = () =>
+    !app.isPackaged && rendererUrl
+      ? mainWindow.loadURL(appendRendererQuery(rendererUrl, rendererQuery))
+      : loadRendererFile();
 
   if (!app.isPackaged && rendererUrl) {
     console.log(`[AionUi] Loading renderer URL: ${rendererUrl}`);
-    mainWindow.loadURL(rendererUrl).catch((error) => {
+    loadRenderer().catch((error) => {
       console.error('[AionUi] loadURL failed, falling back to file:', error.message || error);
-      mainWindow.loadFile(fallbackFile).catch((e2) => {
+      loadRendererFile().catch((e2) => {
         console.error('[AionUi] loadFile fallback also failed:', e2.message || e2);
       });
     });
   } else {
     console.log(`[AionUi] Loading renderer file: ${fallbackFile}`);
-    mainWindow.loadFile(fallbackFile).catch((error) => {
+    loadRenderer().catch((error) => {
       console.error('[AionUi] loadFile failed:', error.message || error);
     });
   }
@@ -653,15 +672,9 @@ const createWindow = ({ showOnReady = true }: { showOnReady?: boolean } = {}): v
     if (!mainWindow.isDestroyed()) {
       console.log('[AionUi] Attempting to recover from renderer crash by reloading...');
 
-      if (!app.isPackaged && rendererUrl) {
-        mainWindow.loadURL(rendererUrl).catch((error) => {
-          console.error('[AionUi] Recovery loadURL failed:', error.message || error);
-        });
-      } else {
-        mainWindow.loadFile(fallbackFile).catch((error) => {
-          console.error('[AionUi] Recovery loadFile failed:', error.message || error);
-        });
-      }
+      loadRenderer().catch((error) => {
+        console.error('[AionUi] Recovery renderer load failed:', error.message || error);
+      });
     }
   });
 
@@ -1058,6 +1071,7 @@ const handleAppReady = async (): Promise<void> => {
     if (productExperience) {
       startMainProductLifecyclePhase(productExperience, 'desktopReady', {
         desktopPet: () => {
+          recordE2EStartedMainProductLifecycle('desktopPet');
           setTimeout(() => {
             void (async () => {
               try {
@@ -1077,6 +1091,7 @@ const handleAppReady = async (): Promise<void> => {
           }, 3000);
         },
         webUi: () => {
+          recordE2EStartedMainProductLifecycle('webUi');
           if (isE2ETestMode) return;
           // 窗口创建后异步恢复 WebUI，不阻塞 UI / Restore WebUI async after window creation, non-blocking
           restoreDesktopWebUIFromPreferences().catch((error) => {

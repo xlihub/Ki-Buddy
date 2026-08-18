@@ -346,6 +346,7 @@ const ModelModalContent: React.FC = () => {
         {t('settings.clearStatus')}
       </Button>
       <TalkToButlerButton
+        data-testid='model-add'
         label={t('settings.addModel')}
         chatLabel={t('settings.talkToButler.addViaChat', { defaultValue: 'Add via chat' })}
         onManual={() => addPlatformModalCtrl.open()}
@@ -429,6 +430,10 @@ const ModelModalContent: React.FC = () => {
               const isExpanded = collapseKey[platform.id] ?? false;
               return (
                 <Collapse
+                  data-testid={`model-provider-${platform.id}`}
+                  data-product-resource-id={platform.id}
+                  data-product-resource-origin='custom'
+                  data-product-resource-access='manage'
                   activeKey={isExpanded ? ['image-generation'] : []}
                   onChange={(_, activeKeys) => {
                     const expanded = activeKeys.includes('image-generation');
@@ -488,6 +493,7 @@ const ModelModalContent: React.FC = () => {
                           />
                           <div className='flex items-center gap-4px'>
                             <Button
+                              data-testid={`model-provider-add-${platform.id}`}
                               size='mini'
                               className='model-provider-action-btn !w-28px !h-28px !min-w-28px text-t-secondary hover:text-t-primary'
                               icon={<Plus size='14' />}
@@ -498,12 +504,14 @@ const ModelModalContent: React.FC = () => {
                               onOk={() => removePlatform(platform.id)}
                             >
                               <Button
+                                data-testid={`model-provider-delete-${platform.id}`}
                                 size='mini'
                                 className='model-provider-action-btn !w-28px !h-28px !min-w-28px text-t-secondary hover:text-t-primary'
                                 icon={<Minus size='14' />}
                               />
                             </Popconfirm>
                             <Button
+                              data-testid={`model-provider-edit-${platform.id}`}
                               size='mini'
                               className='model-provider-action-btn !w-28px !h-28px !min-w-28px text-t-secondary hover:text-t-primary'
                               icon={<Write size='14' />}
@@ -525,7 +533,12 @@ const ModelModalContent: React.FC = () => {
 
                       return (
                         <div key={model}>
-                          <div className='flex items-center justify-between gap-8px px-8px py-12px transition-colors hover:bg-[var(--fill-0)]'>
+                          <div
+                            data-product-resource-id={`provider:${platform.id}/model:${model}`}
+                            data-product-resource-origin='custom'
+                            data-product-resource-access='manage'
+                            className='flex items-center justify-between gap-8px px-8px py-12px transition-colors hover:bg-[var(--fill-0)]'
+                          >
                             <div className='flex min-w-0 flex-1 items-center gap-8px'>
                               {/* 健康状态指示器 / Health status indicator */}
                               {healthStatus !== 'unknown' && (

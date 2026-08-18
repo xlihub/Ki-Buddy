@@ -184,7 +184,7 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
       >
         {messageContext}
         <div>
-          <Form form={form} layout='vertical'>
+          <Form data-testid='model-provider-edit-form' form={form} layout='vertical'>
             {/* 模型供应商名称（可编辑，带 Logo）/ Model Provider name (editable, with Logo) */}
             <Form.Item
               label={
@@ -197,7 +197,7 @@ const EditModeModal = ModalHOC<{ data?: IProvider; onChange(data: IProvider): vo
               required
               rules={[{ required: true }]}
             >
-              <Input placeholder={t('settings.modelProvider')} />
+              <Input data-testid='model-provider-name' placeholder={t('settings.modelProvider')} />
             </Form.Item>
 
             {/* Base URL */}

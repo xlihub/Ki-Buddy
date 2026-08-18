@@ -172,6 +172,7 @@ const ModalMcpManagementSection: React.FC<{
   const renderAddButton = () => {
     return (
       <TalkToButlerButton
+        data-testid='mcp-add'
         label={t('settings.mcpAddServer')}
         chatLabel={t('settings.talkToButler.addViaChat', { defaultValue: 'Add via chat' })}
         prompt={t('settings.talkToButler.prompt.addMcp', { defaultValue: 'Help me set up an MCP server.' })}
@@ -215,11 +216,12 @@ const ModalMcpManagementSection: React.FC<{
             disableOverflow={isPageMode}
           >
             <div className='space-y-12px'>
-              {visibleMcpEntries.map(({ server, access }) => (
+              {visibleMcpEntries.map(({ server, access, origin }) => (
                 <McpServerItem
                   key={server.id}
                   server={server}
                   access={access}
+                  origin={origin}
                   isCollapsed={mcpCollapseKey[server.id] || false}
                   isTestingConnection={testingServers[server.id] || false}
                   oauthStatus={oauthStatus[server.id]}
@@ -231,11 +233,12 @@ const ModalMcpManagementSection: React.FC<{
                   onOAuthLogin={handleOAuthLogin}
                 />
               ))}
-              {extensionMcpCatalogEntries.map(({ server, access }) => (
+              {extensionMcpCatalogEntries.map(({ server, access, origin }) => (
                 <McpServerItem
                   key={server.id}
                   server={server}
                   access={access}
+                  origin={origin}
                   isCollapsed={mcpCollapseKey[server.id] || false}
                   isTestingConnection={false}
                   onToggleCollapse={() => toggleServerCollapse(server.id)}

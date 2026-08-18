@@ -124,7 +124,7 @@ async function ensureRendererAppMounted(page: Page): Promise<void> {
   }
 }
 
-async function resolveMainWindow(electronApp: ElectronApplication): Promise<Page> {
+export async function resolveMainWindow(electronApp: ElectronApplication): Promise<Page> {
   const existingMainWindow = electronApp.windows().find((win) => !isDevToolsWindow(win));
   if (existingMainWindow) {
     await ensureRendererAppMounted(existingMainWindow);
@@ -152,9 +152,16 @@ async function resolveMainWindow(electronApp: ElectronApplication): Promise<Page
  * Resolve the path to the packaged Electron executable under out/.
  * Returns { executablePath, cwd } or null if not found.
  */
-function resolvePackagedApp(): { executablePath: string; cwd: string } | null {
+export type PackagedApp = Readonly<{
+  applicationRoot: string;
+  cwd: string;
+  executablePath: string;
+  resourcesPath: string;
+}>;
+
+export function resolvePackagedApp(rootDirectory?: string): PackagedApp | null {
   const projectRoot = path.resolve(__dirname, '../..');
-  const outDir = path.join(projectRoot, 'out');
+  const outDir = rootDirectory ? path.resolve(rootDirectory) : path.join(projectRoot, 'out');
   if (!fs.existsSync(outDir)) return null;
 
   const platform = process.platform;
@@ -167,7 +174,14 @@ function resolvePackagedApp(): { executablePath: string; cwd: string } | null {
       const executable = ['Ki-Buddy.exe', 'AionUi.exe']
         .map((name) => path.join(dirPath, name))
         .find((candidate) => fs.existsSync(candidate));
-      if (executable) return { executablePath: executable, cwd: dirPath };
+      if (executable) {
+        return {
+          applicationRoot: dirPath,
+          executablePath: executable,
+          cwd: dirPath,
+          resourcesPath: path.join(dirPath, 'resources'),
+        };
+      }
     }
   } else if (platform === 'darwin') {
     // Resolve the executable declared by either the Ki-Buddy or AionUi bundle.
@@ -183,7 +197,15 @@ function resolvePackagedApp(): { executablePath: string; cwd: string } | null {
               .map((name) => path.join(executableDir, name))
               .find((candidate) => fs.statSync(candidate).isFile())
           : undefined;
-        if (executable) return { executablePath: executable, cwd: macDir };
+        if (executable) {
+          const applicationRoot = path.join(macDir, appBundle);
+          return {
+            applicationRoot,
+            executablePath: executable,
+            cwd: macDir,
+            resourcesPath: path.join(applicationRoot, 'Contents', 'Resources'),
+          };
+        }
       }
     }
   } else {
@@ -193,7 +215,14 @@ function resolvePackagedApp(): { executablePath: string; cwd: string } | null {
       if (!fs.existsSync(dirPath)) continue;
       for (const name of ['Ki-Buddy', 'ki-buddy', 'aionui', 'AionUi']) {
         const exe = path.join(dirPath, name);
-        if (fs.existsSync(exe)) return { executablePath: exe, cwd: dirPath };
+        if (fs.existsSync(exe)) {
+          return {
+            applicationRoot: dirPath,
+            executablePath: exe,
+            cwd: dirPath,
+            resourcesPath: path.join(dirPath, 'resources'),
+          };
+        }
       }
     }
   }
@@ -208,7 +237,7 @@ function shouldUsePackagedMode(): boolean {
   return !!process.env.CI;
 }
 
-function createE2EEnvironment(userDataDir: string, stateFile: string): NodeJS.ProcessEnv {
+export function createE2EEnvironment(userDataDir: string, stateFile: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
     AIONUI_EXTENSIONS_PATH:
