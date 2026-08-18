@@ -37,7 +37,12 @@ vi.mock('@/common', () => ({
 }));
 
 // Import after mocks are registered
-import { migrateConfigStorage, migrateProviders, type ConfigFile } from '@/common/config/configMigration';
+import {
+  migrateConfigStorage,
+  migrateLegacyChannelSettings,
+  migrateProviders,
+  type ConfigFile,
+} from '@/common/config/configMigration';
 import { httpRequest } from '@/common/adapter/httpBridge';
 import { ipcBridge } from '@/common';
 
@@ -226,7 +231,7 @@ describe('configMigration', () => {
       ]);
       vi.spyOn(console, 'info').mockImplementation(() => {});
 
-      await migrateConfigStorage(configFile);
+      await migrateLegacyChannelSettings(configFile);
 
       expect(httpRequest).not.toHaveBeenCalledWith('PUT', '/api/settings/client', {
         'assistant.telegram.agent': expect.anything(),
@@ -275,7 +280,7 @@ describe('configMigration', () => {
       });
       vi.spyOn(console, 'info').mockImplementation(() => {});
 
-      await migrateConfigStorage(configFile);
+      await migrateLegacyChannelSettings(configFile);
 
       expect(ipcBridge.channel.setAssistantSetting.invoke).not.toHaveBeenCalled();
       expect(ipcBridge.channel.setDefaultModelSetting.invoke).not.toHaveBeenCalled();

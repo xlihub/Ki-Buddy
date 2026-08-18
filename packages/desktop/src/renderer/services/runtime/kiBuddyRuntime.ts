@@ -103,6 +103,11 @@ export function isProductFeatureEnabled(featureId: ProductFeatureId): boolean {
   return getProductExperience().featureState(featureId) === 'enabled';
 }
 
+/** Keeps Extension settings data and subscriptions on the same product capability decision. */
+export function isExtensionSettingsContributionEnabled(): boolean {
+  return isProductFeatureEnabled('extensionRuntime') && isProductFeatureEnabled('extensionSettings');
+}
+
 /** Resolves the authenticated Ki-Buddy runtime only when both capabilities are present. */
 export function getKiBuddyRendererRuntime(): KiBuddyRendererRuntime | null {
   const productRuntime = getKiBuddyProductRuntime();

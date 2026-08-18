@@ -85,7 +85,7 @@ describe('ChatConversation legacy runtime rendering', () => {
     usePresetAssistantInfoMock.mockReset();
     acpChatMock.mockClear();
     acpModelSelectorMock.mockClear();
-    usePresetAssistantInfoMock.mockReturnValue({ info: undefined, isLoading: false });
+    usePresetAssistantInfoMock.mockReturnValue({ info: undefined, isLoading: false, runtimeAccess: 'allowed' });
   });
 
   it.each(['gemini', 'codex', 'openclaw-gateway', 'nanobot', 'remote'] as const)(
@@ -183,5 +183,68 @@ describe('ChatConversation legacy runtime rendering', () => {
         waitForWarmup: true,
       })
     );
+  });
+
+  it('renders blocked historical Extension conversations without mounting ACP runtime UI', () => {
+    usePresetAssistantInfoMock.mockReturnValue({
+      info: null,
+      isLoading: false,
+      runtimeAccess: 'blocked',
+    });
+
+    render(
+      <ChatConversation
+        conversation={
+          {
+            id: 'conv-extension-history',
+            user_id: 'user-1',
+            name: 'Extension history',
+            type: 'acp',
+            model: {},
+            extra: { workspace: '/tmp/aionui-history', backend: 'ext:example:agent' },
+            status: 'finished',
+            source: 'aionui',
+            created_at: 1,
+            modified_at: 1,
+            pinned: false,
+          } as TChatConversation
+        }
+      />
+    );
+
+    expect(screen.getByText('message history')).toBeInTheDocument();
+    expect(screen.queryByTestId('mock-acp-chat')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mock-acp-model-selector')).not.toBeInTheDocument();
+  });
+
+  it('does not mount ACP runtime UI before historical assistant access is classified', () => {
+    usePresetAssistantInfoMock.mockReturnValue({
+      info: null,
+      isLoading: true,
+      runtimeAccess: 'pending',
+    });
+
+    render(
+      <ChatConversation
+        conversation={
+          {
+            id: 'conv-pending-history',
+            user_id: 'user-1',
+            name: 'Pending history',
+            type: 'acp',
+            model: {},
+            extra: { workspace: '/tmp/aionui-history', assistant_id: 'assistant-pending' },
+            status: 'finished',
+            source: 'aionui',
+            created_at: 1,
+            modified_at: 1,
+            pinned: false,
+          } as TChatConversation
+        }
+      />
+    );
+
+    expect(screen.queryByTestId('mock-acp-chat')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mock-acp-model-selector')).not.toBeInTheDocument();
   });
 });

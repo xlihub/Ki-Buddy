@@ -265,13 +265,18 @@ const ChatConversation: React.FC<{
   const isMobile = Boolean(layout?.isMobile);
 
   const isAionrsConversation = conversation?.type === 'aionrs';
-  const isLegacyReadOnlyConversation = isLegacyReadOnlyConversationType(conversation?.type);
-  const resolvedHideSendBox = hideSendBox || isLegacyReadOnlyConversationType(conversation?.type);
-
   // 使用统一的 Hook 获取预设助手信息（ACP/Codex 会话）
   // Use unified hook for preset assistant info (ACP/Codex conversations)
   const acpConversation = isAionrsConversation ? undefined : conversation;
-  const { info: presetAssistantInfo, isLoading: isLoadingPreset } = usePresetAssistantInfo(acpConversation);
+  const {
+    info: presetAssistantInfo,
+    isLoading: isLoadingPreset,
+    runtimeAccess,
+  } = usePresetAssistantInfo(acpConversation);
+  const isConversationRuntimePending = runtimeAccess === 'pending';
+  const isLegacyReadOnlyConversation =
+    isLegacyReadOnlyConversationType(conversation?.type) || runtimeAccess === 'blocked';
+  const resolvedHideSendBox = hideSendBox || isLegacyReadOnlyConversation;
   const acpAssistantId = presetAssistantInfo?.assistantId;
   const resolvedConversationBackend = resolveConversationBackend(conversation, presetAssistantInfo?.backend);
 
@@ -283,6 +288,7 @@ const ChatConversation: React.FC<{
     if (isLegacyReadOnlyConversation) {
       return <LegacyReadOnlyConversation key={conversation.id} conversation={conversation} />;
     }
+    if (isConversationRuntimePending) return null;
     switch (conversation.type) {
       case 'acp':
       // Antigravity reports its own conversation type but renders through the
@@ -318,6 +324,7 @@ const ChatConversation: React.FC<{
     conversation,
     isAionrsConversation,
     isLegacyReadOnlyConversation,
+    isConversationRuntimePending,
     resolvedConversationBackend,
     assistantDisplayName,
     cronJobId,
@@ -341,6 +348,7 @@ const ChatConversation: React.FC<{
     if (!conversation || isAionrsConversation) return undefined;
     if (isMobile) return undefined;
     if (isLegacyReadOnlyConversation) return undefined;
+    if (isConversationRuntimePending) return undefined;
     // Antigravity included: the backend discovers agy's model list and writes it
     // into the same catalog the ACP picker reads, so it must not fall through to
     // the disabled selector below.
@@ -356,7 +364,14 @@ const ChatConversation: React.FC<{
       );
     }
     return <GoogleModelSelector disabled={true} />;
-  }, [conversation, isAionrsConversation, isMobile, isLegacyReadOnlyConversation, resolvedConversationBackend]);
+  }, [
+    conversation,
+    isAionrsConversation,
+    isMobile,
+    isLegacyReadOnlyConversation,
+    isConversationRuntimePending,
+    resolvedConversationBackend,
+  ]);
 
   if (conversation && conversation.type === 'aionrs') {
     return <AionrsConversationPanel key={conversation.id} conversation={conversation} sliderTitle={sliderTitle} />;

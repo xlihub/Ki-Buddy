@@ -11,8 +11,14 @@ import {
   resolveKiBuddyRuntimeIdentity,
   type KiBuddyProductConfigLoadResult,
 } from '@/common/platform/ki-buddy';
+import { configureCliSafeDirectoryNames, type CliSafeDirectoryNames } from '@process/utils';
 
 export { KI_BUDDY_PRODUCT_RUNTIME, resolveKiBuddyRuntimeIdentity } from '@/common/platform/ki-buddy';
+
+const KI_BUDDY_CLI_SAFE_DIRECTORIES: CliSafeDirectoryNames = Object.freeze({
+  config: '.ki-buddy-config',
+  data: '.ki-buddy',
+});
 
 /** Reads the effective packaged metadata and fails closed when it is unavailable or invalid. */
 export function readKiBuddyRuntimeIdentity(appPath: string): boolean {
@@ -21,6 +27,11 @@ export function readKiBuddyRuntimeIdentity(appPath: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Selects Ki-Buddy's home-directory aliases before storage modules resolve their default paths. */
+export function configureKiBuddyCliSafeDirectories(appPath: string): void {
+  configureCliSafeDirectoryNames(readKiBuddyRuntimeIdentity(appPath) ? KI_BUDDY_CLI_SAFE_DIRECTORIES : null);
 }
 
 /** Resolves the packaged product protocol without enabling any product runtime side effects. */

@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import os from 'os';
 import { getDevAppName } from '@/common/platform';
+import { configureKiBuddyCliSafeDirectories } from '@process/ki-buddy/runtimeIdentity';
 import { applyGpuRecoveryFlags } from './gpuRecovery';
 
 // ============ E2E test isolation ============
@@ -39,6 +40,8 @@ if (!app.isPackaged && !e2eUserDataDir) {
   const appSupportDir = path.dirname(app.getPath('userData'));
   app.setPath('userData', path.join(appSupportDir, devAppName));
 }
+
+configureKiBuddyCliSafeDirectories(app.getAppPath());
 
 // app.disableHardwareAcceleration() must run before app is ready.
 applyGpuRecoveryFlags();

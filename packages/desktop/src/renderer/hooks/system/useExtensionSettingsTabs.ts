@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { extensions as extensionsIpc, type IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
+import { isExtensionSettingsContributionEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
 
 // Module-scope cache: settings tabs rarely change during a session, and multiple
 // components (SettingsSider, SettingsPageWrapper, ExtensionSettingsPage, SettingsModal)
@@ -57,9 +58,11 @@ function ensureStateListener(): void {
  * extensions.state-changed events.
  */
 export function useExtensionSettingsTabs(): IExtensionSettingsTab[] {
-  const [tabs, setTabs] = useState<IExtensionSettingsTab[]>(() => cachedTabs ?? []);
+  const extensionSettingsEnabled = isExtensionSettingsContributionEnabled();
+  const [tabs, setTabs] = useState<IExtensionSettingsTab[]>(() => (extensionSettingsEnabled ? (cachedTabs ?? []) : []));
 
   useEffect(() => {
+    if (!extensionSettingsEnabled) return;
     subscribers.add(setTabs);
     ensureStateListener();
 
@@ -73,7 +76,7 @@ export function useExtensionSettingsTabs(): IExtensionSettingsTab[] {
     return () => {
       subscribers.delete(setTabs);
     };
-  }, []);
+  }, [extensionSettingsEnabled]);
 
-  return tabs;
+  return extensionSettingsEnabled ? tabs : [];
 }

@@ -7,23 +7,27 @@
 import { initApplicationBridge } from './applicationBridge';
 import { initDialogBridge } from './dialogBridge';
 import { initUpdateBridge } from './updateBridge';
-import { initSystemSettingsBridge } from './systemSettingsBridge';
+import { initPetSettingsBridge, initSystemSettingsBridge } from './systemSettingsBridge';
 import { initWindowControlsBridge } from './windowControlsBridge';
 import { initNotificationBridge } from './notificationBridge';
 import { initWebuiBridge } from './webuiBridge';
 import { initThemeBridge } from './themeBridge';
+import type { ProductExperience } from '@/common/platform/ki-buddy';
 
-export type BridgeDependencies = Record<string, never>;
+export type BridgeDependencies = Readonly<{
+  productExperience: ProductExperience;
+}>;
 
-export function initAllBridges(_deps: BridgeDependencies = {}): void {
+export function initAllBridges({ productExperience }: BridgeDependencies): void {
   initDialogBridge();
   initApplicationBridge();
   initWindowControlsBridge();
   initUpdateBridge();
   initSystemSettingsBridge();
   initNotificationBridge();
-  initWebuiBridge();
   initThemeBridge();
+  if (productExperience.featureState('desktopPet') === 'enabled') initPetSettingsBridge();
+  if (productExperience.featureState('webUi') === 'enabled') initWebuiBridge();
 }
 
 export {
@@ -31,6 +35,7 @@ export {
   initDialogBridge,
   initNotificationBridge,
   initSystemSettingsBridge,
+  initPetSettingsBridge,
   initThemeBridge,
   initUpdateBridge,
   initWindowControlsBridge,

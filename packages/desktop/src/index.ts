@@ -67,6 +67,7 @@ import {
 import {
   createOrUpdateTray,
   configureTrayBrand,
+  configureTrayProductExperience,
   destroyTray,
   getCloseToTrayEnabled,
   getIsQuitting,
@@ -80,11 +81,14 @@ import {
   createKiBuddyProductBootstrap,
   createKiBuddyProductIntegrityWindow,
   createKiBuddyRuntime,
+  resolveMainProductExperience,
+  runProductBackendMigrations,
   readKiBuddyRuntimeIdentity,
   resolveKiBuddyCoreDataPath,
   resolveKiBuddyProtocolScheme,
   shouldEnsureDefaultCoreUser,
   shouldStartProductBusinessLifecycle,
+  startMainProductLifecyclePhase,
 } from '@process/ki-buddy';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
@@ -204,6 +208,7 @@ const kiBuddyRuntimeSelection = createKiBuddyRuntime({
   webUi: isWebUIMode,
 });
 const kiBuddyRuntime = kiBuddyRuntimeSelection.runtime;
+const productExperience = resolveMainProductExperience(kiBuddyRuntimeSelection, packagedKiBuddyRuntime);
 const kiBuddyProductBootstrap = createKiBuddyProductBootstrap(kiBuddyRuntimeSelection);
 const kiBuddyProductInvalid = kiBuddyRuntimeSelection.status === 'invalid';
 const productBusinessLifecycleEnabled = shouldStartProductBusinessLifecycle(kiBuddyRuntimeSelection);
@@ -212,6 +217,7 @@ configureNotificationBrandIcon(kiBuddyProductInvalid ? null : (kiBuddyRuntime?.b
 if (kiBuddyRuntime) {
   configureTrayBrand(kiBuddyRuntime.brand);
 }
+if (productExperience) configureTrayProductExperience(productExperience);
 const kiBuddyCoreAuthOptions = kiBuddyRuntime?.coreAuthOptions ?? null;
 const ensureDefaultCoreUser = shouldEnsureDefaultCoreUser(kiBuddyRuntimeSelection.status !== 'absent');
 const resolveBackendDataPath = (dataPath: string): string =>
@@ -379,8 +385,8 @@ const scheduleBackendMigrations = (): void => {
   backendMigrationsScheduled = true;
   void (async () => {
     try {
-      const { runBackendMigrations } = await import('./process/utils/runBackendMigrations');
-      await runBackendMigrations(ProcessConfig);
+      if (!productExperience) return;
+      await runProductBackendMigrations(ProcessConfig, productExperience);
       console.info('[AionUi] runBackendMigrations completed');
     } catch (error) {
       console.error('[AionUi] Backend migration hook threw:', error);
@@ -414,7 +420,11 @@ function markBackendReady(backendPort: number, source: string): void {
   if (backendStartedOk) return;
   console.log(`[AionUi] ${source} ready (port=${backendPort})`);
   exposeBackendPort(backendPort);
-  registerCronResumeBridge(backendPort);
+  if (productExperience) {
+    startMainProductLifecyclePhase(productExperience, 'backendReady', {
+      scheduledTasks: () => registerCronResumeBridge(backendPort),
+    });
+  }
   backendStartedOk = true;
   backendStartupFailed = false;
   backendStartupFailureInfo = null;
@@ -751,7 +761,8 @@ const handleAppReady = async (): Promise<void> => {
   try {
     await import('./process/bridge/feedbackBridge');
     const { initializeProcess } = await import('./process');
-    await initializeProcess();
+    if (!productExperience) throw new Error('Product experience is unavailable for the business lifecycle');
+    await initializeProcess(productExperience);
     const savedLanguage = ProcessConfig.getSync('language');
     rendererInitialLanguage = kiBuddyRuntime?.resolveLanguage(savedLanguage, app.getLocale()) ?? savedLanguage ?? null;
     mark('initializeProcess');
@@ -945,6 +956,11 @@ const handleAppReady = async (): Promise<void> => {
       app.exit(1);
     }
   } else if (isWebUIMode) {
+    if (productExperience?.featureState('webUi') !== 'enabled') {
+      console.error('[AionUi] WebUI is disabled by the selected product experience.');
+      app.exit(1);
+      return;
+    }
     const userConfigInfo = loadUserWebUIConfig();
     if (userConfigInfo.exists && userConfigInfo.path) {
       // Config file loaded from user directory
@@ -1038,24 +1054,35 @@ const handleAppReady = async (): Promise<void> => {
     mark('createWindow');
 
     // Initialize desktop pet (delayed to not block main window)
-    if (!kiBuddyProductInvalid) {
-      setTimeout(() => {
-        void (async () => {
-          try {
-            const petEnabled = await ProcessConfig.get('pet.enabled');
-            if (petEnabled === true) {
-              // Read pet sub-settings before creating the pet so flags are honored
-              // on the first createPetWindow() call (which is sync).
-              const confirmEnabled = (await ProcessConfig.get('pet.confirmEnabled')) ?? true;
-              const { createPetWindow, setPetConfirmEnabled } = await import('./process/pet/petManager');
-              setPetConfirmEnabled(confirmEnabled);
-              createPetWindow();
-            }
-          } catch (error) {
-            console.error('[Pet] Failed to initialize:', error);
-          }
-        })();
-      }, 3000);
+    if (productExperience) {
+      startMainProductLifecyclePhase(productExperience, 'desktopReady', {
+        desktopPet: () => {
+          setTimeout(() => {
+            void (async () => {
+              try {
+                const petEnabled = await ProcessConfig.get('pet.enabled');
+                if (petEnabled === true) {
+                  // Read pet sub-settings before creating the pet so flags are honored
+                  // on the first createPetWindow() call (which is sync).
+                  const confirmEnabled = (await ProcessConfig.get('pet.confirmEnabled')) ?? true;
+                  const { createPetWindow, setPetConfirmEnabled } = await import('./process/pet/petManager');
+                  setPetConfirmEnabled(confirmEnabled);
+                  createPetWindow();
+                }
+              } catch (error) {
+                console.error('[Pet] Failed to initialize:', error);
+              }
+            })();
+          }, 3000);
+        },
+        webUi: () => {
+          if (isE2ETestMode) return;
+          // 窗口创建后异步恢复 WebUI，不阻塞 UI / Restore WebUI async after window creation, non-blocking
+          restoreDesktopWebUIFromPreferences().catch((error) => {
+            console.error('[WebUI] Failed to auto-restore:', error);
+          });
+        },
+      });
     }
 
     // 读取语言设置并初始化主进程 i18n，然后刷新托盘菜单
@@ -1074,13 +1101,6 @@ const handleAppReady = async (): Promise<void> => {
     if (!kiBuddyProductInvalid) {
       onLanguageChanged(() => {
         void refreshTrayMenu();
-      });
-    }
-
-    if (!isE2ETestMode && !kiBuddyProductInvalid) {
-      // 窗口创建后异步恢复 WebUI，不阻塞 UI / Restore WebUI async after window creation, non-blocking
-      restoreDesktopWebUIFromPreferences().catch((error) => {
-        console.error('[WebUI] Failed to auto-restore:', error);
       });
     }
 
@@ -1182,12 +1202,13 @@ installQuitCleanup({
   // Stop aioncore subprocess — backend shutdown kills all agent children
   // transitively (no separate frontend workerTaskManager remains).
   stopBackend: () => (productBusinessLifecycleEnabled ? backendManager.stop() : Promise.resolve()),
-  destroyPetWindow: productBusinessLifecycleEnabled
-    ? async () => {
-        const { destroyPetWindow } = await import('./process/pet/petManager');
-        destroyPetWindow();
-      }
-    : () => Promise.resolve(),
+  destroyPetWindow:
+    productBusinessLifecycleEnabled && productExperience?.featureState('desktopPet') === 'enabled'
+      ? async () => {
+          const { destroyPetWindow } = await import('./process/pet/petManager');
+          destroyPetWindow();
+        }
+      : () => Promise.resolve(),
   logInfo: console.log,
   logWarn: console.warn,
   logError: console.error,

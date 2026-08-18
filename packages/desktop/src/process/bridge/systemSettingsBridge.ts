@@ -56,8 +56,10 @@ export function initSystemSettingsBridge(): void {
       console.error('[SystemSettings] Main process changeLanguage failed:', error);
     });
   });
+}
 
-  // Desktop pet settings
+/** Registers Desktop Pet settings only when the product exposes that lifecycle. */
+export function initPetSettingsBridge(): void {
   ipcBridge.systemSettings.getPetEnabled.provider(async () => {
     const value = await ProcessConfig.get('pet.enabled');
     return value ?? false;

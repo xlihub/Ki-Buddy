@@ -11,6 +11,23 @@ import { existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync, symlinkSy
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+
+export type CliSafeDirectoryNames = Readonly<{
+  config: string;
+  data: string;
+}>;
+
+const AIONUI_CLI_SAFE_DIRECTORY_NAMES: CliSafeDirectoryNames = Object.freeze({
+  config: '.aionui-config',
+  data: '.aionui',
+});
+let cliSafeDirectoryNames = AIONUI_CLI_SAFE_DIRECTORY_NAMES;
+
+/** Configures product-owned home-directory aliases while preserving AionUi defaults when omitted. */
+export function configureCliSafeDirectoryNames(names: CliSafeDirectoryNames | null): void {
+  cliSafeDirectoryNames = names ? Object.freeze({ ...names }) : AIONUI_CLI_SAFE_DIRECTORY_NAMES;
+}
+
 export const hasElectronAppPath = (): boolean => {
   return typeof process.versions.electron === 'string';
 };
@@ -98,7 +115,7 @@ const ensureCliSafeSymlink = (targetPath: string, symlinkName: string): string =
 export const getDataPath = (): string => {
   const rootPath = getElectronPathOrFallback('userData');
   const dataPath = path.join(rootPath, 'aionui');
-  return ensureCliSafeSymlink(dataPath, getEnvAwareName('.aionui'));
+  return ensureCliSafeSymlink(dataPath, getEnvAwareName(cliSafeDirectoryNames.data));
 };
 
 /**
@@ -110,7 +127,7 @@ export const getDataPath = (): string => {
 export const getConfigPath = (): string => {
   const rootPath = getElectronPathOrFallback('userData');
   const configPath = path.join(rootPath, 'config');
-  return ensureCliSafeSymlink(configPath, getEnvAwareName('.aionui-config'));
+  return ensureCliSafeSymlink(configPath, getEnvAwareName(cliSafeDirectoryNames.config));
 };
 
 /**

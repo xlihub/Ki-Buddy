@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { initAllBridges } from '../bridge';
+import { initAllBridges, type BridgeDependencies } from '../bridge';
 
-initAllBridges();
+/** Registers main-process IPC providers for the selected product experience. */
+export default function initBridge(dependencies: BridgeDependencies): void {
+  initAllBridges(dependencies);
+}
