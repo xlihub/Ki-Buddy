@@ -23,6 +23,7 @@ export const useMcpServers = () => {
   const [isMcpServersLoading, setIsMcpServersLoading] = useState(true);
 
   useEffect(() => {
+    const productExperience = getProductExperience();
     void ensureBackendMcpCatalog()
       .then(({ entries = [], hiddenResources = [] }) => {
         setMcpCatalogEntries(entries);
@@ -36,6 +37,8 @@ export const useMcpServers = () => {
       .finally(() => {
         setIsMcpServersLoading(false);
       });
+
+    if (productExperience.featureState('extensionRuntime') !== 'enabled') return;
 
     void ipcBridge.extensions.getMcpServers
       .invoke()
@@ -58,7 +61,7 @@ export const useMcpServers = () => {
         }));
         const projection = projectMcpCatalogCandidates(
           converted.map((server) => ({ server, origin: 'extension' as const })),
-          getProductExperience()
+          productExperience
         );
         reportHiddenProductResources('mcp', projection.hiddenResources);
         setExtensionMcpCatalogEntries(projection.entries);

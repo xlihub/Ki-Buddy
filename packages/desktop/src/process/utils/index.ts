@@ -8,6 +8,7 @@ export {
   getTempPath,
   getDataPath,
   getConfigPath,
+  configureCliSafeDirectoryNames,
   generateHashWithFullName,
   readDirectoryRecursive,
   copyDirectoryRecursively,
@@ -16,3 +17,4 @@ export {
   ensureDirectory,
   resolveCliSafePath,
 } from './utils';
+export type { CliSafeDirectoryNames } from './utils';

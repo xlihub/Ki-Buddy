@@ -17,13 +17,15 @@ if (app.isPackaged) {
   process.env.PREBUILDS_ONLY = '1';
 }
 import initStorage from './utils/initStorage';
-import './utils/initBridge';
+import initBridge from './utils/initBridge';
 import './services/i18n'; // Initialize i18n for main process
+import type { ProductExperience } from '@/common/platform/ki-buddy';
 
-export const initializeProcess = async () => {
+export const initializeProcess = async (productExperience: ProductExperience) => {
   const t0 = performance.now();
   const mark = (label: string) => console.log(`[AionUi:process] ${label} +${Math.round(performance.now() - t0)}ms`);
 
+  initBridge({ productExperience });
   await initStorage();
   mark('initStorage');
 };

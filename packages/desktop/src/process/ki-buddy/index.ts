@@ -8,6 +8,7 @@ import type { SupportedLanguage } from '@/common/config/i18n';
 import {
   KI_BUDDY_CORE_TRANSPORT_CHANNEL,
   KI_BUDDY_PRODUCT_CONFIG_RESULT,
+  createAionUiProductExperience,
   createKiBuddyProductCapability,
   createKiBuddyProductExperience,
   deepFreeze,
@@ -27,6 +28,7 @@ import { createKiBuddyUpdateBridgeConfiguration, createKiBuddyUpdateFeedConfigur
 import type { UpdateBridgeConfiguration } from '@process/bridge/updateBridge';
 import type { UpdateFeedConfiguration } from '@process/services/updateFeed';
 import { BrowserWindow } from 'electron';
+import type { runBackendMigrations } from '@process/utils/runBackendMigrations';
 
 export type KiBuddyRuntime = {
   brand: {
@@ -41,7 +43,6 @@ export type KiBuddyRuntime = {
   registerAuthBridge: (getCoreBaseUrl: () => string) => AgentsAuthService;
   resolveDataPath: (dataPath: string) => string;
   resolveLanguage: (savedLanguage: string | null | undefined, systemLanguage: string | null) => SupportedLanguage;
-  startFeatureLifecycles: (lifecycles: readonly ProductFeatureLifecycle[]) => void;
   updateBridge: UpdateBridgeConfiguration;
   updateFeed: UpdateFeedConfiguration;
 };
@@ -135,6 +136,69 @@ export function startProductFeatureLifecycles(
   }
 }
 
+type BackendReadyLifecycleStarters = Readonly<{
+  scheduledTasks: () => void;
+}>;
+
+type DesktopReadyLifecycleStarters = Readonly<{
+  desktopPet: () => void;
+  webUi: () => void;
+}>;
+
+export function startMainProductLifecyclePhase(
+  productExperience: ProductExperience,
+  phase: 'backendReady',
+  starters: BackendReadyLifecycleStarters
+): void;
+export function startMainProductLifecyclePhase(
+  productExperience: ProductExperience,
+  phase: 'desktopReady',
+  starters: DesktopReadyLifecycleStarters
+): void;
+/** Runs the production main-process lifecycle plan for one startup phase. */
+export function startMainProductLifecyclePhase(
+  productExperience: ProductExperience,
+  phase: 'backendReady' | 'desktopReady',
+  starters: BackendReadyLifecycleStarters | DesktopReadyLifecycleStarters
+): void {
+  if (phase === 'backendReady') {
+    const { scheduledTasks } = starters as BackendReadyLifecycleStarters;
+    startProductFeatureLifecycles(productExperience, [{ featureId: 'scheduledTasks', start: scheduledTasks }]);
+    return;
+  }
+  const { desktopPet, webUi } = starters as DesktopReadyLifecycleStarters;
+  startProductFeatureLifecycles(productExperience, [
+    { featureId: 'desktopPet', start: desktopPet },
+    { featureId: 'webUi', start: webUi },
+  ]);
+}
+
+/** Resolves the main-process adapter without activating product runtime side effects. */
+export function resolveMainProductExperience(
+  selection: KiBuddyRuntimeSelection,
+  productIdentity: boolean,
+  productConfigResult: KiBuddyProductConfigLoadResult = KI_BUDDY_PRODUCT_CONFIG_RESULT
+): ProductExperience | null {
+  if (selection.runtime) return selection.runtime.productExperience;
+  if (selection.status === 'invalid') return null;
+  if (productIdentity && productConfigResult.config) {
+    return createKiBuddyProductExperience(productConfigResult.config.experience);
+  }
+  return createAionUiProductExperience();
+}
+
+/** Runs generic migrations, then product-owned migrations whose lifecycle is enabled. */
+export async function runProductBackendMigrations(
+  configFile: Parameters<typeof runBackendMigrations>[0],
+  productExperience: ProductExperience
+): Promise<void> {
+  const { runBackendMigrations } = await import('@process/utils/runBackendMigrations');
+  await runBackendMigrations(configFile);
+  if (productExperience.featureState('channels') !== 'enabled') return;
+  const { migrateLegacyChannelSettings } = await import('@/common/config/configMigration');
+  await migrateLegacyChannelSettings(configFile);
+}
+
 /** Creates and installs the main-process Ki-Buddy runtime when explicit product metadata selects it. */
 export function createKiBuddyRuntime(
   options: {
@@ -191,7 +255,6 @@ export function createKiBuddyRuntime(
         productLanguage: config.defaults.language,
         systemLanguage,
       }),
-    startFeatureLifecycles: (lifecycles) => startProductFeatureLifecycles(productExperience, lifecycles),
     updateBridge: createKiBuddyUpdateBridgeConfiguration(config),
     updateFeed: createKiBuddyUpdateFeedConfiguration(config),
   };

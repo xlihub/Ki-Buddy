@@ -4,6 +4,11 @@ import type { TConversationAssistantIdentity } from '@/common/config/storage';
 import type { Assistant, AssistantAgent, AssistantDetail } from '@/common/types/agent/assistantTypes';
 import { loadProductAgentCatalog, type ProductManagedAgent } from './kiBuddyAgentCatalog';
 import { projectProductAssistantCatalog } from './catalogs/kiBuddyAssistantCatalog';
+import {
+  resolveKiBuddyConversationRuntimeAccess,
+  type ConversationRuntimeAccess,
+  type KiBuddyConversationRuntimeAccessInput,
+} from './catalogs/kiBuddyAssistantIdentity';
 import { reportHiddenProductResources } from './catalogs/kiBuddyProductResourceDiagnostics';
 import { getKiBuddyProductRuntime } from './kiBuddyRuntime';
 import { createKiBuddyPresentationAdapter } from './kiBuddyPresentationAdapter';
@@ -13,6 +18,8 @@ import type {
   ProductPresentationAdapter,
   RendererBrand,
 } from './productPresentationContract';
+
+export type { ConversationRuntimeAccess } from './catalogs/kiBuddyAssistantIdentity';
 
 declare const __APP_VERSION__: string;
 declare const __KI_BUDDY_VERSION__: string;
@@ -96,6 +103,14 @@ export function adaptProductAssistantDetailIdentity<T extends AssistantDetail>(d
 /** Applies product identity to the built-in CLI snapshot stored on existing conversations. */
 export function adaptProductConversationAssistantIdentity<T extends TConversationAssistantIdentity>(assistant: T): T {
   return getProductPresentationAdapter().adaptConversationAssistantIdentity(assistant);
+}
+
+/** Resolves persisted-conversation runtime access without exposing product policy to upstream callers. */
+export function resolveProductConversationRuntimeAccess(
+  input: KiBuddyConversationRuntimeAccessInput
+): ConversationRuntimeAccess {
+  const runtime = getKiBuddyProductRuntime();
+  return runtime ? resolveKiBuddyConversationRuntimeAccess(input, runtime.productExperience) : 'allowed';
 }
 
 /** Installs product identity once at the shared assistant catalog boundary. */

@@ -29,7 +29,6 @@ const LEGACY_CHANNEL_KEYS = [
 const LEGACY_CHANNEL_PLATFORMS = ['telegram', 'lark', 'dingtalk', 'weixin', 'wecom'] as const;
 
 type LegacyChannelConfigKey = (typeof LEGACY_CHANNEL_KEYS)[number];
-type LegacyChannelPlatform = (typeof LEGACY_CHANNEL_PLATFORMS)[number];
 type LegacyBusinessConfigKey =
   | 'google.config'
   | 'acp.promptTimeout'
@@ -137,8 +136,6 @@ export async function migrateConfigStorage(configFile: ConfigFile): Promise<void
       );
     }
   }
-
-  await migrateLegacyChannelSettings(legacyConfigFile);
 }
 
 export async function migrateLegacyMcpConfigToDb(configFile: ConfigFile): Promise<void> {
@@ -199,7 +196,9 @@ function normalizeLegacyMcpServer(
   };
 }
 
-async function migrateLegacyChannelSettings(configFile: LegacyChannelConfigFile): Promise<void> {
+/** Migrates legacy per-platform channel settings through the dedicated channel APIs. */
+export async function migrateLegacyChannelSettings(configFile: ConfigFile): Promise<void> {
+  const legacyConfigFile = configFile as LegacyChannelConfigFile;
   const assistants: ChannelAssistantCandidate[] = await ipcBridge.assistants.list
     .invoke()
     .catch((): ChannelAssistantCandidate[] => []);
@@ -213,8 +212,8 @@ async function migrateLegacyChannelSettings(configFile: LegacyChannelConfigFile)
     const defaultModelKey = `assistant.${platform}.defaultModel` as const;
 
     const [legacyAssistant, legacyDefaultModel, currentSettings] = await Promise.all([
-      configFile.get(assistantKey).catch((): undefined => undefined),
-      configFile.get(defaultModelKey).catch((): undefined => undefined),
+      legacyConfigFile.get(assistantKey).catch((): undefined => undefined),
+      legacyConfigFile.get(defaultModelKey).catch((): undefined => undefined),
       ipcBridge.channel.getPlatformSettings.invoke({ platform }).catch((): null => null),
     ]);
 

@@ -72,6 +72,214 @@ describe('usePresetAssistantInfo', () => {
     window.__kiBuddyProductPresentation = null;
   });
 
+  it('does not request Extension ACP contributions when the runtime is disabled', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockReturnValue({ data: undefined, isLoading: false });
+
+    renderHook(() => usePresetAssistantInfo(undefined));
+
+    expect(useSWRMock).toHaveBeenNthCalledWith(2, null, expect.any(Function));
+  });
+
+  it('blocks historical Extension adapter backends when the runtime is disabled', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockReturnValue({ data: [], isLoading: false });
+
+    const { result } = renderHook(() => usePresetAssistantInfo(makeConversation({ backend: 'ext:example:agent' })));
+
+    expect(result.current).toEqual({ info: null, isLoading: false, runtimeAccess: 'blocked' });
+  });
+
+  it('does not restore an assistant backed by a historical Extension record when the runtime is disabled', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockImplementation((key: unknown) => {
+      if (key === 'assistants.list') {
+        return {
+          data: [
+            {
+              id: 'assistant-extension-legacy',
+              name: 'Legacy Extension Assistant',
+              avatar: '🧩',
+              name_i18n: {},
+              agent: { source: 'extension', type: 'legacy-extension' },
+            },
+          ],
+          isLoading: false,
+        };
+      }
+      return { data: undefined, isLoading: false };
+    });
+
+    const conversation = makeConversation({
+      custom_agent_id: 'assistant-extension-legacy',
+      preset_context: '# Legacy Extension Assistant',
+    });
+    const { result } = renderHook(() => usePresetAssistantInfo(conversation));
+
+    expect(result.current).toEqual({ info: null, isLoading: false, runtimeAccess: 'blocked' });
+  });
+
+  it('does not restore a modern assistant snapshot backed by an Extension agent when the runtime is disabled', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockImplementation((key: unknown) => {
+      if (key === 'assistants.list') {
+        return {
+          data: [
+            {
+              id: 'assistant-extension-snapshot',
+              name: 'Snapshot Extension Assistant',
+              avatar: '🧩',
+              name_i18n: {},
+              agent: { source: 'extension', type: 'snapshot-extension' },
+            },
+          ],
+          isLoading: false,
+        };
+      }
+      return { data: undefined, isLoading: false };
+    });
+
+    const conversation = {
+      ...makeConversation({ assistant_id: 'assistant-extension-snapshot' }),
+      assistant: {
+        id: 'assistant-extension-snapshot',
+        source: 'generated',
+        name: 'Snapshot Extension Assistant',
+        avatar: '🧩',
+        backend: 'snapshot-extension',
+      },
+    };
+    const { result } = renderHook(() => usePresetAssistantInfo(conversation));
+
+    expect(result.current).toEqual({ info: null, isLoading: false, runtimeAccess: 'blocked' });
+  });
+
+  it('keeps an unclassified snapshot pending while the assistant catalog is loading', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockImplementation((key: unknown) =>
+      key === 'assistants.list' ? { data: undefined, isLoading: true } : { data: undefined, isLoading: false }
+    );
+    const conversation = {
+      ...makeConversation({ assistant_id: 'assistant-extension-snapshot' }),
+      assistant: {
+        id: 'assistant-extension-snapshot',
+        source: 'generated',
+        name: 'Snapshot Extension Assistant',
+        avatar: '🧩',
+        backend: 'snapshot-extension',
+      },
+    };
+
+    const { result } = renderHook(() => usePresetAssistantInfo(conversation));
+
+    expect(result.current).toEqual({ info: null, isLoading: true, runtimeAccess: 'pending' });
+  });
+
+  it('restores an unclassified snapshot when no Extension origin can be proven', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockImplementation((key: unknown) =>
+      key === 'assistants.list' ? { data: [], isLoading: false } : { data: undefined, isLoading: false }
+    );
+    const conversation = {
+      ...makeConversation({ assistant_id: 'assistant-deleted-snapshot' }),
+      assistant: {
+        id: 'assistant-deleted-snapshot',
+        source: 'generated',
+        name: 'Historical Assistant',
+        avatar: '🧩',
+        backend: 'claude',
+      },
+    };
+
+    const { result } = renderHook(() => usePresetAssistantInfo(conversation));
+
+    expect(result.current).toEqual({
+      info: {
+        name: 'Historical Assistant',
+        logo: '🧩',
+        isEmoji: true,
+        backend: 'claude',
+        assistantId: 'assistant-deleted-snapshot',
+      },
+      isLoading: false,
+      runtimeAccess: 'allowed',
+    });
+  });
+
+  it('keeps historical assistant runtime pending until Ki-Buddy can classify its catalog record', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockImplementation((key: unknown) =>
+      key === 'assistants.list' ? { data: undefined, isLoading: true } : { data: undefined, isLoading: false }
+    );
+
+    const { result } = renderHook(() =>
+      usePresetAssistantInfo(makeConversation({ assistant_id: 'assistant-pending', backend: 'claude' }))
+    );
+
+    expect(result.current).toEqual({ info: null, isLoading: true, runtimeAccess: 'pending' });
+  });
+
+  it('allows an unclassified historical assistant after the Ki-Buddy catalog finishes loading', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockImplementation((key: unknown) =>
+      key === 'assistants.list' ? { data: [], isLoading: false } : { data: undefined, isLoading: false }
+    );
+
+    const { result } = renderHook(() =>
+      usePresetAssistantInfo(makeConversation({ assistant_id: 'assistant-deleted', backend: 'claude' }))
+    );
+
+    expect(result.current).toEqual({ info: null, isLoading: false, runtimeAccess: 'allowed' });
+  });
+
+  it('allows an unclassified legacy assistant payload after its catalog record was deleted', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockImplementation((key: unknown) =>
+      key === 'assistants.list' ? { data: [], isLoading: false } : { data: undefined, isLoading: false }
+    );
+
+    const { result } = renderHook(() =>
+      usePresetAssistantInfo(
+        makeConversation({
+          custom_agent_id: 'assistant-deleted',
+          preset_context: '# Deleted Assistant',
+          backend: 'claude',
+        })
+      )
+    );
+
+    expect(result.current.runtimeAccess).toBe('allowed');
+    expect(result.current.info?.name).toBe('Claude');
+  });
+
+  it('keeps legacy ACP runtime rows available in Ki-Buddy when they have no assistant payload', () => {
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    useSWRMock.mockImplementation((key: unknown) =>
+      key === 'assistants.list' ? { data: [], isLoading: false } : { data: undefined, isLoading: false }
+    );
+
+    const { result } = renderHook(() =>
+      usePresetAssistantInfo(
+        makeConversation({ custom_agent_id: 'runtime-social', agent_name: 'Gemini Runtime', backend: 'gemini' })
+      )
+    );
+
+    expect(result.current.runtimeAccess).toBe('allowed');
+    expect(result.current.info?.name).toBe('Gemini Runtime');
+  });
+
+  it('allows the same historical assistant path in AionUi', () => {
+    useSWRMock.mockImplementation((key: unknown) =>
+      key === 'assistants.list' ? { data: undefined, isLoading: true } : { data: undefined, isLoading: false }
+    );
+
+    const { result } = renderHook(() =>
+      usePresetAssistantInfo(makeConversation({ assistant_id: 'assistant-pending', backend: 'claude' }))
+    );
+
+    expect(result.current.runtimeAccess).toBe('allowed');
+  });
+
   it('prefers preset assistant avatar over custom runtime metadata when both identities exist', () => {
     useSWRMock.mockImplementation((key: unknown) => {
       if (key === 'assistants.list') {
@@ -209,6 +417,7 @@ describe('usePresetAssistantInfo', () => {
       backend: 'aionrs',
       assistantId: 'bare-aionrs',
     });
+    expect(result.current.runtimeAccess).toBe('allowed');
   });
 
   it('restores local absolute assistant snapshot avatars from the backend assistant catalog', () => {

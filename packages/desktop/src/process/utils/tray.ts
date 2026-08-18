@@ -14,6 +14,7 @@ import {
 import * as path from 'path';
 import { ipcBridge } from '@/common';
 import i18n from '@process/services/i18n';
+import type { ProductExperience } from '@/common/platform/ki-buddy';
 
 let tray: TrayInstance | null = null;
 let closeToTrayEnabled = false;
@@ -21,6 +22,7 @@ let isQuitting = false;
 let mainWindowRef: BrowserWindow | null = null;
 let cachedActiveCount = 0;
 let trayBrand = { iconPath: 'app.png', productName: 'AionUi' };
+let desktopPetTrayEnabled = true;
 
 /** Replaces the upstream product name in tray locale text with the selected product name. */
 export function formatTrayBrandText(text: string, productName: string): string {
@@ -30,6 +32,11 @@ export function formatTrayBrandText(text: string, productName: string): string {
 /** Configures the generic tray surface from the selected product runtime. */
 export function configureTrayBrand(brand: { iconPath: string; productName: string }): void {
   trayBrand = brand;
+}
+
+/** Projects Desktop Pet tray availability from the selected product adapter. */
+export function configureTrayProductExperience(productExperience: ProductExperience): void {
+  desktopPetTrayEnabled = productExperience.featureState('desktopPet') === 'enabled';
 }
 
 export const setTrayMainWindow = (win: BrowserWindow): void => {
@@ -105,7 +112,8 @@ const getTrayIcon = (): Electron.NativeImage => {
 /**
  * Build tray context menu (async to support dynamic content).
  */
-const buildTrayContextMenu = async (): Promise<Electron.Menu> => {
+/** Builds the current tray menu after product lifecycle projection. */
+export const buildTrayContextMenu = async (): Promise<Electron.Menu> => {
   const getRecentConversations = async (): Promise<Array<{ id: string; title: string }>> => {
     try {
       const result = await ipcBridge.database.getUserConversations.invoke({ limit: 5 });
@@ -175,58 +183,60 @@ const buildTrayContextMenu = async (): Promise<Electron.Menu> => {
     },
   });
 
-  template.push({ type: 'separator' });
-  template.push({
-    label: `🐾 ${i18n.t('pet.desktopPet')}`,
-    submenu: [
-      {
-        label: i18n.t('pet.showHide'),
-        click: async () => {
-          try {
-            const petManager = await import('../pet/petManager');
-            // Toggle: if pet windows exist, hide; otherwise show/create
-            petManager.showPetWindow();
-          } catch {
-            /* pet not available */
-          }
+  if (desktopPetTrayEnabled) {
+    template.push({ type: 'separator' });
+    template.push({
+      label: `🐾 ${i18n.t('pet.desktopPet')}`,
+      submenu: [
+        {
+          label: i18n.t('pet.showHide'),
+          click: async () => {
+            try {
+              const petManager = await import('../pet/petManager');
+              // Toggle: if pet windows exist, hide; otherwise show/create
+              petManager.showPetWindow();
+            } catch {
+              /* pet not available */
+            }
+          },
         },
-      },
-      { type: 'separator' as const },
-      {
-        label: i18n.t('pet.sizeSmall', { px: 200 }),
-        click: async () => {
-          try {
-            const { resizePetWindow } = await import('../pet/petManager');
-            resizePetWindow(200);
-          } catch {
-            /* ignore */
-          }
+        { type: 'separator' as const },
+        {
+          label: i18n.t('pet.sizeSmall', { px: 200 }),
+          click: async () => {
+            try {
+              const { resizePetWindow } = await import('../pet/petManager');
+              resizePetWindow(200);
+            } catch {
+              /* ignore */
+            }
+          },
         },
-      },
-      {
-        label: i18n.t('pet.sizeMedium', { px: 280 }),
-        click: async () => {
-          try {
-            const { resizePetWindow } = await import('../pet/petManager');
-            resizePetWindow(280);
-          } catch {
-            /* ignore */
-          }
+        {
+          label: i18n.t('pet.sizeMedium', { px: 280 }),
+          click: async () => {
+            try {
+              const { resizePetWindow } = await import('../pet/petManager');
+              resizePetWindow(280);
+            } catch {
+              /* ignore */
+            }
+          },
         },
-      },
-      {
-        label: i18n.t('pet.sizeLarge', { px: 360 }),
-        click: async () => {
-          try {
-            const { resizePetWindow } = await import('../pet/petManager');
-            resizePetWindow(360);
-          } catch {
-            /* ignore */
-          }
+        {
+          label: i18n.t('pet.sizeLarge', { px: 360 }),
+          click: async () => {
+            try {
+              const { resizePetWindow } = await import('../pet/petManager');
+              resizePetWindow(360);
+            } catch {
+              /* ignore */
+            }
+          },
         },
-      },
-    ],
-  });
+      ],
+    });
+  }
   template.push({ type: 'separator' });
   template.push({
     label: i18n.t('common.tray.checkUpdate'),

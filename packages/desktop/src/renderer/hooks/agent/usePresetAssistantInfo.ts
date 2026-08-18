@@ -10,8 +10,12 @@ import type { TChatConversation } from '@/common/config/storage';
 import { ipcBridge } from '@/common';
 import { assistantRuntimeKey, type Assistant } from '@/common/types/agent/assistantTypes';
 import { resolveLocaleKey } from '@/common/utils';
-import { adaptProductConversationAssistantIdentity } from '@/renderer/services/runtime/productBrandRuntime';
-import type { AgentLogoMap } from '@/renderer/utils/model/agentLogo';
+import {
+  adaptProductConversationAssistantIdentity,
+  resolveProductConversationRuntimeAccess,
+  type ConversationRuntimeAccess,
+} from '@/renderer/services/runtime/productBrandRuntime';
+import { isProductFeatureEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
 import { resolveAgentLogo, useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import { isLikelyLocalFilePath, resolveAssistantAvatar } from '@/renderer/utils/model/assistantAvatar';
 import useSWR from 'swr';
@@ -23,6 +27,12 @@ export interface PresetAssistantInfo {
   backend?: string;
   assistantId?: string;
 }
+
+type PresetAssistantState = {
+  info: PresetAssistantInfo | null;
+  isLoading: boolean;
+  runtimeAccess: ConversationRuntimeAccess;
+};
 
 /**
  * 从 conversation extra 中解析预设助手 ID
@@ -91,14 +101,55 @@ function findAssistantByIdentityCandidates(
   return undefined;
 }
 
-function hasExplicitAssistantIdentity(conversation: TChatConversation): boolean {
-  const extra = conversation.extra as {
-    assistant_id?: unknown;
-    preset_assistant_id?: unknown;
+type AssistantCatalogResolution = Readonly<{
+  displayAssistant: Assistant | undefined;
+  explicitCandidates: string[];
+  legacyCandidates: string[];
+  requiresClassification: boolean;
+  runtimeAssistant: Assistant | undefined;
+}>;
+
+function resolveAssistantCatalog(
+  conversation: TChatConversation | undefined,
+  assistants: Assistant[] | null | undefined
+): AssistantCatalogResolution {
+  if (!conversation) {
+    return {
+      displayAssistant: undefined,
+      explicitCandidates: [],
+      legacyCandidates: [],
+      requiresClassification: false,
+      runtimeAssistant: undefined,
+    };
+  }
+
+  const explicitCandidates = collectExplicitAssistantIdentityCandidates(conversation);
+  const legacyCandidates = collectLegacyAssistantIdentityCandidates(conversation);
+  const snapshotCandidates = conversation.assistant
+    ? [conversation.assistant.id, ...explicitCandidates, ...legacyCandidates].filter(
+        (value, index, values) => Boolean(value) && values.indexOf(value) === index
+      )
+    : [];
+  const displayCandidates = snapshotCandidates.length
+    ? snapshotCandidates
+    : explicitCandidates.length
+      ? explicitCandidates
+      : legacyCandidates;
+  const runtimeCandidates = [...snapshotCandidates, ...explicitCandidates, ...legacyCandidates].filter(
+    (value, index, values) => Boolean(value) && values.indexOf(value) === index
+  );
+
+  return {
+    displayAssistant: findAssistantByIdentityCandidates(assistants, displayCandidates),
+    explicitCandidates,
+    legacyCandidates,
+    requiresClassification: Boolean(
+      conversation.assistant ||
+      explicitCandidates.length ||
+      (legacyCandidates.length && extractLegacyPresetPayload(conversation).hasPayload)
+    ),
+    runtimeAssistant: findAssistantByIdentityCandidates(assistants, runtimeCandidates),
   };
-  const assistant_id = typeof extra?.assistant_id === 'string' ? extra.assistant_id.trim() : '';
-  const preset_assistant_id = typeof extra?.preset_assistant_id === 'string' ? extra.preset_assistant_id.trim() : '';
-  return Boolean(assistant_id || preset_assistant_id);
 }
 
 function resolveLegacyRuntimeRowId(conversation: TChatConversation): string | null {
@@ -275,21 +326,20 @@ function inferLegacyAssistantInfo(
  * @param conversation - 会话对象 / Conversation object
  * @returns 预设助手信息或 null / Preset assistant info or null
  */
-export function usePresetAssistantInfo(conversation: TChatConversation | undefined): {
-  info: PresetAssistantInfo | null;
-  isLoading: boolean;
-} {
+export function usePresetAssistantInfo(conversation: TChatConversation | undefined): PresetAssistantState {
   const { i18n } = useTranslation();
   const logos = useAgentLogos();
 
   // Merged assistant catalog (builtin + user) from backend
-  const { data: assistantsList, isLoading: isLoadingAssistants } = useSWR('assistants.list', () =>
+  const { data: assistantCatalog, isLoading: isLoadingAssistants } = useSWR('assistants.list', () =>
     ipcBridge.assistants.list.invoke().catch(() => [] as Assistant[])
   );
 
   // Extension-contributed ACP adapters (for ext:{extensionName}:{adapterId} conversations)
-  const { data: extensionAcpAdapters, isLoading: isLoadingExtAdapters } = useSWR('extensions.acpAdapters', () =>
-    ipcBridge.extensions.getAcpAdapters.invoke().catch(() => [] as Record<string, unknown>[])
+  const extensionRuntimeEnabled = isProductFeatureEnabled('extensionRuntime');
+  const { data: extensionAcpAdapters, isLoading: isLoadingExtAdapters } = useSWR(
+    extensionRuntimeEnabled ? 'extensions.acpAdapters' : null,
+    () => ipcBridge.extensions.getAcpAdapters.invoke().catch(() => [] as Record<string, unknown>[])
   );
 
   // Remote agent for remote conversations
@@ -300,7 +350,24 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
     () => (remoteAgentId ? ipcBridge.remoteAgent.get.invoke({ id: remoteAgentId }) : null)
   );
 
-  return useMemo(() => {
+  const assistantResolution = useMemo(
+    () => resolveAssistantCatalog(conversation, assistantCatalog),
+    [assistantCatalog, conversation]
+  );
+
+  const runtimeAccess = resolveProductConversationRuntimeAccess({
+    conversation,
+    assistantCatalog: {
+      matchedAssistant: assistantResolution.runtimeAssistant,
+      requiresClassification: assistantResolution.requiresClassification,
+      status: isLoadingAssistants ? 'loading' : 'ready',
+    },
+  });
+
+  const assistantState = useMemo<Omit<PresetAssistantState, 'runtimeAccess'>>(() => {
+    if (runtimeAccess !== 'allowed') {
+      return { info: null, isLoading: runtimeAccess === 'pending' };
+    }
     if (!conversation) return { info: null, isLoading: false };
 
     const locale = i18n.language || 'en-US';
@@ -309,14 +376,8 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
       const snapshotAvatar =
         typeof conversation.assistant.avatar === 'string' ? conversation.assistant.avatar.trim() : '';
       if (snapshotAvatar && isLikelyLocalFilePath(snapshotAvatar)) {
-        const snapshotCandidates = [
-          conversation.assistant.id,
-          ...collectExplicitAssistantIdentityCandidates(conversation),
-          ...collectLegacyAssistantIdentityCandidates(conversation),
-        ].filter((value, index, values) => Boolean(value) && values.indexOf(value) === index);
-        const catalogAssistant = findAssistantByIdentityCandidates(assistantsList, snapshotCandidates);
-        if (catalogAssistant) {
-          return { info: buildPresetInfoFromAssistant(catalogAssistant, locale), isLoading: false };
+        if (assistantResolution.displayAssistant) {
+          return { info: buildPresetInfoFromAssistant(assistantResolution.displayAssistant, locale), isLoading: false };
         }
         if (isLoadingAssistants) return { info: null, isLoading: true };
       }
@@ -345,12 +406,10 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
       return { info: null, isLoading: false };
     }
 
-    const explicitAssistantCandidates = collectExplicitAssistantIdentityCandidates(conversation);
-    const legacyAssistantCandidates = collectLegacyAssistantIdentityCandidates(conversation);
-    const hasExplicitAssistantId = hasExplicitAssistantIdentity(conversation);
-    const assistantMatch = hasExplicitAssistantId
-      ? findAssistantByIdentityCandidates(assistantsList, explicitAssistantCandidates)
-      : findAssistantByIdentityCandidates(assistantsList, legacyAssistantCandidates);
+    const explicitAssistantCandidates = assistantResolution.explicitCandidates;
+    const legacyAssistantCandidates = assistantResolution.legacyCandidates;
+    const hasExplicitAssistantId = explicitAssistantCandidates.length > 0;
+    const assistantMatch = assistantResolution.displayAssistant;
     const runtimeRowAgentId = resolveLegacyRuntimeRowId(conversation);
     const adapterIdentity = (hasExplicitAssistantId ? explicitAssistantCandidates : legacyAssistantCandidates).find(
       (candidate) => candidate.startsWith('ext:')
@@ -378,7 +437,7 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
       return { info: buildPresetInfoFromAssistant(assistantMatch, locale), isLoading: false };
     }
 
-    const inferredInfo = inferLegacyAssistantInfo(conversation, locale, assistantsList);
+    const inferredInfo = inferLegacyAssistantInfo(conversation, locale, assistantCatalog);
     if (inferredInfo) return { info: inferredInfo, isLoading: false };
 
     const { hasPayload } = extractLegacyPresetPayload(conversation);
@@ -435,12 +494,17 @@ export function usePresetAssistantInfo(conversation: TChatConversation | undefin
     conversation,
     i18n.language,
     logos,
-    assistantsList,
+    assistantCatalog,
+    assistantResolution,
+    extensionRuntimeEnabled,
     isLoadingAssistants,
     extensionAcpAdapters,
     isLoadingExtAdapters,
     remoteAgentId,
     remoteAgent,
     isLoadingRemoteAgent,
+    runtimeAccess,
   ]);
+
+  return useMemo(() => ({ ...assistantState, runtimeAccess }), [assistantState, runtimeAccess]);
 }

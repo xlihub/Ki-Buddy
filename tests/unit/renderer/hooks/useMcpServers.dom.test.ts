@@ -130,7 +130,13 @@ describe('useMcpServers', () => {
     await waitFor(() => expect(result.current.mcpServers).toHaveLength(1));
   });
 
-  it('hides extension MCP servers and retains a structured diagnostic record in Ki-Buddy', async () => {
+  it('does not load extension MCP contributions when the Extension runtime is disabled', async () => {
+    getProductExperienceMock.mockReturnValue({
+      behaviorDefaults: () => ({ scheduledTaskExecutor: 'assistant', autoInjectedSkillExclusions: [] }),
+      featureState: (featureId: string) => (featureId === 'extensionRuntime' ? 'disabled' : 'enabled'),
+      resourceAccess: (_kind: string, origin: string) =>
+        origin === 'custom' ? 'manage' : origin === 'productBuiltin' ? 'use' : 'hidden',
+    });
     getExtensionMcpServersMock.mockResolvedValue([
       {
         id: 'extension-1',
@@ -145,18 +151,11 @@ describe('useMcpServers', () => {
 
     const { result } = renderHook(() => useMcpServers());
 
-    await waitFor(() => expect(getExtensionMcpServersMock).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(result.current.hiddenResources).toHaveLength(1));
+    await waitFor(() => expect(result.current.isMcpServersLoading).toBe(false));
 
+    expect(getExtensionMcpServersMock).not.toHaveBeenCalled();
     expect(result.current.extensionMcpServers).toEqual([]);
-    expect(result.current.hiddenResources).toEqual([
-      expect.objectContaining({
-        code: 'product_resource_hidden',
-        kind: 'mcp',
-        resourceId: 'extension-1',
-        origin: 'extension',
-      }),
-    ]);
+    expect(result.current.hiddenResources).toEqual([]);
   });
 
   it('keeps extension MCP servers visible under the complete AionUi resource policy', async () => {

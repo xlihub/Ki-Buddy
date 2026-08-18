@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { extensions as extensionsIpc, type IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
+import { isExtensionSettingsContributionEnabled } from '@/renderer/services/runtime/kiBuddyRuntime';
 
 type NestedRecord = Record<string, unknown>;
 
@@ -41,18 +42,22 @@ export function useExtI18n(): {
 } {
   const { i18n } = useTranslation();
   const [extI18nData, setExtI18nData] = useState<Record<string, unknown>>({});
+  const extensionSettingsEnabled = isExtensionSettingsContributionEnabled();
 
   useEffect(() => {
+    if (!extensionSettingsEnabled) return;
     const locale = i18n.language;
     void extensionsIpc.getExtI18nForLocale
       .invoke({ locale })
       .then((data) => setExtI18nData(data ?? {}))
       .catch((err) => console.error('[useExtI18n] Failed to load ext i18n:', err));
-  }, [i18n.language]);
+  }, [extensionSettingsEnabled, i18n.language]);
 
   const resolveExtTabName = useCallback(
     (tab: IExtensionSettingsTab): string => {
-      const nsData = extI18nData[tab.extensionName] as NestedRecord | undefined;
+      const nsData = extensionSettingsEnabled
+        ? (extI18nData[tab.extensionName] as NestedRecord | undefined)
+        : undefined;
       const localTabId = getLocalSettingsTabId(tab);
       if (nsData) {
         const translated =
@@ -61,7 +66,7 @@ export function useExtI18n(): {
       }
       return tab.label;
     },
-    [extI18nData]
+    [extI18nData, extensionSettingsEnabled]
   );
 
   return { resolveExtTabName };

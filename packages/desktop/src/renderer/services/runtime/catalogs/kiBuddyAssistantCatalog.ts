@@ -11,15 +11,10 @@ import {
 import { ipcBridge } from '@/common';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { getProductExperience } from '../kiBuddyRuntime';
-import { KI_BUDDY_ASSISTANT_IDENTITIES } from './kiBuddyAssistantIdentity';
+import { KI_BUDDY_ASSISTANT_IDENTITIES, resolveKiBuddyAssistantOrigin } from './kiBuddyAssistantIdentity';
 
 export { KI_BUDDY_PRODUCT_ASSISTANT_IDS } from './kiBuddyAssistantIdentity';
 
-const PRODUCT_OFFICIAL_ASSISTANT_IDS = new Set<string>(
-  Object.values(KI_BUDDY_ASSISTANT_IDENTITIES)
-    .filter(({ assistantSource }) => assistantSource === 'builtin')
-    .map(({ assistantId }) => assistantId)
-);
 const KI_CLI_ASSISTANT_IDENTITY = KI_BUDDY_ASSISTANT_IDENTITIES.kiCli;
 
 const PRODUCT_BUILTIN_ASSISTANT_REQUIREMENTS: readonly ProductBuiltinResourceRequirement[] = Object.values(
@@ -57,12 +52,8 @@ const isKiCliAssistant = (assistant: Assistant): boolean =>
 
 const resolveProductAssistantOrigin = (assistant: Assistant): ProductResourceOrigin => {
   if (assistant.agent?.source === 'extension') return 'extension';
-  if (assistant.source === 'user') return 'custom';
-  if (assistant.source === 'builtin') {
-    return PRODUCT_OFFICIAL_ASSISTANT_IDS.has(assistant.id) ? 'productBuiltin' : 'upstreamBuiltin';
-  }
-  if (isKiCliAssistant(assistant)) return 'productBuiltin';
-  return 'unclassified';
+  if (assistant.source === 'generated') return isKiCliAssistant(assistant) ? 'productBuiltin' : 'unclassified';
+  return resolveKiBuddyAssistantOrigin(assistant);
 };
 
 /** Applies product access from stable Assistant identity and structured source fields. */

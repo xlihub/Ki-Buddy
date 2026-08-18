@@ -56,6 +56,7 @@ import {
   getKiBuddyProductBootstrapError,
   getKiBuddyProductRuntime,
   getKiBuddyRendererRuntime,
+  isProductFeatureEnabled,
 } from './services/runtime/kiBuddyRuntime';
 import { initializeRendererBrand, installProductAssistantCatalogAdapter } from './services/runtime/productBrandRuntime';
 import { FeedbackProvider } from './hooks/context/FeedbackContext';
@@ -339,7 +340,7 @@ const Main = () => {
   }, [ready]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !isProductFeatureEnabled('scheduledTasks')) return;
     void repairAllCronJobTimeZonesOnce();
   }, [ready]);
 

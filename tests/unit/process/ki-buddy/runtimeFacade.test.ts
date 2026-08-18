@@ -10,6 +10,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const installTransportMock = vi.fn();
+const productMigrationMocks = vi.hoisted(() => ({
+  channel: vi.fn(),
+  generic: vi.fn(),
+}));
 
 vi.mock('@/common/adapter/httpBridge', () => ({
   setHttpRequestTransport: installTransportMock,
@@ -20,16 +24,29 @@ vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn() },
   session: { defaultSession: { cookies: { remove: vi.fn(), set: vi.fn() } } },
 }));
+vi.mock('@/common/config/configMigration', () => ({
+  migrateLegacyChannelSettings: productMigrationMocks.channel,
+}));
+vi.mock('@/process/utils/runBackendMigrations', () => ({
+  runBackendMigrations: productMigrationMocks.generic,
+}));
 
 const {
   createKiBuddyProductBootstrap,
   createKiBuddyProductIntegrityWindow,
   createKiBuddyRuntime,
+  resolveMainProductExperience,
+  runProductBackendMigrations,
   shouldStartProductBusinessLifecycle,
   startProductFeatureLifecycles,
 } = await import('@/process/ki-buddy');
+const { configureKiBuddyCliSafeDirectories } = await import('@/process/ki-buddy/runtimeIdentity');
 const { BrowserWindow } = await import('electron');
-const { KI_BUDDY_PRODUCT_CONFIG_RESULT, createAionUiProductExperience } = await import('@/common/platform/ki-buddy');
+const { KI_BUDDY_PRODUCT_CONFIG_RESULT, createAionUiProductExperience, createKiBuddyProductExperience } =
+  await import('@/common/platform/ki-buddy');
+const { NodePlatformServices } = await import('@/common/platform/NodePlatformServices');
+const { registerPlatformServices } = await import('@/common/platform');
+const { getConfigPath, getDataPath } = await import('@process/utils');
 const { KiBuddyGitHubProvider } = await import('@/process/ki-buddy/update/githubUpdateProvider');
 
 function createAppPath(productRuntime?: string): string {
@@ -45,6 +62,19 @@ describe('Ki-Buddy main-process runtime facade', () => {
     installTransportMock.mockReset();
     vi.mocked(BrowserWindow).mockReset();
     for (const appPath of appPaths.splice(0)) rmSync(appPath, { recursive: true, force: true });
+  });
+
+  it('runs Channels migration only for product adapters that enable its lifecycle', async () => {
+    const configFile = {} as never;
+    const kiBuddyExperience = createKiBuddyProductExperience(KI_BUDDY_PRODUCT_CONFIG_RESULT.config?.experience);
+
+    await runProductBackendMigrations(configFile, kiBuddyExperience);
+    expect(productMigrationMocks.generic).toHaveBeenCalledOnce();
+    expect(productMigrationMocks.channel).not.toHaveBeenCalled();
+
+    await runProductBackendMigrations(configFile, createAionUiProductExperience());
+    expect(productMigrationMocks.generic).toHaveBeenCalledTimes(2);
+    expect(productMigrationMocks.channel).toHaveBeenCalledOnce();
   });
 
   it('does not initialize product transport when the runtime capability is absent', () => {
@@ -108,6 +138,31 @@ describe('Ki-Buddy main-process runtime facade', () => {
     expect(installTransportMock).toHaveBeenCalledOnce();
   });
 
+  it('uses the Ki-Buddy data alias while preserving AionUi defaults', () => {
+    const homePath = mkdtempSync(join(tmpdir(), 'ki-buddy-home-'));
+    const dataPath = join(homePath, 'Application Support', 'Ki-Buddy');
+    const kiBuddyAppPath = createAppPath('ki-buddy');
+    const aionUiAppPath = createAppPath();
+    appPaths.push(homePath, kiBuddyAppPath, aionUiAppPath);
+    const platformServices = new NodePlatformServices();
+    platformServices.paths = {
+      ...platformServices.paths,
+      getDataDir: () => dataPath,
+      getHomeDir: () => homePath,
+      isPackaged: () => true,
+      needsCliSafeSymlinks: () => true,
+    };
+    registerPlatformServices(platformServices);
+
+    configureKiBuddyCliSafeDirectories(kiBuddyAppPath);
+    expect(getDataPath()).toBe(join(homePath, '.ki-buddy'));
+    expect(getConfigPath()).toBe(join(homePath, '.ki-buddy-config'));
+
+    configureKiBuddyCliSafeDirectories(aionUiAppPath);
+    expect(getDataPath()).toBe(join(homePath, '.aionui'));
+    expect(getConfigPath()).toBe(join(homePath, '.aionui-config'));
+  });
+
   it('keeps a recognized Ki-Buddy runtime invalid without starting product side effects', () => {
     const appPath = createAppPath('ki-buddy');
     appPaths.push(appPath);
@@ -131,6 +186,7 @@ describe('Ki-Buddy main-process runtime facade', () => {
       error: expect.stringContaining('missing team'),
     });
     expect(shouldStartProductBusinessLifecycle(selection)).toBe(false);
+    expect(resolveMainProductExperience(selection, true, { config: null, error: 'missing team' })).toBeNull();
     expect(installTransportMock).not.toHaveBeenCalled();
   });
 
@@ -149,6 +205,19 @@ describe('Ki-Buddy main-process runtime facade', () => {
     expect(selection.status).toBe('invalid');
     expect(createKiBuddyProductBootstrap(selection).status).toBe('invalid');
     expect(shouldStartProductBusinessLifecycle(selection)).toBe(false);
+  });
+
+  it('keeps the Ki-Buddy lifecycle policy in WebUI mode without starting product transport', () => {
+    const appPath = createAppPath('ki-buddy');
+    appPaths.push(appPath);
+
+    const selection = createKiBuddyRuntime({ appPath, resetPassword: false, webUi: true });
+    const experience = resolveMainProductExperience(selection, true);
+
+    expect(selection.status).toBe('absent');
+    expect(experience.featureState('webUi')).toBe('disabled');
+    expect(experience.featureState('scheduledTasks')).toBe('enabled');
+    expect(installTransportMock).not.toHaveBeenCalled();
   });
 
   it('starts the business lifecycle for valid Ki-Buddy and ordinary AionUi selections', () => {
@@ -193,22 +262,6 @@ describe('Ki-Buddy main-process runtime facade', () => {
     expect(integrityWindow.loadFile).toHaveBeenCalledWith('/app/renderer/index.html');
     expect(integrityWindow.loadURL).not.toHaveBeenCalled();
     expect(integrityWindow.show).toHaveBeenCalledOnce();
-  });
-
-  it('skips disabled Team main lifecycles while retaining enabled Ki-Buddy lifecycles', () => {
-    const appPath = createAppPath('ki-buddy');
-    appPaths.push(appPath);
-    const runtime = createKiBuddyRuntime({ appPath, resetPassword: false, webUi: false }).runtime!;
-    const startTeam = vi.fn();
-    const startScheduledTasks = vi.fn();
-
-    runtime.startFeatureLifecycles([
-      { featureId: 'team', start: startTeam },
-      { featureId: 'scheduledTasks', start: startScheduledTasks },
-    ]);
-
-    expect(startTeam).not.toHaveBeenCalled();
-    expect(startScheduledTasks).toHaveBeenCalledOnce();
   });
 
   it('retains existing Team main lifecycles for the AionUi adapter', () => {
