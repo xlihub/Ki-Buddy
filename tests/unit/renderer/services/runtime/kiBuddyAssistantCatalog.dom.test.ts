@@ -2,6 +2,7 @@ import type { ProductExperience } from '@/common/platform/ki-buddy';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import { createAionUiProductExperience, createKiBuddyProductExperience } from '@/common/platform/ki-buddy';
 import { projectProductAssistantCatalog } from '@/renderer/services/runtime/catalogs/kiBuddyAssistantCatalog';
+import { KI_BUDDY_PRODUCT_RESOURCE_REGISTRY } from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import productConfig from '../../../../../ki-buddy-product.json';
 
@@ -43,6 +44,28 @@ const kiBuddyExperience = (): ProductExperience => createKiBuddyProductExperienc
 describe('projectProductAssistantCatalog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('uses one stable registry for product Agent, Assistant, Skill, and MCP identities', () => {
+    expect(
+      Object.values(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.agent).map(({ id, featureId }) => ({ id, featureId }))
+    ).toEqual([{ id: '632f31d2', featureId: 'agents' }]);
+    expect(
+      Object.values(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant).map(({ id, featureId }) => ({ id, featureId }))
+    ).toEqual([
+      { id: 'word-creator', featureId: 'assistants' },
+      { id: 'ppt-creator', featureId: 'assistants' },
+      { id: 'excel-creator', featureId: 'assistants' },
+      { id: 'bare:632f31d2', featureId: 'assistants' },
+    ]);
+    expect(
+      Object.values(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.skill).map(({ id, backendName }) => ({ id, backendName }))
+    ).toEqual([
+      { id: 'builtin:officecli-docx', backendName: 'officecli-docx' },
+      { id: 'builtin:officecli-pptx', backendName: 'officecli-pptx' },
+      { id: 'builtin:officecli-xlsx', backendName: 'officecli-xlsx' },
+    ]);
+    expect(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp).toEqual({});
   });
 
   it('shows stable product and Custom Assistants with manage access', () => {

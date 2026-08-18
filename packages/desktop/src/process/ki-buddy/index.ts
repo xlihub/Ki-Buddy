@@ -62,6 +62,29 @@ export type ProductFeatureLifecycle = {
   start: () => void;
 };
 
+type MainProductLifecycleDefinition = Readonly<{
+  featureId: ProductFeatureId;
+}>;
+
+/** Stable identities for every product-controlled lifecycle owned by the Electron main process. */
+export const MAIN_PRODUCT_LIFECYCLE_REGISTRY = {
+  accountCoreTransport: { featureId: 'account' },
+  channelsMigration: { featureId: 'channels' },
+  desktopPet: { featureId: 'desktopPet' },
+  scheduledTasks: { featureId: 'scheduledTasks' },
+  webUi: { featureId: 'webUi' },
+} as const satisfies Readonly<Record<string, MainProductLifecycleDefinition>>;
+
+export type MainProductLifecycleId = keyof typeof MAIN_PRODUCT_LIFECYCLE_REGISTRY;
+
+/** Reads a main lifecycle decision through the stable registry instead of feature literals at call sites. */
+export function isMainProductLifecycleEnabled(
+  productExperience: ProductExperience,
+  lifecycleId: MainProductLifecycleId
+): boolean {
+  return productExperience.featureState(MAIN_PRODUCT_LIFECYCLE_REGISTRY[lifecycleId].featureId) === 'enabled';
+}
+
 export type KiBuddyProductIntegrityWindowOptions = {
   isPackaged: boolean;
   preloadPath: string;
@@ -163,13 +186,15 @@ export function startMainProductLifecyclePhase(
 ): void {
   if (phase === 'backendReady') {
     const { scheduledTasks } = starters as BackendReadyLifecycleStarters;
-    startProductFeatureLifecycles(productExperience, [{ featureId: 'scheduledTasks', start: scheduledTasks }]);
+    startProductFeatureLifecycles(productExperience, [
+      { featureId: MAIN_PRODUCT_LIFECYCLE_REGISTRY.scheduledTasks.featureId, start: scheduledTasks },
+    ]);
     return;
   }
   const { desktopPet, webUi } = starters as DesktopReadyLifecycleStarters;
   startProductFeatureLifecycles(productExperience, [
-    { featureId: 'desktopPet', start: desktopPet },
-    { featureId: 'webUi', start: webUi },
+    { featureId: MAIN_PRODUCT_LIFECYCLE_REGISTRY.desktopPet.featureId, start: desktopPet },
+    { featureId: MAIN_PRODUCT_LIFECYCLE_REGISTRY.webUi.featureId, start: webUi },
   ]);
 }
 
@@ -194,9 +219,10 @@ export async function runProductBackendMigrations(
 ): Promise<void> {
   const { runBackendMigrations } = await import('@process/utils/runBackendMigrations');
   await runBackendMigrations(configFile);
-  if (productExperience.featureState('channels') !== 'enabled') return;
-  const { migrateLegacyChannelSettings } = await import('@/common/config/configMigration');
-  await migrateLegacyChannelSettings(configFile);
+  if (isMainProductLifecycleEnabled(productExperience, 'channelsMigration')) {
+    const { migrateLegacyChannelSettings } = await import('@/common/config/configMigration');
+    await migrateLegacyChannelSettings(configFile);
+  }
 }
 
 /** Creates and installs the main-process Ki-Buddy runtime when explicit product metadata selects it. */
@@ -230,7 +256,12 @@ export function createKiBuddyRuntime(
   const productExperience = createKiBuddyProductExperience(config.experience);
   const coreAuthOptions = createKiBuddyCoreAuthOptions();
   const coreTransport = new KiBuddyMainCoreTransport(coreAuthOptions.coreCsrfToken);
-  startProductFeatureLifecycles(productExperience, [{ featureId: 'account', start: () => coreTransport.install() }]);
+  startProductFeatureLifecycles(productExperience, [
+    {
+      featureId: MAIN_PRODUCT_LIFECYCLE_REGISTRY.accountCoreTransport.featureId,
+      start: () => coreTransport.install(),
+    },
+  ]);
 
   const runtime: KiBuddyRuntime = {
     brand: {

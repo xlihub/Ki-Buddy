@@ -300,10 +300,12 @@ dist:
 # Run linter
 lint:
     bun run lint
+    bun packages/shared-scripts/src/kiBuddyProductExperienceConsistency.ts
 
 # Run linter with auto-fix
 lint-fix:
     bun run lint:fix
+    bun packages/shared-scripts/src/kiBuddyProductExperienceConsistency.ts
 
 # Format code
 fmt:
@@ -333,6 +335,7 @@ push *ARGS: lint-strict fmt-check typecheck i18n-check test
 # Lint with only errors reported (for CI/push gates)
 lint-strict:
     bun run lint -- --quiet
+    bun packages/shared-scripts/src/kiBuddyProductExperienceConsistency.ts
 
 # ============================================================
 # Testing

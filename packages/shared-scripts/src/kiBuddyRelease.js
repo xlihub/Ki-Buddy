@@ -4,6 +4,7 @@ const { execFileSync } = require('node:child_process');
 const { isDeepStrictEqual } = require('node:util');
 const yaml = require('js-yaml');
 const { readKiCorePin } = require('./kiCoreRelease');
+const productExperienceRegistry = require('../../desktop/src/common/platform/ki-buddy/experience/registry.json');
 
 const KI_BUDDY_PRODUCT = 'Ki-Buddy';
 const KI_BUDDY_REPOSITORY = 'xlihub/Ki-Buddy';
@@ -13,46 +14,12 @@ const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const PACKAGE_VERSION_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 const SHA40_PATTERN = /^[0-9a-f]{40}$/;
-const PRODUCT_FEATURE_IDS = [
-  'account',
-  'agents',
-  'appearance',
-  'assistants',
-  'channels',
-  'componentShowcase',
-  'conversation',
-  'desktopPet',
-  'extensionMarketplace',
-  'extensionRuntime',
-  'extensionSettings',
-  'guid',
-  'guidFeedback',
-  'guidGithubStar',
-  'guidWebUi',
-  'models',
-  'scheduledTasks',
-  'skills',
-  'system',
-  'team',
-  'themeCustomEditor',
-  'themeMarketplace',
-  'themePresets',
-  'tools',
-  'webUi',
-];
-const PRODUCT_RESOURCE_KINDS = ['agent', 'assistant', 'model', 'skill', 'mcp'];
-const PRODUCT_RESOURCE_ORIGINS = ['productBuiltin', 'upstreamBuiltin', 'custom', 'extension', 'unclassified'];
-const PRODUCT_FEATURE_DEPENDENCIES = [
-  ['extensionMarketplace', 'extensionRuntime'],
-  ['extensionSettings', 'extensionRuntime'],
-  ['guidFeedback', 'guid'],
-  ['guidGithubStar', 'guid'],
-  ['guidWebUi', 'guid'],
-  ['guidWebUi', 'webUi'],
-  ['themeCustomEditor', 'appearance'],
-  ['themeMarketplace', 'appearance'],
-  ['themePresets', 'appearance'],
-];
+const PRODUCT_FEATURE_IDS = Object.keys(productExperienceRegistry.features);
+const PRODUCT_RESOURCE_KINDS = Object.keys(productExperienceRegistry.resourceKinds);
+const PRODUCT_RESOURCE_ORIGINS = Object.keys(productExperienceRegistry.resourceOrigins);
+const PRODUCT_FEATURE_DEPENDENCIES = Object.entries(productExperienceRegistry.features).flatMap(
+  ([featureId, definition]) => definition.dependsOn.map((parentId) => [featureId, parentId])
+);
 
 function requireExactKeys(value, keys, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -82,6 +49,11 @@ function validateProductExperiencePolicy(policy) {
   for (const [child, parent] of PRODUCT_FEATURE_DEPENDENCIES) {
     if (policy.features[child] === 'enabled' && policy.features[parent] !== 'enabled') {
       throw new Error(`Product feature ${child} requires enabled parent ${parent}`);
+    }
+  }
+  for (const [featureId, definition] of Object.entries(productExperienceRegistry.features)) {
+    if (definition.requiredState && policy.features[featureId] !== definition.requiredState) {
+      throw new Error(`Product feature ${featureId} must be ${definition.requiredState}`);
     }
   }
 

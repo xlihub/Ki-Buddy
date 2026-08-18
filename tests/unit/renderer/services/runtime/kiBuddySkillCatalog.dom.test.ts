@@ -185,9 +185,9 @@ describe('projectProductSkillCatalog', () => {
       { name: 'skill-creator', origin: 'upstreamBuiltin', access: 'use' },
     ]);
     expect(result.hiddenResources).toEqual([
-      expect.objectContaining({ resourceId: 'builtin:mermaid/SKILL.md', origin: 'upstreamBuiltin' }),
+      expect.objectContaining({ resourceId: 'builtin:mermaid', origin: 'upstreamBuiltin' }),
       expect.objectContaining({
-        resourceId: 'builtin:auto-inject/aionui-config/SKILL.md',
+        resourceId: 'builtin:aionui-config',
         origin: 'upstreamBuiltin',
       }),
       expect.objectContaining({ resourceId: 'extension:extension-skill', origin: 'extension' }),
@@ -197,7 +197,7 @@ describe('projectProductSkillCatalog', () => {
     expect(result.hiddenResources[0]).not.toHaveProperty('description');
   });
 
-  it('does not identify a renamed built-in as an Office product resource by display name alone', () => {
+  it('identifies an Office product Skill by stable backend name instead of installation path', () => {
     const result = projectProductSkillCatalog(
       [
         {
@@ -213,10 +213,10 @@ describe('projectProductSkillCatalog', () => {
       createKiBuddyProductExperience(productConfig.experience)
     );
 
-    expect(result.entries).toEqual([]);
-    expect(result.hiddenResources).toEqual([
-      expect.objectContaining({ resourceId: 'builtin:other/SKILL.md', origin: 'upstreamBuiltin' }),
+    expect(result.entries).toEqual([
+      expect.objectContaining({ resourceId: 'builtin:officecli-docx', origin: 'productBuiltin' }),
     ]);
+    expect(result.hiddenResources).toEqual([]);
   });
 
   it('keeps the complete Skill catalog manageable when the Ki-Buddy capability is absent', () => {

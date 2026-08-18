@@ -15,6 +15,7 @@ export {
 } from './productConfig';
 export {
   PRODUCT_FEATURE_IDS,
+  PRODUCT_FEATURE_DEPENDENCIES,
   PRODUCT_RESOURCE_KINDS,
   PRODUCT_RESOURCE_ORIGINS,
   createAionUiProductExperience,
@@ -23,7 +24,7 @@ export {
   evaluateProductBuiltinResourceState,
   parseProductExperiencePolicy,
   projectProductResources,
-} from './productExperience';
+} from './experience';
 export type {
   DeepReadonly,
   ProductBehaviorDefaults,
@@ -40,7 +41,7 @@ export type {
   ProductBuiltinResourceRequirement,
   ProductBuiltinResourceState,
   MissingProductBuiltinResourceRecord,
-} from './productExperience';
+} from './experience';
 export {
   KI_BUDDY_CORE_TRANSPORT_CHANNEL,
   KI_BUDDY_PRODUCT_BOOTSTRAP_CHANNEL,

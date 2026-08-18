@@ -19,9 +19,9 @@ const KI_CLI_ASSISTANT_IDENTITY = KI_BUDDY_ASSISTANT_IDENTITIES.kiCli;
 
 const PRODUCT_BUILTIN_ASSISTANT_REQUIREMENTS: readonly ProductBuiltinResourceRequirement[] = Object.values(
   KI_BUDDY_ASSISTANT_IDENTITIES
-).map(({ assistantId, resourceName }) => ({
-  featureId: 'assistants',
-  resourceId: assistantId,
+).map(({ id, resourceName, featureId }) => ({
+  featureId,
+  resourceId: id,
   resourceName,
 }));
 
@@ -44,8 +44,8 @@ export type ProductAssistantCatalog = Readonly<{
 }>;
 
 const isKiCliAssistant = (assistant: Assistant): boolean =>
-  assistant.id === KI_CLI_ASSISTANT_IDENTITY.assistantId &&
-  assistant.source === KI_CLI_ASSISTANT_IDENTITY.assistantSource &&
+  assistant.id === KI_CLI_ASSISTANT_IDENTITY.id &&
+  assistant.source === KI_CLI_ASSISTANT_IDENTITY.source &&
   assistant.agent_id === KI_CLI_ASSISTANT_IDENTITY.agentId &&
   assistant.agent?.type === KI_CLI_ASSISTANT_IDENTITY.agentType &&
   assistant.agent.source === KI_CLI_ASSISTANT_IDENTITY.agentSource;

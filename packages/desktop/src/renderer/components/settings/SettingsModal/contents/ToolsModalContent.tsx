@@ -34,7 +34,6 @@ import {
 } from '@/renderer/services/clientBusinessSettings';
 import classNames from 'classnames';
 import { getProductDocumentationUrl } from '@/renderer/services/runtime/productBrandRuntime';
-import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
 import type { McpCatalogEntry } from '@/renderer/hooks/mcp/catalog';
 import { useSettingsTabNavigate, useSettingsViewMode } from '../settingsViewContext';
 
@@ -281,7 +280,6 @@ const ModalMcpManagementSection: React.FC<{
 };
 
 const ToolsModalContent: React.FC = () => {
-  const canUseUpstreamBuiltinMcp = getProductExperience().resourceAccess('mcp', 'upstreamBuiltin') !== 'hidden';
   const imageGenerationGuideUrl = getProductDocumentationUrl(
     'https://github.com/iOfficeAI/AionUi/wiki/AionUi-Image-Generation-Tool-Model-Configuration-Guide'
   );
@@ -297,6 +295,7 @@ const ToolsModalContent: React.FC = () => {
     mcpServers,
     mcpCatalogEntries,
     extensionMcpCatalogEntries,
+    canUseUpstreamBuiltinMcp,
     saveMcpServers,
     setMcpServers,
     isMcpServersLoading,

@@ -15,6 +15,7 @@ import * as path from 'path';
 import { ipcBridge } from '@/common';
 import i18n from '@process/services/i18n';
 import type { ProductExperience } from '@/common/platform/ki-buddy';
+import { isMainProductLifecycleEnabled } from '@process/ki-buddy';
 
 let tray: TrayInstance | null = null;
 let closeToTrayEnabled = false;
@@ -36,7 +37,7 @@ export function configureTrayBrand(brand: { iconPath: string; productName: strin
 
 /** Projects Desktop Pet tray availability from the selected product adapter. */
 export function configureTrayProductExperience(productExperience: ProductExperience): void {
-  desktopPetTrayEnabled = productExperience.featureState('desktopPet') === 'enabled';
+  desktopPetTrayEnabled = isMainProductLifecycleEnabled(productExperience, 'desktopPet');
 }
 
 export const setTrayMainWindow = (win: BrowserWindow): void => {

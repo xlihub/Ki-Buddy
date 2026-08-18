@@ -10,7 +10,7 @@ import {
 } from '@/common/platform/ki-buddy';
 import { requestManagedAgents, type ManagedAgent } from '@/renderer/utils/model/agentTypes';
 import { getKiBuddyProductRuntime, getProductExperience } from './kiBuddyRuntime';
-import { KI_CLI_PRODUCT_RESOURCE_ID } from './catalogs/kiBuddyAssistantIdentity';
+import { KI_BUDDY_PRODUCT_RESOURCE_REGISTRY, KI_CLI_PRODUCT_RESOURCE_ID } from './catalogs/kiBuddyResourceRegistry';
 import { reportHiddenProductResources } from './catalogs/kiBuddyProductResourceDiagnostics';
 
 export { KI_CLI_PRODUCT_RESOURCE_ID } from './catalogs/kiBuddyAssistantIdentity';
@@ -19,7 +19,7 @@ const getProductBuiltinAgentRequirements = (): readonly ProductBuiltinResourceRe
   const resourceName = getKiBuddyProductRuntime()?.brand.cliName;
   return [
     {
-      featureId: 'agents',
+      featureId: KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.agent.kiCli.featureId,
       resourceId: KI_CLI_PRODUCT_RESOURCE_ID,
       ...(resourceName ? { resourceName } : {}),
     },

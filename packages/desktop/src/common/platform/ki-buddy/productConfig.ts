@@ -6,7 +6,7 @@ import {
   parseProductExperiencePolicy,
   type DeepReadonly,
   type ProductExperienceSnapshot,
-} from './productExperience';
+} from './experience';
 
 export const KI_BUDDY_PRODUCT_RUNTIME = 'ki-buddy' as const;
 
