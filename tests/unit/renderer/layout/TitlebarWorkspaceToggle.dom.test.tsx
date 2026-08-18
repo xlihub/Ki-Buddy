@@ -1,12 +1,13 @@
 import { act, render, screen } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
+import { activateKiBuddyProduct } from '../../../fixtures/kiBuddyProduct';
 
 const platform = vi.hoisted(() => ({ desktop: true, mac: false }));
 const route = vi.hoisted(() => ({ pathname: '/conversation/test' }));
 const layout = vi.hoisted(() => ({ mobile: false }));
 const teamGet = vi.hoisted(() => vi.fn().mockResolvedValue({ name: 'Team One' }));
+const searchRender = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -19,7 +20,12 @@ vi.mock('@/common', () => ({
   ipcBridge: { conversation: { get: { invoke: vi.fn() } }, team: { get: { invoke: teamGet } } },
 }));
 vi.mock('@/common/config/constants', () => ({ TEAM_MODE_ENABLED: false }));
-vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover', () => ({ default: () => null }));
+vi.mock('@renderer/pages/conversation/GroupedHistory/ConversationSearchPopover', () => ({
+  default: () => {
+    searchRender();
+    return <div data-testid='conversation-search' />;
+  },
+}));
 vi.mock('@/renderer/components/layout/Titlebar/MobileConversationBrand', () => ({ default: () => null }));
 vi.mock('@/renderer/components/layout/WindowControls', () => ({
   default: () => <div data-testid='window-controls' />,
@@ -36,6 +42,9 @@ vi.mock('@/renderer/hooks/context/FeedbackContext', () => ({
 vi.mock('@/renderer/services/feedback/resolveFeedbackModule', () => ({
   resolveFeedbackModule: () => 'conversation-session',
 }));
+vi.mock('@/renderer/services/runtime/productBrandRuntime', () => ({
+  getRendererBrand: () => ({ productName: 'AionUi' }),
+}));
 vi.mock('@/renderer/utils/platform', () => ({
   isElectronDesktop: () => platform.desktop,
   isMacOS: () => platform.mac,
@@ -50,6 +59,7 @@ describe('Titlebar workspace toggle', () => {
     platform.mac = false;
     route.pathname = '/conversation/test';
     layout.mobile = false;
+    searchRender.mockClear();
     teamGet.mockClear();
     window.__kiBuddyProductBootstrapError = null;
     window.__kiBuddyProductPresentation = null;
@@ -100,7 +110,7 @@ describe('Titlebar workspace toggle', () => {
   it('does not read Team state from a legacy Team address in Ki-Buddy', () => {
     route.pathname = '/team/legacy-team';
     layout.mobile = true;
-    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    activateKiBuddyProduct();
 
     render(<Titlebar workspaceAvailable={false} />);
 
@@ -114,5 +124,26 @@ describe('Titlebar workspace toggle', () => {
     render(<Titlebar workspaceAvailable={false} />);
 
     expect(teamGet).toHaveBeenCalledWith({ id: 'team-1' });
+  });
+
+  it('projects the desktop conversation search from ProductExperience', () => {
+    activateKiBuddyProduct({ conversation: 'disabled' });
+
+    render(<Titlebar workspaceAvailable={false} />);
+
+    expect(screen.queryByTestId('conversation-search')).not.toBeInTheDocument();
+    expect(searchRender).not.toHaveBeenCalled();
+  });
+
+  it('keeps desktop conversation search available in Ki-Buddy and AionUi', () => {
+    activateKiBuddyProduct();
+    const { unmount } = render(<Titlebar workspaceAvailable={false} />);
+
+    expect(screen.getByTestId('conversation-search')).toBeInTheDocument();
+    unmount();
+
+    window.__kiBuddyProductPresentation = null;
+    render(<Titlebar workspaceAvailable={false} />);
+    expect(screen.getByTestId('conversation-search')).toBeInTheDocument();
   });
 });

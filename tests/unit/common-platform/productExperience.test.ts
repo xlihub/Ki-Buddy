@@ -293,4 +293,16 @@ describe('ProductExperience interface', () => {
       })
     ).toThrow('extensionMarketplace');
   });
+
+  it('rejects a product policy without the required Guid landing capability', () => {
+    expect(() =>
+      parseProductExperiencePolicy({
+        ...validPolicy,
+        features: {
+          ...validPolicy.features,
+          guid: 'disabled',
+        },
+      })
+    ).toThrow('Product feature guid must be enabled');
+  });
 });

@@ -19,6 +19,7 @@ interface SiderToolbarProps {
   siderTooltipProps: SiderTooltipProps;
   onNewChat: () => void;
   onToggleBatchMode: () => void;
+  showHistoryActions?: boolean;
 }
 
 const SiderToolbar: React.FC<SiderToolbarProps> = ({
@@ -28,6 +29,7 @@ const SiderToolbar: React.FC<SiderToolbarProps> = ({
   siderTooltipProps,
   onNewChat,
   onToggleBatchMode,
+  showHistoryActions = true,
 }) => {
   const { t } = useTranslation();
 
@@ -80,25 +82,27 @@ const SiderToolbar: React.FC<SiderToolbarProps> = ({
           </span>
         </div>
       </Tooltip>
-      <Tooltip
-        {...siderTooltipProps}
-        content={isBatchMode ? t('conversation.history.batchModeExit') : t('conversation.history.batchManage')}
-        position='right'
-      >
-        <div
-          className={classNames(
-            'size-26px rd-6px flex items-center justify-center cursor-pointer shrink-0 transition-colors border border-solid border-transparent text-t-secondary hover:text-t-primary',
-            isMobile && 'sider-action-icon-btn-mobile',
-            {
-              'hover:bg-fill-3': !isBatchMode,
-              'bg-[rgba(var(--primary-6),0.12)] border-[rgba(var(--primary-6),0.24)] !text-primary': isBatchMode,
-            }
-          )}
-          onClick={onToggleBatchMode}
+      {showHistoryActions && (
+        <Tooltip
+          {...siderTooltipProps}
+          content={isBatchMode ? t('conversation.history.batchModeExit') : t('conversation.history.batchManage')}
+          position='right'
         >
-          <ListCheckbox theme='outline' size='14' className='block leading-none shrink-0' style={{ lineHeight: 0 }} />
-        </div>
-      </Tooltip>
+          <div
+            className={classNames(
+              'size-26px rd-6px flex items-center justify-center cursor-pointer shrink-0 transition-colors border border-solid border-transparent text-t-secondary hover:text-t-primary',
+              isMobile && 'sider-action-icon-btn-mobile',
+              {
+                'hover:bg-fill-3': !isBatchMode,
+                'bg-[rgba(var(--primary-6),0.12)] border-[rgba(var(--primary-6),0.24)] !text-primary': isBatchMode,
+              }
+            )}
+            onClick={onToggleBatchMode}
+          >
+            <ListCheckbox theme='outline' size='14' className='block leading-none shrink-0' style={{ lineHeight: 0 }} />
+          </div>
+        </Tooltip>
+      )}
     </div>
   );
 };
