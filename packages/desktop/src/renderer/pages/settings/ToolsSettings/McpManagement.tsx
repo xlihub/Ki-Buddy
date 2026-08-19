@@ -173,11 +173,12 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
           {visibleMcpEntries.length === 0 && extensionMcpCatalogEntries.length === 0 ? (
             <div className='py-8 text-center text-t-secondary'>{t('settings.mcpNoServersFound')}</div>
           ) : (
-            visibleMcpEntries.map(({ server, access }) => (
+            visibleMcpEntries.map(({ server, access, origin }) => (
               <McpServerItem
                 key={server.id}
                 server={server}
                 access={access}
+                origin={origin}
                 isCollapsed={mcpCollapseKey[server.id] || false}
                 isTestingConnection={testingServers[server.id] || false}
                 oauthStatus={oauthStatus[server.id]}
@@ -190,11 +191,12 @@ const McpManagement: React.FC<McpManagementProps> = ({ message }) => {
               />
             ))
           )}
-          {extensionMcpCatalogEntries.map(({ server, access }) => (
+          {extensionMcpCatalogEntries.map(({ server, access, origin }) => (
             <McpServerItem
               key={server.id}
               server={server}
               access={access}
+              origin={origin}
               isCollapsed={mcpCollapseKey[server.id] || false}
               isTestingConnection={false}
               onToggleCollapse={() => toggleServerCollapse(server.id)}

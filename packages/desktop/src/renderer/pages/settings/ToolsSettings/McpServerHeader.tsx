@@ -196,6 +196,7 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
         )}
         {canTest && (!needsLogin || access === 'use') && (
           <Button
+            data-testid={`mcp-test-${server.id}`}
             size='mini'
             icon={<Refresh size={'14'} />}
             title={t('settings.mcpTestConnection')}
@@ -211,13 +212,17 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
               trigger='hover'
               droplist={
                 <Menu>
-                  <Menu.Item key='edit' onClick={() => onEditServer(server)}>
+                  <Menu.Item data-testid={`mcp-edit-${server.id}`} key='edit' onClick={() => onEditServer(server)}>
                     <div className='flex items-center gap-2'>
                       <Write size={'14'} />
                       {t('settings.mcpEditServer')}
                     </div>
                   </Menu.Item>
-                  <Menu.Item key='delete' onClick={() => onDeleteServer(server.id)}>
+                  <Menu.Item
+                    data-testid={`mcp-delete-${server.id}`}
+                    key='delete'
+                    onClick={() => onDeleteServer(server.id)}
+                  >
                     <div className='flex items-center gap-2 text-red-500'>
                       <DeleteFour size={'14'} />
                       {t('settings.mcpDeleteServer')}
@@ -226,7 +231,7 @@ const McpServerHeader: React.FC<McpServerHeaderProps> = ({
                 </Menu>
               }
             >
-              <Button size='mini' icon={<SettingOne size={'14'} />} />
+              <Button data-testid={`mcp-manage-${server.id}`} size='mini' icon={<SettingOne size={'14'} />} />
             </Dropdown>
           )}
         </div>

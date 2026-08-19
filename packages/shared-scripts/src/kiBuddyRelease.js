@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -10,6 +11,7 @@ const KI_BUDDY_PRODUCT = 'Ki-Buddy';
 const KI_BUDDY_REPOSITORY = 'xlihub/Ki-Buddy';
 const AION_UI_REPOSITORY = 'iOfficeAI/AionUi';
 const PRODUCT_CONFIG_FILE = 'ki-buddy-product.json';
+const PRODUCT_EXPERIENCE_REGISTRY_FILE = 'packages/desktop/src/common/platform/ki-buddy/experience/registry.json';
 const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const PACKAGE_VERSION_PATTERN =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
@@ -324,6 +326,92 @@ function readProductConfig(projectRoot) {
   return config;
 }
 
+function sha256File(filePath) {
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+function createSourceStateSha256(projectRoot) {
+  const hash = crypto.createHash('sha256');
+  hash.update(
+    execFileSync('git', ['diff', '--binary', 'HEAD', '--'], {
+      cwd: projectRoot,
+      encoding: 'buffer',
+      maxBuffer: 100 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  );
+  const untrackedFiles = execFileSync('git', ['ls-files', '--others', '--exclude-standard', '-z'], {
+    cwd: projectRoot,
+    encoding: 'buffer',
+    maxBuffer: 100 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+    .toString('utf8')
+    .split('\0')
+    .filter(Boolean)
+    .toSorted();
+  for (const relativePath of untrackedFiles) {
+    hash.update(`untracked\0${relativePath}\0`);
+    const filePath = path.join(projectRoot, relativePath);
+    const stats = fs.lstatSync(filePath);
+    hash.update(stats.isSymbolicLink() ? fs.readlinkSync(filePath) : fs.readFileSync(filePath));
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
+/** Writes immutable evidence tying one packaged client to its product policy sources and source commit. */
+function createKiBuddyBuildEvidence(projectRoot, outputPath, options = {}) {
+  const productConfig = readProductConfig(projectRoot);
+  const sourceCommit = String(
+    options.commit ||
+      execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: projectRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+  ).trim();
+  if (!SHA40_PATTERN.test(sourceCommit)) {
+    throw new Error('Ki-Buddy build evidence requires a full lowercase source commit SHA');
+  }
+  const sourceTreeDirty =
+    options.dirty ??
+    Boolean(
+      execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], {
+        cwd: projectRoot,
+        encoding: 'utf8',
+        maxBuffer: 100 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim()
+    );
+  const sourceStateSha256 = options.sourceStateSha256 || createSourceStateSha256(projectRoot);
+
+  const evidence = {
+    schemaVersion: 1,
+    product: {
+      runtimeIdentity: productConfig.runtimeIdentity,
+      productName: productConfig.brand.productName,
+    },
+    sourceCommit,
+    sourceTreeDirty,
+    sourceStateSha256,
+    policySources: {
+      productConfig: {
+        path: PRODUCT_CONFIG_FILE,
+        sha256: sha256File(path.join(projectRoot, PRODUCT_CONFIG_FILE)),
+      },
+      experienceRegistry: {
+        path: PRODUCT_EXPERIENCE_REGISTRY_FILE,
+        sha256: sha256File(path.join(projectRoot, PRODUCT_EXPERIENCE_REGISTRY_FILE)),
+      },
+    },
+  };
+
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+  return evidence;
+}
+
 function createEffectivePackageJson(projectRoot, options = {}) {
   const upstreamPackage = readJson(path.join(projectRoot, 'package.json'), 'AionUi package.json');
   const productConfig = readProductConfig(projectRoot);
@@ -364,6 +452,12 @@ function createElectronBuilderConfig(projectRoot, outputPath, options = {}) {
       to: productConfig.assets.packaged.icon,
     });
   }
+  const buildEvidencePath = path.join(path.dirname(outputPath), 'ki-buddy-build-evidence.json');
+  createKiBuddyBuildEvidence(projectRoot, buildEvidencePath, { commit: options.commit });
+  productExtraResources.push({
+    from: buildEvidencePath,
+    to: 'ki-buddy-build-evidence.json',
+  });
   const config = {
     ...upstreamBuilderConfig,
     ...productConfig.electronBuilder,
@@ -656,6 +750,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  createSourceStateSha256,
+  createKiBuddyBuildEvidence,
   createEffectivePackageJson,
   createElectronBuilderConfig,
   extractReleaseNotes,

@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { load as loadYaml } from 'js-yaml';
 
 const {
+  createKiBuddyBuildEvidence,
+  createSourceStateSha256,
   createEffectivePackageJson,
   createElectronBuilderConfig,
   readKiBuddyRelease,
@@ -20,6 +24,12 @@ function readPngDimensions(relativePath: string): { height: number; width: numbe
   const data = readFileSync(join(projectRoot, relativePath));
   expect(data.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
   return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
+}
+
+function sha256(relativePath: string): string {
+  return createHash('sha256')
+    .update(readFileSync(join(projectRoot, relativePath)))
+    .digest('hex');
 }
 
 describe('Ki-Buddy product release identity', () => {
@@ -268,9 +278,114 @@ describe('Ki-Buddy product release identity', () => {
         resource.to === 'app.png' ? Object.assign({}, resource, { from: productConfig.assets.platform.png }) : resource
       );
       expectedResources.push({ from: productConfig.assets.platform.png, to: productConfig.assets.packaged.icon });
+      const evidencePath = join(tempDir, 'ki-buddy-build-evidence.json');
+      expectedResources.push({ from: evidencePath, to: 'ki-buddy-build-evidence.json' });
       expect(config.extraResources).toEqual(expectedResources);
+      expect(JSON.parse(readFileSync(evidencePath, 'utf8'))).toMatchObject({
+        product: { runtimeIdentity: 'ki-buddy', productName: 'Ki-Buddy' },
+        sourceCommit: expect.stringMatching(/^[0-9a-f]{40}$/),
+      });
       expect(JSON.parse(readFileSync(outputPath, 'utf8'))).toEqual(config);
       expect(readFileSync(join(projectRoot, 'package.json'), 'utf8')).toBe(originalPackage);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('records the exact product policy sources, tested commit, and source-tree state in packaged build evidence', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-build-evidence-'));
+    const outputPath = join(tempDir, 'ki-buddy-build-evidence.json');
+    const testedCommit = 'a'.repeat(40);
+    try {
+      const sourceStateSha256 = 'c'.repeat(64);
+      const evidence = createKiBuddyBuildEvidence(projectRoot, outputPath, {
+        commit: testedCommit,
+        dirty: false,
+        sourceStateSha256,
+      });
+
+      expect(evidence).toEqual({
+        schemaVersion: 1,
+        product: {
+          runtimeIdentity: 'ki-buddy',
+          productName: 'Ki-Buddy',
+        },
+        sourceCommit: testedCommit,
+        sourceTreeDirty: false,
+        sourceStateSha256,
+        policySources: {
+          productConfig: {
+            path: 'ki-buddy-product.json',
+            sha256: sha256('ki-buddy-product.json'),
+          },
+          experienceRegistry: {
+            path: 'packages/desktop/src/common/platform/ki-buddy/experience/registry.json',
+            sha256: sha256('packages/desktop/src/common/platform/ki-buddy/experience/registry.json'),
+          },
+        },
+      });
+      expect(JSON.parse(readFileSync(outputPath, 'utf8'))).toEqual(evidence);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('marks build evidence when the packaged source tree contains uncommitted changes', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-dirty-build-evidence-'));
+    try {
+      expect(
+        createKiBuddyBuildEvidence(projectRoot, join(tempDir, 'evidence.json'), {
+          commit: 'b'.repeat(40),
+          dirty: true,
+          sourceStateSha256: 'd'.repeat(64),
+        })
+      ).toMatchObject({
+        sourceCommit: 'b'.repeat(40),
+        sourceTreeDirty: true,
+        sourceStateSha256: 'd'.repeat(64),
+      });
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('changes source-state evidence for package.json, other tracked files, and untracked files', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ki-buddy-source-state-'));
+    const packagePath = join(tempDir, 'package.json');
+    const trackedPath = join(tempDir, 'tracked.txt');
+    const packageContents = '{"name":"upstream"}\n';
+    const trackedContents = 'tracked baseline\n';
+    try {
+      execFileSync('git', ['init', '--quiet'], { cwd: tempDir });
+      writeFileSync(packagePath, packageContents);
+      writeFileSync(trackedPath, trackedContents);
+      execFileSync('git', ['add', 'package.json', 'tracked.txt'], { cwd: tempDir });
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'user.name=Ki-Buddy Test',
+          '-c',
+          'user.email=ki-buddy-test@example.com',
+          'commit',
+          '--quiet',
+          '-m',
+          'base',
+        ],
+        { cwd: tempDir }
+      );
+
+      const baseline = createSourceStateSha256(tempDir);
+      writeFileSync(packagePath, '{"name":"modified-product"}\n');
+      expect(createSourceStateSha256(tempDir)).not.toBe(baseline);
+
+      writeFileSync(packagePath, packageContents);
+      writeFileSync(trackedPath, 'tracked modification\n');
+      expect(createSourceStateSha256(tempDir)).not.toBe(baseline);
+
+      writeFileSync(trackedPath, trackedContents);
+      writeFileSync(join(tempDir, 'untracked.txt'), 'untracked evidence\n');
+      expect(createSourceStateSha256(tempDir)).not.toBe(baseline);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

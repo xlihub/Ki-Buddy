@@ -4,11 +4,12 @@ import type { IMcpServer } from '@/common/config/storage';
 import McpServerHeader from './McpServerHeader';
 import McpServerToolsList from './McpServerToolsList';
 import type { McpOAuthStatus } from '@/renderer/hooks/mcp/useMcpOAuth';
-import type { ProductResourceAccess } from '@/common/platform/ki-buddy';
+import type { ProductResourceAccess, ProductResourceOrigin } from '@/common/platform/ki-buddy';
 
 interface McpServerItemProps {
   server: IMcpServer;
   access?: ProductResourceAccess;
+  origin?: ProductResourceOrigin;
   isCollapsed: boolean;
   isTestingConnection: boolean;
   oauthStatus?: McpOAuthStatus;
@@ -25,6 +26,7 @@ interface McpServerItemProps {
 const McpServerItem: React.FC<McpServerItemProps> = ({
   server,
   access,
+  origin,
   isCollapsed,
   isTestingConnection,
   oauthStatus,
@@ -39,6 +41,9 @@ const McpServerItem: React.FC<McpServerItemProps> = ({
   return (
     <Collapse
       key={server.id}
+      data-product-resource-id={server.id}
+      data-product-resource-origin={origin}
+      data-product-resource-access={access}
       activeKey={isCollapsed ? ['1'] : []}
       onChange={onToggleCollapse}
       className='mb-4 [&_div.arco-collapse-item-header-title]:flex-1'

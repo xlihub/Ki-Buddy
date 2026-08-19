@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { RESPONSE_MAPPERS } from './mappers';
 import { HTTP_ROUTES } from './routes';
+import { fetchBackendFromRenderer } from '../httpBridge';
 
 type ElectronApi = {
   emit?: (name: string, data: unknown) => Promise<unknown>;
@@ -30,62 +31,12 @@ export async function invokeBridge<T = unknown>(
     const body =
       route.method === 'GET' || route.method === 'DELETE' ? undefined : route.mapBody ? route.mapBody(params) : data;
 
-    const raw = await page.evaluate(
-      async ({ method, path, requestBody, requestTimeoutMs }) => {
-        const port = (window as unknown as { __backendPort?: number }).__backendPort;
-        if (!port) {
-          throw new Error('window.__backendPort is not available in renderer context');
-        }
-
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
-
-        try {
-          const headers: Record<string, string> = {};
-          if (requestBody !== undefined) headers['Content-Type'] = 'application/json';
-
-          const requestInit: RequestInit = {
-            method,
-            headers,
-            signal: controller.signal,
-          };
-          if (requestBody !== undefined && method !== 'GET') {
-            requestInit.body = JSON.stringify(requestBody);
-          }
-
-          const response = await fetch(`http://127.0.0.1:${port}${path}`, requestInit);
-
-          if (!response.ok) {
-            let errBody: unknown;
-            try {
-              errBody = await response.json();
-            } catch {
-              errBody = await response.text();
-            }
-            throw new Error(`Backend ${method} ${path} failed (${response.status}): ${JSON.stringify(errBody)}`);
-          }
-
-          const contentType = response.headers.get('Content-Type');
-          if (!contentType?.includes('application/json')) {
-            return undefined;
-          }
-
-          const json = (await response.json()) as { success?: boolean; data?: unknown };
-          if (json && typeof json === 'object' && 'data' in json) {
-            return json.data;
-          }
-          return json;
-        } finally {
-          clearTimeout(timer);
-        }
-      },
-      {
-        method: route.method,
-        path: resolvedPath,
-        requestBody: body,
-        requestTimeoutMs: timeoutMs,
-      }
-    );
+    const raw = await page.evaluate(fetchBackendFromRenderer, {
+      method: route.method,
+      path: resolvedPath,
+      body,
+      timeoutMs,
+    });
 
     return (route.mapResponse ? RESPONSE_MAPPERS[route.mapResponse](raw) : raw) as T;
   }

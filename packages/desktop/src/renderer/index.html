@@ -14,6 +14,50 @@
     <link rel="apple-touch-icon" href="./pwa/icon-180.png" />
     <title>AionUi</title>
     <script>
+      // Test-only first-frame observer. The main process supplies selectors in the renderer URL;
+      // this runs before React and keeps DOM access inside the renderer process.
+      (function () {
+        var serializedSelectors = new URLSearchParams(window.location.search).get('aionui-e2e-forbidden-selectors');
+        if (!serializedSelectors) return;
+
+        var selectors = JSON.parse(serializedSelectors);
+        if (
+          !Array.isArray(selectors) ||
+          !selectors.every(function (selector) {
+            return typeof selector === 'string';
+          })
+        ) {
+          throw new Error('aionui-e2e-forbidden-selectors must contain a JSON string array');
+        }
+
+        var violations = [];
+        var inspect = function (root) {
+          selectors.forEach(function (selector) {
+            var matches = [];
+            if (root instanceof Element && root.matches(selector)) matches.push(root);
+            root.querySelectorAll(selector).forEach(function (match) {
+              matches.push(match);
+            });
+            matches.forEach(function (match) {
+              violations.push({ selector: selector, html: match.outerHTML.slice(0, 500) });
+            });
+          });
+        };
+
+        window.__getE2EUiObserverState = function () {
+          return { selectors: selectors.slice(), violations: violations.slice() };
+        };
+        inspect(document);
+        new MutationObserver(function (records) {
+          records.forEach(function (record) {
+            record.addedNodes.forEach(function (node) {
+              if (node instanceof Element) inspect(node);
+            });
+          });
+        }).observe(document, { childList: true, subtree: true });
+      })();
+    </script>
+    <script>
       // Restore appearance and explicit product presentation before the first business frame.
       (function () {
         try {

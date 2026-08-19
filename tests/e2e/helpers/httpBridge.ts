@@ -16,7 +16,59 @@ import type { Page } from '@playwright/test';
  * `data` when present, matching `httpBridge.ts:76` in the renderer adapter.
  */
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+type RendererBackendRequest = Readonly<{
+  body?: unknown;
+  method: HttpMethod;
+  path: string;
+  timeoutMs?: number;
+}>;
+
+/** Executes one authenticated backend request from the renderer network context. */
+export async function fetchBackendFromRenderer({
+  body,
+  method,
+  path,
+  timeoutMs,
+}: RendererBackendRequest): Promise<unknown> {
+  const port = window.__backendPort;
+  if (!port) throw new Error('window.__backendPort is not available in renderer context');
+
+  const effectiveBody = body !== undefined ? body : method === 'DELETE' ? {} : undefined;
+  const headers: Record<string, string> = {};
+  if (effectiveBody !== undefined) headers['Content-Type'] = 'application/json';
+  const csrfToken = window.electronAPI?.kiBuddyCoreTransport?.csrfToken;
+  if (csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(method)) headers['x-csrf-token'] = csrfToken;
+
+  const controller = timeoutMs ? new AbortController() : undefined;
+  const timer = timeoutMs ? window.setTimeout(() => controller?.abort(), timeoutMs) : undefined;
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`, {
+      method,
+      headers,
+      credentials: 'include',
+      signal: controller?.signal,
+      ...(effectiveBody !== undefined && method !== 'GET' ? { body: JSON.stringify(effectiveBody) } : {}),
+    });
+
+    if (!response.ok) {
+      let errorBody: unknown;
+      try {
+        errorBody = await response.json();
+      } catch {
+        errorBody = await response.text();
+      }
+      throw new Error(`Backend ${method} ${path} failed (${response.status}): ${JSON.stringify(errorBody)}`);
+    }
+
+    if (!response.headers.get('Content-Type')?.includes('application/json')) return undefined;
+    const json = (await response.json()) as unknown;
+    return json && typeof json === 'object' && 'data' in json ? (json as { data: unknown }).data : json;
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
+}
 
 export async function httpInvoke<T = unknown>(
   page: Page,
@@ -24,50 +76,7 @@ export async function httpInvoke<T = unknown>(
   path: string,
   body?: unknown
 ): Promise<T> {
-  return page.evaluate(
-    async ({ method: m, path: p, body: b }) => {
-      const port = (window as unknown as { __backendPort?: number }).__backendPort ?? 13400;
-      const url = `http://127.0.0.1:${port}${p}`;
-      // DELETE routes require Content-Type: application/json AND a JSON-parseable
-      // body even when the operation takes no body (e.g. DELETE /api/skills/external-paths
-      // where the path is in the query string). Send `{}` as default body for DELETE.
-      const effectiveBody = b !== undefined ? b : m === 'DELETE' ? {} : undefined;
-      const headers: Record<string, string> = {};
-      if (effectiveBody !== undefined) headers['Content-Type'] = 'application/json';
-
-      const requestInit: RequestInit = {
-        method: m,
-        headers,
-      };
-      if (effectiveBody !== undefined && m !== 'GET') {
-        requestInit.body = JSON.stringify(effectiveBody);
-      }
-
-      const res = await fetch(url, requestInit);
-
-      if (!res.ok) {
-        let errText: string;
-        try {
-          errText = JSON.stringify(await res.json());
-        } catch {
-          errText = await res.text();
-        }
-        throw new Error(`Backend ${m} ${p} failed (${res.status}): ${errText}`);
-      }
-
-      const contentType = res.headers.get('Content-Type');
-      if (!contentType?.includes('application/json')) {
-        return undefined;
-      }
-
-      const json = await res.json();
-      if (json && typeof json === 'object' && 'data' in json) {
-        return (json as { data: unknown }).data;
-      }
-      return json;
-    },
-    { method, path, body }
-  ) as Promise<T>;
+  return page.evaluate(fetchBackendFromRenderer, { method, path, body }) as Promise<T>;
 }
 
 export const httpGet = <T = unknown>(page: Page, path: string) => httpInvoke<T>(page, 'GET', path);
