@@ -768,6 +768,9 @@
     "playwrightMcpConfigHint": "Playwright MCP를 사용하여 CDP 엔드포인트를 통해 연결하고, 접근성 스냅샷 및 브라우저 자동화를 지원합니다."
   },
   "mcpNoDescription": "설명 없음",
+  "kiBuddy": {
+    "agentsListDescription": "현재 로그인한 계정에서 사용할 수 있는 전체 Agents 카탈로그를 표시합니다."
+  },
   "mcpAuthRequired": "인증 필요",
   "mcpOAuthLoginSuccess": "OAuth 로그인 성공",
   "mcpOAuthLoginFailed": "OAuth 로그인 실패",

@@ -51,10 +51,18 @@ vi.mock('@/process/ki-buddy/CredentialStore', () => ({
   },
 }));
 
-import { registerKiBuddyAuthBridge } from '@/process/ki-buddy/authBridge';
+import { createKiBuddyBackendMigrationScheduler, registerKiBuddyAuthBridge } from '@/process/ki-buddy/authBridge';
 import { KiBuddyMainCoreTransport } from '@/process/ki-buddy/KiBuddyMainCoreTransport';
 
-function registerBridgeWithSuccessfulLogin() {
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function registerBridgeWithSuccessfulLogin(onSessionAuthenticated?: () => void) {
   const coreTransport = new KiBuddyMainCoreTransport('core-csrf-token');
   const fetchMock = vi
     .fn<typeof fetch>()
@@ -108,6 +116,7 @@ function registerBridgeWithSuccessfulLogin() {
     bootstrapSecret: 'bootstrap-secret',
     coreTransport,
     getCoreBaseUrl: () => 'http://127.0.0.1:39123',
+    onSessionAuthenticated,
   });
   return { authService, coreTransport, fetchMock };
 }
@@ -174,6 +183,20 @@ describe('Ki-Buddy authentication IPC bridge', () => {
     );
   });
 
+  it('notifies the product lifecycle after the projected Core session becomes active', async () => {
+    const onSessionAuthenticated = vi.fn();
+    registerBridgeWithSuccessfulLogin(onSessionAuthenticated);
+    const loginHandler = electronMock.handlers.get('ki-buddy-auth:login');
+
+    await loginHandler?.(null, {
+      baseUrl: 'https://agents.example.com',
+      loginName: 'agents-user@example.com',
+      password: 'password',
+    });
+
+    expect(onSessionAuthenticated).toHaveBeenCalledWith('core-user-42');
+  });
+
   it('clears projected Core state on logout', async () => {
     const { coreTransport } = registerBridgeWithSuccessfulLogin();
     const loginHandler = electronMock.handlers.get('ki-buddy-auth:login');
@@ -219,5 +242,67 @@ describe('Ki-Buddy authentication IPC bridge', () => {
       code: 'contractError',
     });
     expect(electronMock.agentsFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('Ki-Buddy account-aware backend migrations', () => {
+  it('reports a failed migration and retries the same account', async () => {
+    const error = new Error('migration failed');
+    const onError = vi.fn();
+    const run = vi.fn().mockRejectedValueOnce(error).mockResolvedValue(undefined);
+    const scheduler = createKiBuddyBackendMigrationScheduler({ isReady: () => true, onError, run });
+
+    scheduler.trigger('core-user-a');
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(error));
+
+    scheduler.trigger('core-user-a');
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(2));
+    scheduler.trigger('core-user-a');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs migrations once for each authenticated Core user', async () => {
+    const run = vi.fn().mockResolvedValue(undefined);
+    const scheduler = createKiBuddyBackendMigrationScheduler({ isReady: () => true, onError: vi.fn(), run });
+
+    scheduler.trigger('core-user-a');
+    await vi.waitFor(() => expect(run).toHaveBeenCalledOnce());
+    scheduler.trigger('core-user-a');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(run).toHaveBeenCalledOnce();
+
+    scheduler.trigger('core-user-b');
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps a superseded account retryable after a different account finishes', async () => {
+    const firstRun = deferred();
+    const run = vi.fn().mockReturnValueOnce(firstRun.promise).mockResolvedValue(undefined);
+    const scheduler = createKiBuddyBackendMigrationScheduler({ isReady: () => true, onError: vi.fn(), run });
+
+    scheduler.trigger('core-user-a');
+    scheduler.trigger('core-user-b');
+    firstRun.resolve();
+
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(2));
+    scheduler.trigger('core-user-a');
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(3));
+  });
+
+  it('runs only the latest authenticated account after a migration is superseded', async () => {
+    const firstRun = deferred();
+    const run = vi.fn().mockReturnValueOnce(firstRun.promise).mockResolvedValue(undefined);
+    const scheduler = createKiBuddyBackendMigrationScheduler({ isReady: () => true, onError: vi.fn(), run });
+
+    scheduler.trigger('core-user-a');
+    scheduler.trigger('core-user-b');
+    scheduler.trigger('core-user-c');
+    firstRun.resolve();
+
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(2));
+    scheduler.trigger('core-user-c');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(run).toHaveBeenCalledTimes(2);
   });
 });

@@ -3,6 +3,24 @@ import { session } from 'electron';
 
 const AGENTS_NETWORK_PARTITION = 'ki-buddy-agents-network';
 const ALLOWED_SELF_SIGNED_ERRORS = new Set(['CERT_AUTHORITY_INVALID', 'CERT_COMMON_NAME_INVALID']);
+const SERVER_NEXT_GATEWAY_API_PREFIX = '/kagents_core/api';
+const AGENTS_BRIDGE_PATH_PREFIX = '/bridge/agents/';
+
+function isAgentsBridgePath(path: string): boolean {
+  try {
+    return new URL(path, 'https://ki-buddy.invalid').pathname.startsWith(AGENTS_BRIDGE_PATH_PREFIX);
+  } catch {
+    return false;
+  }
+}
+
+/** Resolves Bridge routes exposed by the authenticated deployment's HTTPS server_next gateway. */
+export function resolveAgentsRequestUrl(baseUrl: string, path: string): string {
+  if (isAgentsBridgePath(path)) {
+    return `${new URL(baseUrl).origin}${SERVER_NEXT_GATEWAY_API_PREFIX}${path}`;
+  }
+  return `${baseUrl}${path}`;
+}
 
 function isPrivateIpv4(hostname: string): boolean {
   const octets = hostname.split('.').map(Number);

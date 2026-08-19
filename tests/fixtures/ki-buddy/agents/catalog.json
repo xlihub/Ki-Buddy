@@ -1,0 +1,36 @@
+{
+  "status": "ok",
+  "total": 2,
+  "agents": [
+    {
+      "agentId": "fixture-feedback-analysis",
+      "agentTitle": "客户反馈分析",
+      "agentDescription": "分析脱敏后的客户反馈文本并生成摘要。",
+      "agentType": "workflow",
+      "defaultInputModes": [
+        {
+          "name": "feedback",
+          "description": "脱敏后的反馈文本",
+          "type": "text",
+          "required": true
+        }
+      ],
+      "defaultOutputModes": [
+        {
+          "name": "summary",
+          "description": "分析摘要",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "agentId": "fixture-report-generation",
+      "agentTitle": "报告生成",
+      "agentDescription": "根据脱敏输入生成报告。",
+      "agentType": "a2a",
+      "defaultInputModes": [],
+      "defaultOutputModes": []
+    }
+  ]
+}

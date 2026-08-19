@@ -42,6 +42,7 @@ export type LaunchedPackagedApp = Readonly<{
 }>;
 
 const KI_BUDDY_FORBIDDEN_UI_SELECTORS = [
+  '[data-testid="installation-integrity-dialog"]',
   ...new Set(Object.values(FIRST_RELEASE_MATRIX.disabledFeatureEvidence.flashObserved).flat()),
 ];
 

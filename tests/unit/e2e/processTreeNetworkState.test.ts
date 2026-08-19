@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   collectProcessTreePids,
+  findUnexpectedApplicationListeners,
   partitionExpectedPlaywrightElectronListeners,
   parseLsofListeners,
   parsePsProcessTable,
@@ -83,6 +84,41 @@ describe('packaged process-tree network evidence', () => {
 
     expect(partition.playwrightHarnessListeners).toEqual([inspectListener, devtoolsListener]);
     expect(partition.applicationListeners).toEqual([backendListener]);
+  });
+
+  it('keeps an expected product bridge separate from Playwright listeners', () => {
+    const electronCommand = 'Ki-Buddy --inspect=0 --remote-debugging-port=0';
+    const inspectListener = {
+      pid: 10,
+      command: electronCommand,
+      address: '127.0.0.1:43101',
+      port: 43101,
+      protocol: 'tcp' as const,
+    };
+    const devtoolsListener = { ...inspectListener, address: '127.0.0.1:43102', port: 43102 };
+    const agentsBridgeListener = { ...inspectListener, address: '127.0.0.1:43103', port: 43103 };
+    const partition = partitionExpectedPlaywrightElectronListeners(
+      {
+        rootPid: 10,
+        processes: [{ pid: 10, ppid: 1, command: electronCommand }],
+        listeners: [inspectListener, devtoolsListener, agentsBridgeListener],
+      },
+      [43100, agentsBridgeListener.port]
+    );
+
+    expect(partition.playwrightHarnessListeners).toEqual([inspectListener, devtoolsListener]);
+    expect(partition.applicationListeners).toEqual([agentsBridgeListener]);
+  });
+
+  it('allows product ports and AionCore dynamic listeners while reporting other listeners', () => {
+    const listeners = [
+      { pid: 11, command: 'aioncore --port 43100', address: '127.0.0.1:43100', port: 43100, protocol: 'tcp' as const },
+      { pid: 11, command: 'aioncore --port 43100', address: '127.0.0.1:43101', port: 43101, protocol: 'tcp' as const },
+      { pid: 10, command: 'Ki-Buddy', address: '127.0.0.1:43102', port: 43102, protocol: 'tcp' as const },
+      { pid: 12, command: 'unexpected-server', address: '127.0.0.1:43103', port: 43103, protocol: 'tcp' as const },
+    ];
+
+    expect(findUnexpectedApplicationListeners(listeners, [43100, 43102])).toEqual([listeners[3]]);
   });
 
   it('finds Playwright listeners on the Electron child of a Windows command wrapper', () => {

@@ -152,6 +152,73 @@ it('shows installation integrity diagnostics when a required product MCP is miss
   expect(screen.getByText('Ki-Buddy business content')).toBeInTheDocument();
 });
 
+it('waits for the post-auth Adapter registration before reporting it as missing', async () => {
+  vi.useFakeTimers();
+  loadProductBuiltinMcpResourceStateMock
+    .mockResolvedValueOnce({
+      status: 'invalid',
+      missing: [
+        {
+          code: 'required_product_resource_missing',
+          featureId: 'tools',
+          kind: 'mcp',
+          origin: 'productBuiltin',
+          resourceId: 'builtin:agents-mcp-adapter',
+          resourceName: 'agents-mcp-adapter',
+        },
+      ],
+    })
+    .mockResolvedValueOnce({ status: 'ready', missing: [] });
+
+  render(
+    <KiBuddyProductResourceIntegrityGate enabled>
+      <div>Ki-Buddy business content</div>
+    </KiBuddyProductResourceIntegrityGate>
+  );
+
+  await act(async () => Promise.resolve());
+  expect(loadProductBuiltinMcpResourceStateMock).toHaveBeenCalledOnce();
+  expect(
+    screen.queryByText('common.backendStartup.incompleteInstallation.runtimeComponentDescription:agents-mcp-adapter')
+  ).not.toBeInTheDocument();
+
+  await act(async () => vi.advanceTimersByTimeAsync(1_000));
+
+  expect(loadProductBuiltinMcpResourceStateMock).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('Ki-Buddy business content')).toBeInTheDocument();
+});
+
+it('reports the Adapter as missing when registration stays absent through the grace period', async () => {
+  vi.useFakeTimers();
+  loadProductBuiltinMcpResourceStateMock.mockResolvedValue({
+    status: 'invalid',
+    missing: [
+      {
+        code: 'required_product_resource_missing',
+        featureId: 'tools',
+        kind: 'mcp',
+        origin: 'productBuiltin',
+        resourceId: 'builtin:agents-mcp-adapter',
+        resourceName: 'agents-mcp-adapter',
+      },
+    ],
+  });
+
+  render(
+    <KiBuddyProductResourceIntegrityGate enabled>
+      <div>Account and diagnostics content</div>
+    </KiBuddyProductResourceIntegrityGate>
+  );
+
+  await act(async () => Promise.resolve());
+  expect(screen.queryByText('builtin:agents-mcp-adapter')).not.toBeInTheDocument();
+
+  await act(async () => vi.advanceTimersByTimeAsync(15_000));
+
+  expect(screen.getByText('builtin:agents-mcp-adapter')).toBeInTheDocument();
+  expect(screen.getByText('Account and diagnostics content')).toBeInTheDocument();
+});
+
 it('shows installation integrity diagnostics when a required product Assistant is missing', async () => {
   loadProductBuiltinAssistantResourceStateMock.mockResolvedValue({
     status: 'invalid',

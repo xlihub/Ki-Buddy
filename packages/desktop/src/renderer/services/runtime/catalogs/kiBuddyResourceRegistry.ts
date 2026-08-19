@@ -1,4 +1,5 @@
-import type { ProductFeatureId } from '@/common/platform/ki-buddy';
+import type { ProductFeatureId, ProductResourceOrigin } from '@/common/platform/ki-buddy';
+import type { IMcpServer } from '@/common/config/storage';
 
 type ProductResourceDefinition = Readonly<{
   featureId: ProductFeatureId;
@@ -65,8 +66,54 @@ export const KI_BUDDY_PRODUCT_RESOURCE_REGISTRY = {
       backendName: 'officecli-xlsx',
     },
   },
-  mcp: {},
+  mcp: {
+    agentsAdapter: {
+      id: 'builtin:agents-mcp-adapter',
+      featureId: 'tools',
+      resourceName: 'agents-mcp-adapter',
+      backendName: 'agents-mcp-adapter',
+      scriptName: 'builtin-mcp-agents.js',
+      tools: {
+        list: {
+          name: 'agents_list',
+          descriptionKey: 'settings.kiBuddy.agentsListDescription',
+        },
+      },
+    },
+  },
 } as const;
+
+/** Identifies the product-owned Adapter using the complete registration shape available without Ki-Core changes. */
+export function resolveKiBuddyProductMcpResourceId(
+  server: Pick<IMcpServer, 'builtin' | 'name' | 'transport'>
+): string | null {
+  const definition = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp.agentsAdapter;
+  if (
+    server.builtin !== true ||
+    server.name !== definition.backendName ||
+    server.transport.type !== 'stdio' ||
+    server.transport.command !== 'node' ||
+    server.transport.args?.length !== 1
+  ) {
+    return null;
+  }
+  const normalizedScriptPath = server.transport.args[0].replace(/\\/gu, '/');
+  return normalizedScriptPath.endsWith(`/${definition.scriptName}`) ? definition.id : null;
+}
+
+/** Resolves product-owned UI copy without changing the Adapter's stable MCP protocol metadata. */
+export function resolveKiBuddyMcpToolDescriptionKey(
+  server: Pick<IMcpServer, 'builtin' | 'name' | 'transport'>,
+  origin: ProductResourceOrigin | undefined,
+  toolName: string
+): 'settings.kiBuddy.agentsListDescription' | null {
+  const definition = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp.agentsAdapter;
+  return origin === 'productBuiltin' &&
+    resolveKiBuddyProductMcpResourceId(server) === definition.id &&
+    toolName === definition.tools.list.name
+    ? definition.tools.list.descriptionKey
+    : null;
+}
 
 export const KI_CLI_PRODUCT_RESOURCE_ID = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.agent.kiCli.id;
 export const KI_BUDDY_ASSISTANT_IDENTITIES = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant;

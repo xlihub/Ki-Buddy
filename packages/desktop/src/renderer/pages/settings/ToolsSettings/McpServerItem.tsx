@@ -66,7 +66,7 @@ const McpServerItem: React.FC<McpServerItemProps> = ({
         name='1'
         className={'[&_div.arco-collapse-item-content-box]:py-3'}
       >
-        <McpServerToolsList server={server} />
+        <McpServerToolsList server={server} origin={origin} />
       </Collapse.Item>
     </Collapse>
   );

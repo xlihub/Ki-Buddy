@@ -780,6 +780,9 @@
     "playwrightMcpConfigHint": "使用 Playwright MCP 透過 CDP 端點連線，支援無障礙樹快照和瀏覽器自動化。"
   },
   "mcpNoDescription": "暫無描述",
+  "kiBuddy": {
+    "agentsListDescription": "列出目前登入帳號可用的完整 Agents 目錄。"
+  },
   "mcpAuthRequired": "需要身份驗證",
   "mcpOAuthLoginSuccess": "OAuth 登入成功",
   "mcpOAuthLoginFailed": "OAuth 登入失敗",

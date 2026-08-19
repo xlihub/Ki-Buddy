@@ -1900,6 +1900,7 @@ export type I18nKey =
   | 'settings.imageInputUnsupported'
   | 'settings.includePrereleaseUpdates'
   | 'settings.installed'
+  | 'settings.kiBuddy.agentsListDescription'
   | 'settings.language'
   | 'settings.lark.agent'
   | 'settings.lark.agentDesc'

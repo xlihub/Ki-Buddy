@@ -65,7 +65,21 @@ describe('projectProductAssistantCatalog', () => {
       { id: 'builtin:officecli-pptx', backendName: 'officecli-pptx' },
       { id: 'builtin:officecli-xlsx', backendName: 'officecli-xlsx' },
     ]);
-    expect(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp).toEqual({});
+    expect(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp).toEqual({
+      agentsAdapter: {
+        id: 'builtin:agents-mcp-adapter',
+        featureId: 'tools',
+        resourceName: 'agents-mcp-adapter',
+        backendName: 'agents-mcp-adapter',
+        scriptName: 'builtin-mcp-agents.js',
+        tools: {
+          list: {
+            name: 'agents_list',
+            descriptionKey: 'settings.kiBuddy.agentsListDescription',
+          },
+        },
+      },
+    });
   });
 
   it('shows stable product and Custom Assistants with manage access', () => {
