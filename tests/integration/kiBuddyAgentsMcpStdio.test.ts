@@ -10,7 +10,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startAgentsMcpRuntimeBridge } from '@/process/ki-buddy/agents';
 import { startAgentsMcpBridge, type AgentsMcpBridgeHandle } from '@/process/ki-buddy/agents/bridge';
-import { createAgentsCatalogClient, type AgentsCatalogClient } from '@/process/ki-buddy/agents/client';
+import { createAgentsClient, type AgentsClient } from '@/process/ki-buddy/agents/client';
 import { AgentsMcpError } from '@/process/ki-buddy/agents/errors';
 
 const projectRoot = path.resolve(__dirname, '../..');
@@ -53,6 +53,7 @@ const fakeCatalog = {
 type FakeCatalogGateway = Readonly<{
   baseUrl: string;
   close: () => Promise<void>;
+  invokeBodies: () => readonly unknown[];
   requestPaths: () => readonly string[];
   setCatalog: (catalog: unknown) => void;
   setStatus: (status: number) => void;
@@ -68,8 +69,36 @@ async function startFakeCatalogGateway(initialCatalog: unknown = fakeCatalog): P
   let catalog = initialCatalog;
   let status = 200;
   const paths: string[] = [];
+  const invokeBodies: unknown[] = [];
   const server = createServer((request, response) => {
     paths.push(request.url ?? '');
+    if (
+      request.method === 'POST' &&
+      request.url === '/bridge/agents/invoke' &&
+      request.headers.authorization === 'Bearer fake-agents-token'
+    ) {
+      const chunks: Buffer[] = [];
+      request.on('data', (chunk: Buffer) => chunks.push(chunk));
+      request.on('end', () => {
+        invokeBodies.push(JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown);
+        response.writeHead(status, { 'content-type': 'application/json' });
+        response.end(
+          JSON.stringify({
+            status: 'completed',
+            request_id: 'request-redacted-1',
+            conversation_id: 'conversation-redacted-1',
+            flow_instance_id: 'task-redacted-1',
+            result: {
+              status: 'completed',
+              text: 'Scalar invocation completed.',
+              outputs: [{ url: 'https://must-not-be-exposed.invalid/result.pdf' }],
+            },
+            debug: { deploymentUrl: 'https://must-not-be-exposed.invalid' },
+          })
+        );
+      });
+      return;
+    }
     if (
       request.method !== 'GET' ||
       request.url !== '/bridge/agents/catalog' ||
@@ -92,6 +121,7 @@ async function startFakeCatalogGateway(initialCatalog: unknown = fakeCatalog): P
   const { port } = server.address() as AddressInfo;
   const gateway = {
     baseUrl: `http://127.0.0.1:${port}`,
+    invokeBodies: () => [...invokeBodies],
     requestPaths: () => [...paths],
     setCatalog: (nextCatalog: unknown) => {
       catalog = nextCatalog;
@@ -133,13 +163,48 @@ async function startGatewayBackedBridge(binding: MutableSessionBinding): Promise
 async function createGatewayBackedClient(
   binding: MutableSessionBinding,
   options: Readonly<{ now?: () => number }> = {}
-): Promise<AgentsCatalogClient> {
+): Promise<AgentsClient> {
   const bridge = await startGatewayBackedBridge(binding);
-  return createAgentsCatalogClient({
+  return createAgentsClient({
     bridgeToken: bridge.token,
     bridgeUrl: bridge.url,
     ...options,
   });
+}
+
+async function connectGatewayBackedStdioAdapter(name: string): Promise<
+  Readonly<{
+    bridge: AgentsMcpBridgeHandle;
+    binding: MutableSessionBinding;
+    client: Client;
+    gateway: FakeCatalogGateway;
+    readStderr: () => string;
+  }>
+> {
+  const gateway = await startFakeCatalogGateway();
+  const binding = {
+    deploymentUrl: gateway.baseUrl,
+    sessionEpoch: 1,
+    userId: 'user-1',
+  };
+  const bridge = await startGatewayBackedBridge(binding);
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [adapterScript],
+    env: {
+      KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN: bridge.token,
+      KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL: bridge.url,
+    },
+    stderr: 'pipe',
+  });
+  let stderr = '';
+  transport.stderr?.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
+  const client = new Client({ name, version: '1.0.0' });
+  clients.push(client);
+  await client.connect(transport);
+  return { binding, bridge, client, gateway, readStderr: () => stderr };
 }
 
 async function waitForLine(stream: NodeJS.ReadableStream, timeoutMessage: string): Promise<string> {
@@ -231,6 +296,103 @@ afterEach(async () => {
 });
 
 describe('packaged Agents MCP stdio entry', () => {
+  it('completes one scalar invoke through the self-contained stdio Adapter without duplicate dispatch', async () => {
+    const { client, gateway } = await connectGatewayBackedStdioAdapter('ki-buddy-agents-invoke-e2e');
+
+    await client.callTool({ name: 'agents_list', arguments: {} });
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-feedback' } });
+    const result = await client.callTool({
+      name: 'agents_invoke',
+      arguments: { agentId: 'agent-feedback', inputs: { query: 'Summarize the release notes.' } },
+    });
+    const duplicate = await client.callTool({
+      name: 'agents_invoke',
+      arguments: { agentId: 'agent-feedback', inputs: { query: 'Summarize the release notes.' } },
+    });
+
+    expect(result.content).toEqual([
+      {
+        type: 'text',
+        text: JSON.stringify({
+          agentId: 'agent-feedback',
+          taskId: 'task-redacted-1',
+          requestId: 'request-redacted-1',
+          text: 'Scalar invocation completed.',
+        }),
+      },
+    ]);
+    expect(duplicate.isError).toBe(true);
+    expect(gateway.requestPaths()).toEqual([
+      '/bridge/agents/catalog',
+      '/bridge/agents/catalog',
+      '/bridge/agents/catalog',
+      '/bridge/agents/invoke',
+    ]);
+    expect(gateway.invokeBodies()).toHaveLength(1);
+  });
+
+  it('keeps bridge credentials and raw invoke fields out of stdio diagnostics', async () => {
+    const { bridge, client, readStderr } = await connectGatewayBackedStdioAdapter('ki-buddy-agents-invoke-diagnostics');
+
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-feedback' } });
+    await client.callTool({
+      name: 'agents_invoke',
+      arguments: { agentId: 'agent-feedback', inputs: { query: 'Summarize the release notes.' } },
+    });
+
+    expect(
+      [bridge.token, bridge.url, 'must-not-be-exposed.invalid'].filter((value) => readStderr().includes(value))
+    ).toEqual([]);
+  });
+
+  it('rejects a same-agent invoke when the account changes after packaged stdio describe', async () => {
+    const { binding, client, gateway } = await connectGatewayBackedStdioAdapter(
+      'ki-buddy-agents-account-bound-invoke-e2e'
+    );
+
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-feedback' } });
+    binding.sessionEpoch = 2;
+    binding.userId = 'user-2';
+    const result = await client.callTool({
+      name: 'agents_invoke',
+      arguments: { agentId: 'agent-feedback', inputs: { query: 'Must not dispatch.' } },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(gateway.invokeBodies()).toEqual([]);
+    expect(gateway.requestPaths()).toEqual(['/bridge/agents/catalog', '/bridge/agents/catalog']);
+  });
+
+  it('direct invokes one catalog agent with scalar inputs and returns safe correlations', async () => {
+    const gateway = await startFakeCatalogGateway();
+    const client = await createGatewayBackedClient({
+      deploymentUrl: gateway.baseUrl,
+      sessionEpoch: 1,
+      userId: 'user-1',
+    });
+
+    const { grant } = await client.describe('agent-feedback');
+    await expect(client.invoke(grant, { query: 'Summarize the release notes.' })).resolves.toEqual({
+      agentId: 'agent-feedback',
+      taskId: 'task-redacted-1',
+      requestId: 'request-redacted-1',
+      text: 'Scalar invocation completed.',
+    });
+    expect(gateway.requestPaths()).toEqual([
+      '/bridge/agents/catalog',
+      '/bridge/agents/catalog',
+      '/bridge/agents/invoke',
+    ]);
+    expect(gateway.invokeBodies()).toEqual([
+      {
+        agentId: 'agent-feedback',
+        agentType: 'workflow',
+        conversationId: expect.stringMatching(/^ki-buddy-/u),
+        inputs: { query: 'Summarize the release notes.' },
+      },
+    ]);
+  });
+
   it('applies TTL and force refresh through a local fake Agents Gateway', async () => {
     let currentTime = 10_000;
     const gateway = await startFakeCatalogGateway();
@@ -426,7 +588,7 @@ describe('packaged Agents MCP stdio entry', () => {
     });
 
     expect(existsSync(adapterScript)).toBe(true);
-    expect(tools.tools.map(({ name }) => name)).toEqual(['agents_list', 'agents_describe']);
+    expect(tools.tools.map(({ name }) => name)).toEqual(['agents_list', 'agents_describe', 'agents_invoke']);
     expect(result.content).toEqual([
       {
         type: 'text',

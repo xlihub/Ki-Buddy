@@ -77,6 +77,10 @@ describe('projectProductAssistantCatalog', () => {
             name: 'agents_describe',
             descriptionKey: 'settings.kiBuddy.agentsDescribeDescription',
           },
+          invoke: {
+            name: 'agents_invoke',
+            descriptionKey: 'settings.kiBuddy.agentsInvokeDescription',
+          },
           list: {
             name: 'agents_list',
             descriptionKey: 'settings.kiBuddy.agentsListDescription',

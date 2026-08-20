@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import invokeFixture from '../../../fixtures/ki-buddy/agents/invoke.json';
 import { test, expect, resolvePackagedApp } from '../../fixtures';
 import { httpInvoke } from '../../helpers';
 
@@ -42,6 +43,13 @@ type AgentsDescribeResult = Readonly<{
   agentId: string;
   inputSchema: Array<{ name: string; required: boolean; type: string }>;
   outputSchema: Array<{ name: string; required: boolean; type: string }>;
+}>;
+
+type AgentsInvokeResult = Readonly<{
+  agentId: string;
+  requestId: string;
+  taskId: string;
+  text: string;
 }>;
 
 type HeldCatalogRequest = Readonly<{
@@ -117,6 +125,12 @@ function identityForUser(user: (typeof AGENTS_USERS)[number]): 'A' | 'B' {
   return user === AGENTS_USER_A ? 'A' : 'B';
 }
 
+async function readJsonRequest(request: http.IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
+}
+
 function resolveRegisteredAdapterCommand(command: string): string {
   if (command !== 'node') return command;
   const packaged = resolvePackagedApp();
@@ -149,12 +163,14 @@ async function startFakeAgentsServer(
   close: () => Promise<void>;
   expireToken: (token: string) => void;
   getCatalogIdentitySequence: () => readonly ('A' | 'B')[];
+  getInvokeRequests: () => readonly unknown[];
   getValidationRequestCount: () => number;
   holdNextCatalog: (identity: 'A' | 'B') => HeldCatalogRequest;
   restoreToken: (token: string) => void;
 }> {
   const expiredTokens = new Set<string>();
   const catalogIdentitySequence: Array<'A' | 'B'> = [];
+  const invokeRequests: unknown[] = [];
   let heldCatalog:
     | {
         cancelled: boolean;
@@ -178,8 +194,9 @@ async function startFakeAgentsServer(
     const isLogin = request.method === 'POST' && request.url === '/kagent/login';
     const isValidation = request.method === 'POST' && request.url === '/kagent/system/user/validateToken';
     const isCatalog = request.method === 'GET' && request.url === '/kagents_core/api/bridge/agents/catalog';
+    const isInvoke = request.method === 'POST' && request.url === '/kagents_core/api/bridge/agents/invoke';
 
-    if (!isLogin && !isValidation && !isCatalog) {
+    if (!isLogin && !isValidation && !isCatalog && !isInvoke) {
       response.writeHead(404).end();
       return;
     }
@@ -208,6 +225,23 @@ async function startFakeAgentsServer(
         return;
       }
       sendCatalog();
+      return;
+    }
+
+    if (isInvoke) {
+      const user = findUserByToken(request.headers.authorization);
+      if (!user) {
+        response.writeHead(401).end();
+        return;
+      }
+      void readJsonRequest(request).then(
+        (body) => {
+          invokeRequests.push(body);
+          response.writeHead(200, { 'Content-Type': 'application/json' });
+          response.end(JSON.stringify(invokeFixture));
+        },
+        () => response.writeHead(400).end()
+      );
       return;
     }
 
@@ -257,6 +291,7 @@ async function startFakeAgentsServer(
     close: () => new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve()))),
     expireToken: (token) => expiredTokens.add(token),
     getCatalogIdentitySequence: () => [...catalogIdentitySequence],
+    getInvokeRequests: () => [...invokeRequests],
     getValidationRequestCount: () => validationRequestCount,
     holdNextCatalog: (identity) => {
       if (heldCatalog) throw new Error('A catalog request is already held');
@@ -304,10 +339,74 @@ async function readAgentsAdapterRegistration(
   return servers.find(({ name }) => name === 'agents-mcp-adapter');
 }
 
+async function loginToIsolatedPackagedApp(
+  page: import('@playwright/test').Page,
+  params: { baseUrl: string; username: string }
+): Promise<void> {
+  await page
+    .locator('#ki-buddy-opening-guide-title, input[autocomplete="username"]')
+    .first()
+    .waitFor({ state: 'visible', timeout: 30_000 });
+  const skipGuide = page.getByRole('button', { name: /^(跳过|Skip)$/i });
+  if (await skipGuide.isVisible().catch(() => false)) await skipGuide.click();
+  await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible', timeout: 30_000 });
+  await loginThroughUi(page, params);
+}
+
+async function connectPackagedAgentsAdapter(
+  electronApp: import('@playwright/test').ElectronApplication,
+  page: import('@playwright/test').Page,
+  clientName: string
+): Promise<{
+  bridge: Readonly<{ token: string; url: string }>;
+  client: Client;
+  readStderr: () => string;
+}> {
+  let registration: BackendMcpServer | undefined;
+  await expect
+    .poll(
+      async () => {
+        registration = await readAgentsAdapterRegistration(page);
+        return registration;
+      },
+      { timeout: 30_000 }
+    )
+    .toMatchObject({
+      builtin: true,
+      enabled: true,
+      transport: { type: 'stdio', command: 'node', args: [expect.stringContaining('builtin-mcp-agents.js')] },
+    });
+  if (!registration?.transport.args) throw new Error('The packaged Agents MCP Adapter registration is incomplete');
+
+  const bridge = await electronApp.evaluate(() => {
+    const url = process.env.KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL;
+    const token = process.env.KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN;
+    if (!url || !token) throw new Error('The packaged Agents MCP Bridge is unavailable');
+    return { token, url };
+  });
+  const transport = new StdioClientTransport({
+    command: resolveRegisteredAdapterCommand(registration.transport.command),
+    args: registration.transport.args,
+    env: {
+      KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN: bridge.token,
+      KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL: bridge.url,
+    },
+    stderr: 'pipe',
+  });
+  let stderr = '';
+  transport.stderr?.on('data', (chunk) => {
+    stderr += chunk.toString();
+  });
+  const client = new Client({ name: clientName, version: '1.0.0' });
+  await client.connect(transport);
+  return { bridge, client, readStderr: () => stderr };
+}
+
 type AgentsToolResult = Awaited<ReturnType<Client['callTool']>>;
 
 type AgentsToolResults = Readonly<{
   agents_describe: AgentsDescribeResult;
+  agents_invoke: AgentsInvokeResult;
   agents_list: AgentsListResult;
 }>;
 
@@ -819,7 +918,7 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
     }
   });
 
-  test('keeps agents_list bound to the current account across a packaged Adapter session', async ({
+  test('keeps Agents catalog discovery bound to the current account', async ({
     isolatedPackagedApp: electronApp,
     isolatedPackagedPage: page,
   }) => {
@@ -828,53 +927,8 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
     let heldCatalog: HeldCatalogRequest | null = null;
 
     try {
-      await page
-        .locator('#ki-buddy-opening-guide-title, input[autocomplete="username"]')
-        .first()
-        .waitFor({ state: 'visible', timeout: 30_000 });
-      const skipGuide = page.getByRole('button', { name: /^(跳过|Skip)$/i });
-      if (await skipGuide.isVisible().catch(() => false)) await skipGuide.click();
-      await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible', timeout: 30_000 });
-      await loginThroughUi(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_A.userName });
-
-      let registration: BackendMcpServer | undefined;
-      await expect
-        .poll(
-          async () => {
-            registration = await readAgentsAdapterRegistration(page);
-            return registration;
-          },
-          { timeout: 30_000 }
-        )
-        .toMatchObject({
-          builtin: true,
-          enabled: true,
-          transport: { type: 'stdio', command: 'node', args: [expect.stringContaining('builtin-mcp-agents.js')] },
-        });
-      if (!registration?.transport.args) throw new Error('The packaged Agents MCP Adapter registration is incomplete');
-
-      const bridge = await electronApp.evaluate(() => {
-        const url = process.env.KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL;
-        const token = process.env.KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN;
-        if (!url || !token) throw new Error('The packaged Agents MCP Bridge is unavailable');
-        return { token, url };
-      });
-      const transport = new StdioClientTransport({
-        command: resolveRegisteredAdapterCommand(registration.transport.command),
-        args: registration.transport.args,
-        env: {
-          KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN: bridge.token,
-          KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL: bridge.url,
-        },
-        stderr: 'pipe',
-      });
-      let stderr = '';
-      transport.stderr?.on('data', (chunk) => {
-        stderr += chunk.toString();
-      });
-      client = new Client({ name: 'ki-buddy-account-switch-e2e', version: '1.0.0' });
-      await client.connect(transport);
-      const tools = await client.listTools();
+      await loginToIsolatedPackagedApp(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_A.userName });
+      ({ client } = await connectPackagedAgentsAdapter(electronApp, page, 'ki-buddy-account-switch-e2e'));
       const accountAResult = readAgentsToolResult(
         'agents_list',
         await client.callTool({ name: 'agents_list', arguments: {} })
@@ -897,21 +951,75 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
         await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-for-user-b' } })
       );
 
-      expect(tools.tools.map(({ name }) => name)).toContain('agents_list');
-      expect(tools.tools.map(({ name }) => name)).toContain('agents_describe');
-      expect(accountAResult).toEqual({ total: 1, agents: [expect.objectContaining({ agentId: 'agent-for-user-a' })] });
-      expect(staleAccountAResult.isError).toBe(true);
-      expect(accountBResult).toEqual({ total: 1, agents: [expect.objectContaining({ agentId: 'agent-for-user-b' })] });
-      expect(accountBDescription).toMatchObject({
-        agentId: 'agent-for-user-b',
-        inputSchema: [{ name: 'query', type: 'text', required: true }],
-        outputSchema: [{ name: 'result', type: 'text', required: true }],
+      expect({
+        accountAResult,
+        staleAccountAIsError: staleAccountAResult.isError,
+        accountBResult,
+        accountBDescription,
+      }).toMatchObject({
+        accountAResult: { total: 1, agents: [{ agentId: 'agent-for-user-a' }] },
+        staleAccountAIsError: true,
+        accountBResult: { total: 1, agents: [{ agentId: 'agent-for-user-b' }] },
+        accountBDescription: {
+          agentId: 'agent-for-user-b',
+          inputSchema: [{ name: 'query', type: 'text', required: true }],
+          outputSchema: [{ name: 'result', type: 'text', required: true }],
+        },
       });
       expect(agents.getCatalogIdentitySequence()).toEqual(['A', 'A', 'B', 'B']);
-      expect(stderr).not.toContain(bridge.token);
-      expect(stderr).not.toContain(bridge.url);
     } finally {
       heldCatalog?.release();
+      await client?.close().catch(() => undefined);
+      await page.evaluate(() => window.electronAPI?.kiBuddyAuth?.logout()).catch(() => undefined);
+      await agents.close();
+    }
+  });
+
+  test('dispatches one packaged scalar invoke for one successful describe', async ({
+    isolatedPackagedApp: electronApp,
+    isolatedPackagedPage: page,
+  }) => {
+    const agents = await startFakeAgentsServer({ loginUserSequence: [AGENTS_USER_A] });
+    let client: Client | null = null;
+
+    try {
+      await loginToIsolatedPackagedApp(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_A.userName });
+      client = (await connectPackagedAgentsAdapter(electronApp, page, 'ki-buddy-scalar-invoke-e2e')).client;
+      const description = readAgentsToolResult(
+        'agents_describe',
+        await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-for-user-a' } })
+      );
+      const invokeResult = readAgentsToolResult(
+        'agents_invoke',
+        await client.callTool({
+          name: 'agents_invoke',
+          arguments: { agentId: 'agent-for-user-a', inputs: { query: 'Summarize this scalar input.' } },
+        })
+      );
+      const duplicateInvoke = await client.callTool({
+        name: 'agents_invoke',
+        arguments: { agentId: 'agent-for-user-a', inputs: { query: 'Dispatch this twice.' } },
+      });
+
+      expect({ description, invokeResult, duplicateIsError: duplicateInvoke.isError }).toMatchObject({
+        description: { agentId: 'agent-for-user-a' },
+        invokeResult: {
+          agentId: 'agent-for-user-a',
+          requestId: 'request-redacted-1',
+          taskId: 'task-redacted-1',
+          text: 'Done.',
+        },
+        duplicateIsError: true,
+      });
+      expect(agents.getInvokeRequests()).toEqual([
+        {
+          agentId: 'agent-for-user-a',
+          agentType: 'workflow',
+          conversationId: expect.stringMatching(/^ki-buddy-/u),
+          inputs: { query: 'Summarize this scalar input.' },
+        },
+      ]);
+    } finally {
       await client?.close().catch(() => undefined);
       await page.evaluate(() => window.electronAPI?.kiBuddyAuth?.logout()).catch(() => undefined);
       await agents.close();

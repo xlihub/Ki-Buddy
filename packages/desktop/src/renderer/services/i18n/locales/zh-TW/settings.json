@@ -782,6 +782,7 @@
   "mcpNoDescription": "暫無描述",
   "kiBuddy": {
     "agentsDescribeDescription": "顯示目前目錄中一個 Agent 的精確輸入與輸出結構。",
+    "agentsInvokeDescription": "重新整理權限與輸入結構後，以完整的純量參數呼叫一次已描述的 Agent。",
     "agentsListDescription": "列出目前登入帳號可用的完整 Agents 目錄。"
   },
   "mcpAuthRequired": "需要身份驗證",

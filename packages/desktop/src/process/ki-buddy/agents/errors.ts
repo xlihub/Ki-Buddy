@@ -1,8 +1,12 @@
+import type { AgentsInvokeCorrelation } from './contracts';
+
 export type AgentsMcpErrorCode =
   | 'ambiguous'
   | 'auth'
   | 'configuration'
   | 'contract'
+  | 'invalid_input'
+  | 'invoke_failed'
   | 'network'
   | 'not_found'
   | 'server';
@@ -30,6 +34,16 @@ const AGENTS_MCP_ERROR_PRESENTATIONS = {
     bridgeStatus: 502,
     message: 'Agents catalog response is incompatible',
   },
+  invalid_input: {
+    bridgeError: 'agents_invalid_input',
+    bridgeStatus: 400,
+    message: 'Agent inputs do not match the current scalar schema',
+  },
+  invoke_failed: {
+    bridgeError: 'agents_invoke_failed',
+    bridgeStatus: 502,
+    message: 'Agent execution failed',
+  },
   network: {
     bridgeError: 'agents_network_error',
     bridgeStatus: 502,
@@ -51,6 +65,8 @@ const BRIDGE_ERROR_CODES = {
   agents_ambiguous: 'ambiguous',
   agents_auth_required: 'auth',
   agents_contract_error: 'contract',
+  agents_invalid_input: 'invalid_input',
+  agents_invoke_failed: 'invoke_failed',
   agents_network_error: 'network',
   agents_not_found: 'not_found',
   agents_server_error: 'server',
@@ -74,7 +90,8 @@ export function resolveAgentsBridgeErrorCode(value: unknown): AgentsMcpErrorCode
 export class AgentsMcpError extends Error {
   constructor(
     readonly code: AgentsMcpErrorCode,
-    message: string
+    message: string,
+    readonly correlation?: AgentsInvokeCorrelation
   ) {
     super(message);
     this.name = 'AgentsMcpError';

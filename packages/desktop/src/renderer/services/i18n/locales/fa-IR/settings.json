@@ -782,6 +782,7 @@
   "mcpNoDescription": "بدون توضیحات",
   "kiBuddy": {
     "agentsDescribeDescription": "طرح‌وارهٔ دقیق ورودی و خروجی یک Agent در فهرست فعلی را نمایش می‌دهد.",
+    "agentsInvokeDescription": "پس از به‌روزرسانی مجوز و طرح‌واره، Agent توضیح‌داده‌شده را یک‌بار با ورودی‌های اسکالر کامل فراخوانی می‌کند.",
     "agentsListDescription": "فهرست کامل Agents در دسترس حساب واردشده فعلی را نمایش می‌دهد."
   },
   "mcpAuthRequired": "احراز هویت لازم است",

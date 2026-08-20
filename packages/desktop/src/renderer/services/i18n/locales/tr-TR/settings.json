@@ -770,6 +770,7 @@
   "mcpNoDescription": "Açıklama yok",
   "kiBuddy": {
     "agentsDescribeDescription": "Geçerli katalogdaki bir Agent için tam giriş ve çıkış şemasını gösterir.",
+    "agentsInvokeDescription": "İzin ve giriş şeması yenilendikten sonra açıklanan Agent’ı eksiksiz skaler girişlerle bir kez çağırır.",
     "agentsListDescription": "Geçerli oturum açmış hesabın kullanabildiği eksiksiz Agents kataloğunu listeler."
   },
   "mcpAuthRequired": "Kimlik doğrulama gerekli",
