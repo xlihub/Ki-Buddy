@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { normalizeAgentsBaseUrl } from '@/common/platform/ki-buddy';
+import { resolveAgentsRequestUrl } from './agents/networkClient';
 import type {
   KiBuddyAuthSession,
   KiBuddyAuthUser,
@@ -32,6 +33,7 @@ type AgentsAuthServiceDependencies = {
   credentialStore: AgentsCredentialStore;
   fetch: typeof fetch;
   getCoreBaseUrl: () => string;
+  onSessionActivated?: (coreUserId: string) => void;
   onSessionInvalidated?: () => void;
   scheduleSessionValidation?: (validate: () => Promise<void>) => () => void;
   setCoreSessionCookie: (setCookieHeader: string) => Promise<void>;
@@ -336,7 +338,7 @@ export class AgentsAuthService {
     const sessionSignal = this.sessionAbortController?.signal;
     const signal =
       init.signal && sessionSignal ? AbortSignal.any([init.signal, sessionSignal]) : (sessionSignal ?? init.signal);
-    const response = await this.dependencies.agentsFetch(`${credential.baseUrl}${path}`, {
+    const response = await this.dependencies.agentsFetch(resolveAgentsRequestUrl(credential.baseUrl, path), {
       ...init,
       headers,
       redirect: 'manual',
@@ -389,6 +391,7 @@ export class AgentsAuthService {
     this.session = session;
     this.restoreAttempted = true;
     this.startSessionValidation();
+    this.dependencies.onSessionActivated?.(projection.user.id);
     return session;
   }
 

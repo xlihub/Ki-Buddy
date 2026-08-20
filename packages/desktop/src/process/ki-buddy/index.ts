@@ -18,7 +18,7 @@ import {
   type ProductFeatureId,
 } from '@/common/platform/ki-buddy';
 import type { KiBuddyProductBootstrap, KiBuddyProductCapability } from '@/common/types/platform/kiBuddyProduct';
-import { registerKiBuddyAuthBridge } from './authBridge';
+import { createKiBuddyBackendMigrationScheduler, registerKiBuddyAuthBridge } from './authBridge';
 import type { AgentsAuthService } from './AgentsAuthService';
 import { createKiBuddyCoreAuthOptions, type KiBuddyCoreAuthOptions } from './bootstrap';
 import { resolveKiBuddyCoreDataPath } from './coreDataPath';
@@ -37,10 +37,14 @@ export type KiBuddyRuntime = {
   };
   coreAuthOptions: KiBuddyCoreAuthOptions;
   coreTransportChannel: typeof KI_BUDDY_CORE_TRANSPORT_CHANNEL;
+  createBackendMigrationScheduler: typeof createKiBuddyBackendMigrationScheduler;
   productIdentity: typeof KI_BUDDY_PRODUCT_RUNTIME;
   productCapability: KiBuddyProductCapability;
   productExperience: ProductExperience;
-  registerAuthBridge: (getCoreBaseUrl: () => string) => AgentsAuthService;
+  registerAuthBridge: (
+    getCoreBaseUrl: () => string,
+    onSessionAuthenticated?: (coreUserId: string) => void
+  ) => AgentsAuthService;
   resolveDataPath: (dataPath: string) => string;
   resolveLanguage: (savedLanguage: string | null | undefined, systemLanguage: string | null) => SupportedLanguage;
   updateBridge: UpdateBridgeConfiguration;
@@ -66,9 +70,14 @@ type MainProductLifecycleDefinition = Readonly<{
   featureId: ProductFeatureId;
 }>;
 
+type StartAgentsMcpRuntimeBridge = (
+  authService: AgentsAuthService
+) => Promise<Readonly<{ close: () => Promise<void> }>>;
+
 /** Stable identities for every product-controlled lifecycle owned by the Electron main process. */
 export const MAIN_PRODUCT_LIFECYCLE_REGISTRY = {
   accountCoreTransport: { featureId: 'account' },
+  agentsMcp: { featureId: 'tools' },
   channelsMigration: { featureId: 'channels' },
   desktopPet: { featureId: 'desktopPet' },
   scheduledTasks: { featureId: 'scheduledTasks' },
@@ -215,14 +224,35 @@ export function resolveMainProductExperience(
 /** Runs generic migrations, then product-owned migrations whose lifecycle is enabled. */
 export async function runProductBackendMigrations(
   configFile: Parameters<typeof runBackendMigrations>[0],
-  productExperience: ProductExperience
+  productExperience: ProductExperience,
+  productIdentity: typeof KI_BUDDY_PRODUCT_RUNTIME | null = null
 ): Promise<void> {
   const { runBackendMigrations } = await import('@process/utils/runBackendMigrations');
   await runBackendMigrations(configFile);
+  if (productIdentity === KI_BUDDY_PRODUCT_RUNTIME && isMainProductLifecycleEnabled(productExperience, 'agentsMcp')) {
+    const { ensureAgentsMcpRegistration } = await import('./agents/registration');
+    await ensureAgentsMcpRegistration();
+  }
   if (isMainProductLifecycleEnabled(productExperience, 'channelsMigration')) {
     const { migrateLegacyChannelSettings } = await import('@/common/config/configMigration');
     await migrateLegacyChannelSettings(configFile);
   }
+}
+
+/** Starts the product-owned Agents MCP bridge only when its capability is enabled. */
+export async function startAgentsMcpProductLifecycle(
+  productExperience: ProductExperience,
+  authService: AgentsAuthService,
+  onWillQuit: (listener: () => Promise<void>) => void,
+  startRuntimeBridge: StartAgentsMcpRuntimeBridge = async (service) => {
+    const { startAgentsMcpRuntimeBridge } = await import('./agents');
+    return startAgentsMcpRuntimeBridge(service);
+  }
+): Promise<boolean> {
+  if (!isMainProductLifecycleEnabled(productExperience, 'agentsMcp')) return false;
+  const bridge = await startRuntimeBridge(authService);
+  onWillQuit(() => bridge.close());
+  return true;
 }
 
 /** Creates and installs the main-process Ki-Buddy runtime when explicit product metadata selects it. */
@@ -270,14 +300,16 @@ export function createKiBuddyRuntime(
     },
     coreAuthOptions,
     coreTransportChannel: KI_BUDDY_CORE_TRANSPORT_CHANNEL,
+    createBackendMigrationScheduler: createKiBuddyBackendMigrationScheduler,
     productIdentity: KI_BUDDY_PRODUCT_RUNTIME,
     productCapability: createKiBuddyProductCapability(config),
     productExperience,
-    registerAuthBridge: (getCoreBaseUrl) =>
+    registerAuthBridge: (getCoreBaseUrl, onSessionAuthenticated) =>
       registerKiBuddyAuthBridge({
         bootstrapSecret: coreAuthOptions.bootstrapSecret,
         coreTransport,
         getCoreBaseUrl,
+        onSessionAuthenticated,
       }),
     resolveDataPath: resolveKiBuddyCoreDataPath,
     resolveLanguage: (savedLanguage, systemLanguage) =>

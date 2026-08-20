@@ -14,7 +14,10 @@ import {
 import { getClientBusinessSetting } from '@/renderer/services/clientBusinessSettings';
 import { reportHiddenProductResources } from '@/renderer/services/runtime/catalogs/kiBuddyProductResourceDiagnostics';
 import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
-import { KI_BUDDY_PRODUCT_RESOURCE_REGISTRY } from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
+import {
+  KI_BUDDY_PRODUCT_RESOURCE_REGISTRY,
+  resolveKiBuddyProductMcpResourceId,
+} from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
 
 type BackendMcpTransport = Exclude<IMcpServerTransport, { type: 'streamable_http' }>;
 
@@ -36,6 +39,7 @@ export type McpCatalogEntry = Readonly<{
 
 type McpCatalogCandidate = Readonly<{
   origin: ProductResourceOrigin;
+  productResourceId?: string;
   server: IMcpServer;
 }>;
 
@@ -44,11 +48,17 @@ const isBuiltinServer = (server: IMcpServer) => server.builtin === true;
 const isProductResourceOrigin = (value: unknown): value is ProductResourceOrigin =>
   typeof value === 'string' && PRODUCT_RESOURCE_ORIGINS.includes(value as ProductResourceOrigin);
 
-const resolveBackendMcpOrigin = (server: ProductAwareMcpServer): ProductResourceOrigin => {
+const resolveBackendMcpIdentity = (
+  server: ProductAwareMcpServer
+): Readonly<{ origin: ProductResourceOrigin; productResourceId?: string }> => {
   if (server.product_origin !== undefined) {
-    return isProductResourceOrigin(server.product_origin) ? server.product_origin : 'unclassified';
+    return {
+      origin: isProductResourceOrigin(server.product_origin) ? server.product_origin : 'unclassified',
+    };
   }
-  return server.builtin === true ? 'upstreamBuiltin' : 'custom';
+  const productResourceId = resolveKiBuddyProductMcpResourceId(server);
+  if (productResourceId) return { origin: 'productBuiltin', productResourceId };
+  return { origin: server.builtin === true ? 'upstreamBuiltin' : 'custom' };
 };
 
 const normalizeServerName = (name: string) => name.trim().toLowerCase();
@@ -60,7 +70,7 @@ export const isProductMcpOriginVisible = (experience: ProductExperience, origin:
 /** Product-owned MCP requirements registered by features such as the future Agents Adapter integration. */
 export const PRODUCT_BUILTIN_MCP_REQUIREMENTS: readonly ProductBuiltinResourceRequirement[] = Object.values(
   KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp
-);
+).map(({ id, featureId, resourceName }) => ({ resourceId: id, featureId, resourceName }));
 
 /** Returns the stable key used to reconcile MCP catalog entries across backend and local sources. */
 export const getMcpCatalogServerKey = (server: Pick<IMcpServer, 'id' | 'name' | 'builtin'>) => {
@@ -129,7 +139,12 @@ export const projectMcpCatalogCandidates = (
   const projection = projectProductResources(
     experience,
     'mcp',
-    candidates.map(({ server, origin }) => ({ id: server.id, name: server.name, origin, server }))
+    candidates.map(({ server, origin, productResourceId }) => ({
+      id: productResourceId ?? server.id,
+      name: server.name,
+      origin,
+      server,
+    }))
   );
   return {
     entries: projection.visible.map(({ resource, access }) => ({
@@ -156,8 +171,12 @@ export async function loadProductBuiltinMcpResourceState(
   try {
     const backendServers = await mcpService.listServers.invoke();
     const availableResourceIds = backendServers
-      .filter((server) => resolveBackendMcpOrigin(server) === 'productBuiltin')
-      .map(({ id }) => id);
+      .map((server) => resolveBackendMcpIdentity(server))
+      .filter(
+        (identity): identity is Readonly<{ origin: 'productBuiltin'; productResourceId: string }> =>
+          identity.origin === 'productBuiltin' && typeof identity.productResourceId === 'string'
+      )
+      .map(({ productResourceId }) => productResourceId);
     return evaluateProductBuiltinResourceState(experience, 'mcp', {
       availableResourceIds,
       catalogReady: true,
@@ -185,7 +204,7 @@ export const ensureBackendMcpCatalog = async (
   const allBackendServers = dedupeServers(await mcpService.listServers.invoke());
   const projection = projectMcpCatalogCandidates(
     dedupeCandidates([
-      ...allBackendServers.map((server) => ({ server, origin: resolveBackendMcpOrigin(server) })),
+      ...allBackendServers.map((server) => ({ server, ...resolveBackendMcpIdentity(server) })),
       ...allBuiltinServers.map((server) => ({ server, origin: 'upstreamBuiltin' as const })),
     ]),
     experience

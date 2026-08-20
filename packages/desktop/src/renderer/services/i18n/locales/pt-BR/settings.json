@@ -780,6 +780,9 @@
     "playwrightMcpConfigHint": "Use o Playwright MCP para conectar via endpoint CDP, com instantâneos de acessibilidade e automação do navegador."
   },
   "mcpNoDescription": "Nenhuma descrição",
+  "kiBuddy": {
+    "agentsListDescription": "Lista o catálogo completo de Agents disponível para a conta conectada."
+  },
   "mcpAuthRequired": "Autenticação obrigatória",
   "mcpOAuthLoginSuccess": "Login OAuth bem-sucedido",
   "mcpOAuthLoginFailed": "Falha no login OAuth",

@@ -11,6 +11,7 @@ import { join } from 'node:path';
 
 const installTransportMock = vi.fn();
 const productMigrationMocks = vi.hoisted(() => ({
+  agentsMcp: vi.fn(),
   channel: vi.fn(),
   generic: vi.fn(),
 }));
@@ -30,6 +31,9 @@ vi.mock('@/common/config/configMigration', () => ({
 vi.mock('@/process/utils/runBackendMigrations', () => ({
   runBackendMigrations: productMigrationMocks.generic,
 }));
+vi.mock('@/process/ki-buddy/agents/registration', () => ({
+  ensureAgentsMcpRegistration: productMigrationMocks.agentsMcp,
+}));
 
 const {
   MAIN_PRODUCT_LIFECYCLE_REGISTRY,
@@ -39,6 +43,7 @@ const {
   resolveMainProductExperience,
   runProductBackendMigrations,
   shouldStartProductBusinessLifecycle,
+  startAgentsMcpProductLifecycle,
   startProductFeatureLifecycles,
 } = await import('@/process/ki-buddy');
 const { configureKiBuddyCliSafeDirectories } = await import('@/process/ki-buddy/runtimeIdentity');
@@ -68,6 +73,7 @@ describe('Ki-Buddy main-process runtime facade', () => {
   it('keeps product-specific main lifecycles in one stable registry', () => {
     expect(MAIN_PRODUCT_LIFECYCLE_REGISTRY).toEqual({
       accountCoreTransport: { featureId: 'account' },
+      agentsMcp: { featureId: 'tools' },
       channelsMigration: { featureId: 'channels' },
       desktopPet: { featureId: 'desktopPet' },
       scheduledTasks: { featureId: 'scheduledTasks' },
@@ -86,6 +92,50 @@ describe('Ki-Buddy main-process runtime facade', () => {
     await runProductBackendMigrations(configFile, createAionUiProductExperience());
     expect(productMigrationMocks.generic).toHaveBeenCalledTimes(2);
     expect(productMigrationMocks.channel).toHaveBeenCalledOnce();
+  });
+
+  it('registers the Agents MCP only when the explicit Ki-Buddy capability is present', async () => {
+    const configFile = {} as never;
+    const kiBuddyExperience = createKiBuddyProductExperience(KI_BUDDY_PRODUCT_CONFIG_RESULT.config?.experience);
+
+    await runProductBackendMigrations(configFile, kiBuddyExperience, 'ki-buddy');
+    expect(productMigrationMocks.agentsMcp).toHaveBeenCalledOnce();
+
+    await runProductBackendMigrations(configFile, createAionUiProductExperience(), null);
+    expect(productMigrationMocks.agentsMcp).toHaveBeenCalledOnce();
+  });
+
+  it('starts and cleans up the Agents MCP bridge when the Tools capability is present', async () => {
+    const close = vi.fn().mockResolvedValue(undefined);
+    const startRuntimeBridge = vi.fn().mockResolvedValue({ close });
+    const onWillQuit = vi.fn();
+    const experience = createKiBuddyProductExperience(KI_BUDDY_PRODUCT_CONFIG_RESULT.config?.experience);
+
+    await expect(startAgentsMcpProductLifecycle(experience, {} as never, onWillQuit, startRuntimeBridge)).resolves.toBe(
+      true
+    );
+
+    expect(startRuntimeBridge).toHaveBeenCalledOnce();
+    expect(onWillQuit).toHaveBeenCalledOnce();
+    await onWillQuit.mock.calls[0][0]();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('does not start the Agents MCP bridge when the Tools capability is absent', async () => {
+    const startRuntimeBridge = vi.fn();
+    const onWillQuit = vi.fn();
+    const config = KI_BUDDY_PRODUCT_CONFIG_RESULT.config!.experience;
+    const experience = createKiBuddyProductExperience({
+      ...config,
+      features: { ...config.features, tools: 'disabled' },
+    });
+
+    await expect(startAgentsMcpProductLifecycle(experience, {} as never, onWillQuit, startRuntimeBridge)).resolves.toBe(
+      false
+    );
+
+    expect(startRuntimeBridge).not.toHaveBeenCalled();
+    expect(onWillQuit).not.toHaveBeenCalled();
   });
 
   it('does not initialize product transport when the runtime capability is absent', () => {
@@ -147,6 +197,17 @@ describe('Ki-Buddy main-process runtime facade', () => {
       updaterCacheDirName: 'com.xlihub.ki-buddy',
     });
     expect(installTransportMock).toHaveBeenCalledOnce();
+  });
+
+  it('exposes account-aware migration scheduling only through the Ki-Buddy runtime', async () => {
+    const appPath = createAppPath('ki-buddy');
+    appPaths.push(appPath);
+    const runtime = createKiBuddyRuntime({ appPath, resetPassword: false, webUi: false }).runtime!;
+    const run = vi.fn().mockResolvedValue(undefined);
+
+    runtime.createBackendMigrationScheduler({ isReady: () => true, onError: vi.fn(), run }).trigger('core-user-a');
+
+    await vi.waitFor(() => expect(run).toHaveBeenCalledOnce());
   });
 
   it('uses the Ki-Buddy data alias while preserving AionUi defaults', () => {

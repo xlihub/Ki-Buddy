@@ -90,8 +90,10 @@ import {
   resolveKiBuddyProtocolScheme,
   shouldEnsureDefaultCoreUser,
   shouldStartProductBusinessLifecycle,
+  startAgentsMcpProductLifecycle,
   startMainProductLifecyclePhase,
 } from '@process/ki-buddy';
+import { createBackendMigrationScheduler } from '@process/startup/backendMigrationScheduler';
 // @ts-expect-error - electron-squirrel-startup doesn't have types
 import electronSquirrelStartup from 'electron-squirrel-startup';
 
@@ -255,7 +257,6 @@ const backendManager = new BackendLifecycleManager(
   },
   resolveBinaryPath
 );
-kiBuddyRuntime?.registerAuthBridge(() => `http://127.0.0.1:${backendManager.port}`);
 let disposeCronResumeListener: (() => void) | null = null;
 
 // Flag tracking whether the backend subprocess started successfully. Read by
@@ -264,8 +265,28 @@ let backendStartedOk = false;
 let backendStartupFailed = false;
 let backendStartupFailureInfo: BackendStartupFailureInfo | null = null;
 let rendererInitialLanguage: string | null = null;
-let backendMigrationsScheduled = false;
 let ensureAdminUserPromise: Promise<void> | null = null;
+
+// Migrations wait for the renderer because some steps route through its BroadcastChannel.
+// Authentication may complete after an initial unauthenticated attempt, so failed runs remain retryable.
+const backendMigrationSchedulerOptions = {
+  isReady: () => backendStartedOk,
+  onError: (error: unknown) => console.error('[AionUi] Backend migration hook threw:', error),
+  run: async () => {
+    if (!productExperience) return;
+    await runProductBackendMigrations(ProcessConfig, productExperience, kiBuddyRuntime?.productIdentity ?? null);
+    console.info('[AionUi] runBackendMigrations completed');
+  },
+} as const;
+const scheduleBackendMigrations: (coreUserId?: string) => void = kiBuddyRuntime
+  ? kiBuddyRuntime.createBackendMigrationScheduler(backendMigrationSchedulerOptions).trigger
+  : (() => {
+      const scheduler = createBackendMigrationScheduler(backendMigrationSchedulerOptions);
+      return () => scheduler.trigger();
+    })();
+const kiBuddyAuthService =
+  kiBuddyRuntime?.registerAuthBridge(() => `http://127.0.0.1:${backendManager.port}`, scheduleBackendMigrations) ??
+  null;
 
 ipcMain.on(KI_BUDDY_PRODUCT_BOOTSTRAP_CHANNEL, (event) => {
   event.returnValue = kiBuddyProductBootstrap;
@@ -386,26 +407,6 @@ function registerCronResumeBridge(backendPort: number): void {
     powerMonitor.removeListener('resume', onResume);
   };
 }
-
-/**
- * Run one-shot backend migrations after the renderer has loaded. Some steps
- * (ConfigStorage.get, ipcBridge.listProviders) route through the renderer via
- * BroadcastChannel, so invoking them before the renderer exists deadlocks the
- * main process. Called from did-finish-load.
- */
-const scheduleBackendMigrations = (): void => {
-  if (backendMigrationsScheduled || !backendStartedOk) return;
-  backendMigrationsScheduled = true;
-  void (async () => {
-    try {
-      if (!productExperience) return;
-      await runProductBackendMigrations(ProcessConfig, productExperience);
-      console.info('[AionUi] runBackendMigrations completed');
-    } catch (error) {
-      console.error('[AionUi] Backend migration hook threw:', error);
-    }
-  })();
-};
 
 function exposeBackendPort(backendPort: number): void {
   // Expose the backend port to main-process callers of httpBridge (e.g. the
@@ -784,6 +785,17 @@ const handleAppReady = async (): Promise<void> => {
     console.error('Failed to initialize process:', error);
     app.exit(1);
     return;
+  }
+
+  if (kiBuddyAuthService && productExperience) {
+    try {
+      const started = await startAgentsMcpProductLifecycle(productExperience, kiBuddyAuthService, (listener) => {
+        app.once('will-quit', () => void listener());
+      });
+      if (started) mark('agentsMcpBridge');
+    } catch (error) {
+      console.error('[Ki-Buddy] Failed to start the Agents MCP bridge.', error);
+    }
   }
 
   /**

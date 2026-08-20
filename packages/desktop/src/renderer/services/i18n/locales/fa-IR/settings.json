@@ -780,6 +780,9 @@
     "playwrightMcpConfigHint": "از Playwright MCP برای اتصال از طریق نقطه پایانی CDP، با اسنپ‌شات‌های دسترسی و اتوماسیون مرورگر استفاده کنید."
   },
   "mcpNoDescription": "بدون توضیحات",
+  "kiBuddy": {
+    "agentsListDescription": "فهرست کامل Agents در دسترس حساب واردشده فعلی را نمایش می‌دهد."
+  },
   "mcpAuthRequired": "احراز هویت لازم است",
   "mcpOAuthLoginSuccess": "ورود OAuth موفق بود",
   "mcpOAuthLoginFailed": "ورود OAuth ناموفق بود",

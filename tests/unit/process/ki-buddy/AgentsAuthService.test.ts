@@ -387,6 +387,7 @@ describe('AgentsAuthService', () => {
   ])(
     'revokes the old Core runtime before switching $scenario',
     async ({ oldBaseUrl, oldUserId, newBaseUrl, newUserId }) => {
+      const onSessionActivated = vi.fn();
       loadSessionMock.mockResolvedValue({
         baseUrl: oldBaseUrl,
         token: 'old-agents-token',
@@ -454,6 +455,7 @@ describe('AgentsAuthService', () => {
         },
         fetch: fetchMock,
         getCoreBaseUrl: () => 'http://127.0.0.1:39123',
+        onSessionActivated,
         setCoreSessionCookie: setCoreCookieMock,
       });
 
@@ -474,6 +476,7 @@ describe('AgentsAuthService', () => {
         token: 'new-agents-token',
         userId: newUserId,
       });
+      expect(onSessionActivated).toHaveBeenCalledWith('new-core-user');
     }
   );
 
@@ -1253,6 +1256,73 @@ describe('AgentsAuthService', () => {
     expect(sessionInvalidatedMock).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect((await service.getSession()).status).toBe('authenticated');
+  });
+
+  it('routes authenticated Bridge requests through the deployment HTTPS server_next gateway', async () => {
+    loadSessionMock.mockResolvedValue({
+      baseUrl: 'https://agents.example.com',
+      token: 'saved-agents-token',
+      userId: 'agents-user-42',
+    });
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            errorCode: 0,
+            responseBody: { uuid: 'agents-user-42', userName: 'agents-user@example.com' },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              user_id: 'core-user-42',
+              user_type: 'aionpro',
+              external_user_id: 'opaque-external-id',
+              session_generation: 1,
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            success: true,
+            data: { user: { id: 'core-user-42', username: 'agents-user@example.com' }, session_generation: 1 },
+          }),
+          { status: 200, headers: { 'set-cookie': 'aionui-session=restored-core-token; HttpOnly' } }
+        )
+      )
+      .mockResolvedValueOnce(Response.json({ status: 'ok', agents: [], total: 0 }))
+      .mockResolvedValueOnce(Response.json({ status: 'ok', requestId: 'request-1' }));
+    const service = new AgentsAuthService({
+      agentsFetch: fetchMock,
+      bootstrapSecret: 'bootstrap-secret',
+      clearCoreSession: clearCoreCookieMock,
+      credentialStore: {
+        load: loadSessionMock,
+        save: saveSessionMock,
+        clear: clearSessionMock,
+      },
+      fetch: fetchMock,
+      getCoreBaseUrl: () => 'http://127.0.0.1:39123',
+      setCoreSessionCookie: setCoreCookieMock,
+    });
+    await service.getSession();
+
+    await service.fetchAuthenticated('/bridge/agents/catalog?refresh=true', { method: 'GET' });
+    await service.fetchAuthenticated('/bridge/agents/invoke', { method: 'POST', body: '{"agentId":"agent-1"}' });
+
+    expect(fetchMock.mock.calls[3]?.[0]).toBe(
+      'https://agents.example.com/kagents_core/api/bridge/agents/catalog?refresh=true'
+    );
+    expect(fetchMock.mock.calls[4]?.[0]).toBe('https://agents.example.com/kagents_core/api/bridge/agents/invoke');
+    expect(fetchMock.mock.calls[4]?.[1]).toMatchObject({ method: 'POST', body: '{"agentId":"agent-1"}' });
+    expect(new Headers(fetchMock.mock.calls[4]?.[1]?.headers).get('Authorization')).toBe('Bearer saved-agents-token');
   });
 
   it('clears the Core runtime before reporting a credential cleanup failure', async () => {

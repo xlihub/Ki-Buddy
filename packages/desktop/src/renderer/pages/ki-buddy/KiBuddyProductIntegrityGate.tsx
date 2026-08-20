@@ -8,12 +8,14 @@ import type { ProductBuiltinResourceState } from '@/common/platform/ki-buddy';
 import { loadProductBuiltinMcpResourceState } from '@/renderer/hooks/mcp/catalog';
 import { loadProductBuiltinAgentResourceState } from '@/renderer/services/runtime/kiBuddyAgentCatalog';
 import { loadProductBuiltinAssistantResourceState } from '@/renderer/services/runtime/catalogs/kiBuddyAssistantCatalog';
+import { KI_BUDDY_PRODUCT_RESOURCE_REGISTRY } from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
 
 type KiBuddyProductIntegrityGateProps = {
   failure: string;
 };
 
 const PRODUCT_RESOURCE_VALIDATION_RETRY_MS = 1_000;
+const PRODUCT_MIGRATION_RESOURCE_GRACE_MS = 15_000;
 
 /** Blocks the business host when a recognized Ki-Buddy installation has an invalid packaged policy. */
 const KiBuddyProductIntegrityGate: React.FC<KiBuddyProductIntegrityGateProps> = ({ failure }) => {
@@ -51,6 +53,13 @@ export const KiBuddyProductResourceIntegrityGate: React.FC<PropsWithChildren<{ e
     if (!enabled) return;
     let active = true;
     let retryTimer: number | undefined;
+    const productMigrationDeadline = Date.now() + PRODUCT_MIGRATION_RESOURCE_GRACE_MS;
+    const retryValidation = (): void => {
+      setResourceState({ status: 'pending', missing: [] });
+      retryTimer = window.setTimeout((): void => {
+        void validateResources();
+      }, PRODUCT_RESOURCE_VALIDATION_RETRY_MS);
+    };
     const validateResources = async (): Promise<void> => {
       const results = await Promise.allSettled([
         loadProductBuiltinAgentResourceState(),
@@ -67,6 +76,14 @@ export const KiBuddyProductResourceIntegrityGate: React.FC<PropsWithChildren<{ e
       const states = results.flatMap((result) => (result.status === 'fulfilled' ? [result.value] : []));
       const missing = states.flatMap((state) => (state.status === 'invalid' ? state.missing : []));
       if (missing.length > 0) {
+        const onlyPostAuthMigrationResourcesAreMissing = missing.every(
+          ({ kind, resourceId }) =>
+            kind === 'mcp' && resourceId === KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp.agentsAdapter.id
+        );
+        if (onlyPostAuthMigrationResourcesAreMissing && Date.now() < productMigrationDeadline) {
+          retryValidation();
+          return;
+        }
         setResourceState({ status: 'invalid', missing });
         return;
       }
@@ -74,10 +91,7 @@ export const KiBuddyProductResourceIntegrityGate: React.FC<PropsWithChildren<{ e
         results.some((result) => result.status === 'rejected') ||
         states.some((state) => state.status === 'pending')
       ) {
-        setResourceState({ status: 'pending', missing: [] });
-        retryTimer = window.setTimeout((): void => {
-          void validateResources();
-        }, PRODUCT_RESOURCE_VALIDATION_RETRY_MS);
+        retryValidation();
         return;
       }
       setResourceState({ status: 'ready', missing: [] });

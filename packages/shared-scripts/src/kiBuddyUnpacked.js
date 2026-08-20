@@ -23,6 +23,40 @@ function requireMatchingFile(expectedPath, actualPath, label) {
   }
 }
 
+function requireRelativePath(value, label) {
+  if (typeof value !== 'string' || !value || path.isAbsolute(value) || value.split(/[\\/]/u).includes('..')) {
+    throw new Error(`${label} must be a safe relative path`);
+  }
+  return value;
+}
+
+function resolveManagedNode(resourcesDir, platform) {
+  const bundledRoot = path.join(resourcesDir, 'bundled-aioncore');
+  const runtimeDirectories = fs
+    .readdirSync(bundledRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith(`${platform}-`));
+  if (runtimeDirectories.length !== 1) {
+    throw new Error(`Expected one ${platform} bundled AionCore runtime in ${bundledRoot}`);
+  }
+  const managedResourcesDir = path.join(bundledRoot, runtimeDirectories[0].name, 'managed-resources');
+  const manifestPath = requireFile(
+    path.join(managedResourcesDir, 'manifest.json'),
+    `${platform} managed Node manifest`
+  );
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch {
+    throw new Error(`${platform} managed Node manifest is invalid JSON`);
+  }
+  if (!manifest?.node || typeof manifest.node !== 'object') {
+    throw new Error(`${platform} managed Node manifest does not declare Node`);
+  }
+  const nodeRoot = requireRelativePath(manifest.node.root, `${platform} managed Node root`);
+  const nodeExecutable = requireRelativePath(manifest.node.executable, `${platform} managed Node executable`);
+  return requireFile(path.join(managedResourcesDir, nodeRoot, nodeExecutable), `${platform} managed Node executable`);
+}
+
 function resolveMacApp(inputPath, productName) {
   if (inputPath.endsWith('.app')) return inputPath;
   const appName = `${productName}.app`;
@@ -94,12 +128,24 @@ function verifyKiBuddyUnpacked(projectRoot, unpackedPath, platform = process.pla
     path.join(resourcesDir, productConfig.assets.packaged.icon),
     `${platform} runtime icon`
   );
+  const agentsMcpAdapterPath = requireFile(
+    path.join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'builtin-mcp-agents.js'),
+    `${platform} Agents MCP Adapter`
+  );
+  const managedNodePath = resolveManagedNode(resourcesDir, platform);
 
   if (platform === 'win32' && readWindowsProductName(executablePath) !== productConfig.brand.productName) {
     throw new Error('Windows executable ProductName does not match the Ki-Buddy product name');
   }
 
-  return { applicationRoot, executablePath, platform, productName: productConfig.brand.productName };
+  return {
+    agentsMcpAdapterPath,
+    applicationRoot,
+    executablePath,
+    managedNodePath,
+    platform,
+    productName: productConfig.brand.productName,
+  };
 }
 
 function runCli() {

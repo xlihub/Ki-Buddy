@@ -138,20 +138,34 @@ export function collectProcessTreePids(processes: readonly ProcessTreeRecord[], 
   return treePids;
 }
 
+const hasPlaywrightDebugFlags = (command: string): boolean =>
+  /(?:^|[\s"])--inspect=0(?=[\s"]|$)/.test(command) && /(?:^|[\s"])--remote-debugging-port=0(?=[\s"]|$)/.test(command);
+
+const toPortSet = (ports: number | readonly number[]): Set<number> =>
+  new Set(typeof ports === 'number' ? [ports] : ports);
+
+export function findUnexpectedApplicationListeners(
+  listeners: readonly ProcessTreeListener[],
+  expectedApplicationPorts: number | readonly number[]
+): ProcessTreeListener[] {
+  const applicationPorts = toPortSet(expectedApplicationPorts);
+  return listeners.filter(({ command, port }) => !applicationPorts.has(port) && !/aioncore/i.test(command));
+}
+
 export function partitionExpectedPlaywrightElectronListeners(
   state: ProcessTreeNetworkState,
-  backendPort: number
+  expectedApplicationPorts: number | readonly number[]
 ): Readonly<{
   applicationListeners: readonly ProcessTreeListener[];
   playwrightHarnessListeners: readonly ProcessTreeListener[];
 }> {
-  const hasPlaywrightDebugFlags = (command: string): boolean =>
-    /(?:^|[\s"])--inspect=0(?=[\s"]|$)/.test(command) &&
-    /(?:^|[\s"])--remote-debugging-port=0(?=[\s"]|$)/.test(command);
   const harnessProcessIds = new Set(
     state.processes.filter(({ command }) => hasPlaywrightDebugFlags(command)).map(({ pid }) => pid)
   );
-  const candidates = state.listeners.filter(({ pid, port }) => harnessProcessIds.has(pid) && port !== backendPort);
+  const applicationPorts = toPortSet(expectedApplicationPorts);
+  const candidates = state.listeners.filter(
+    ({ pid, port }) => harnessProcessIds.has(pid) && !applicationPorts.has(port)
+  );
   const candidateProcessIds = new Set(candidates.map(({ pid }) => pid));
   const playwrightHarnessListeners = candidates.length === 2 && candidateProcessIds.size === 1 ? candidates : [];
 

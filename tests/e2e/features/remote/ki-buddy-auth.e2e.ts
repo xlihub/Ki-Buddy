@@ -3,7 +3,19 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { test, expect } from '../../fixtures';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { test, expect, resolvePackagedApp } from '../../fixtures';
+import { httpInvoke } from '../../helpers';
+
+const projectRoot = path.resolve(__dirname, '../../../..');
+const { verifyKiBuddyUnpacked } = require('../../../../packages/shared-scripts/src/kiBuddyUnpacked.js') as {
+  verifyKiBuddyUnpacked: (
+    projectRoot: string,
+    unpackedPath: string,
+    platform?: NodeJS.Platform
+  ) => Readonly<{ managedNodePath: string }>;
+};
 
 type CoreCurrentUserResponse = {
   success: boolean;
@@ -12,6 +24,25 @@ type CoreCurrentUserResponse = {
     username: string;
   };
 };
+
+type BackendMcpServer = Readonly<{
+  builtin?: boolean;
+  enabled: boolean;
+  id: string;
+  name: string;
+  transport: Readonly<{ args?: string[]; command: string; type: string }>;
+}>;
+
+type AgentsListResult = Readonly<{
+  agents: Array<{ agentId: string }>;
+  total: number;
+}>;
+
+type HeldCatalogRequest = Readonly<{
+  release: () => void;
+  waitForStart: () => Promise<void>;
+  wasCancelled: () => boolean;
+}>;
 
 const AGENTS_USERS = [
   {
@@ -38,12 +69,49 @@ const AGENTS_USERS = [
 
 const AGENTS_USER_A = AGENTS_USERS[0];
 const AGENTS_USER_B = AGENTS_USERS[1];
+const AGENTS_CATALOGS = {
+  [AGENTS_USER_A.token]: {
+    status: 'ok',
+    total: 1,
+    agents: [
+      {
+        agentId: 'agent-for-user-a',
+        agentTitle: 'Account A Agent',
+        agentDescription: 'Visible only to account A.',
+        agentType: 'workflow',
+      },
+    ],
+  },
+  [AGENTS_USER_B.token]: {
+    status: 'ok',
+    total: 1,
+    agents: [
+      {
+        agentId: 'agent-for-user-b',
+        agentTitle: 'Account B Agent',
+        agentDescription: 'Visible only to account B.',
+        agentType: 'workflow',
+      },
+    ],
+  },
+} as const;
 const BROWSER_SITE_COOKIE = 'ki-buddy-browser-session=preserved';
 const BROWSER_SITE_STORAGE_KEY = 'ki-buddy-browser-storage';
 const BROWSER_SITE_STORAGE_VALUE = 'preserved';
 
 function findUserByToken(authorization: string | undefined) {
   return AGENTS_USERS.find((user) => authorization === `Bearer ${user.token}`);
+}
+
+function identityForUser(user: (typeof AGENTS_USERS)[number]): 'A' | 'B' {
+  return user === AGENTS_USER_A ? 'A' : 'B';
+}
+
+function resolveRegisteredAdapterCommand(command: string): string {
+  if (command !== 'node') return command;
+  const packaged = resolvePackagedApp();
+  if (!packaged) throw new Error('The packaged Ki-Buddy application is unavailable');
+  return verifyKiBuddyUnpacked(projectRoot, packaged.applicationRoot, process.platform).managedNodePath;
 }
 
 async function fillLoginForm(
@@ -70,10 +138,23 @@ async function startFakeAgentsServer(
   baseUrl: string;
   close: () => Promise<void>;
   expireToken: (token: string) => void;
+  getCatalogIdentitySequence: () => readonly ('A' | 'B')[];
   getValidationRequestCount: () => number;
+  holdNextCatalog: (identity: 'A' | 'B') => HeldCatalogRequest;
   restoreToken: (token: string) => void;
 }> {
   const expiredTokens = new Set<string>();
+  const catalogIdentitySequence: Array<'A' | 'B'> = [];
+  let heldCatalog:
+    | {
+        cancelled: boolean;
+        identity: 'A' | 'B';
+        release: Promise<void>;
+        resolveRelease: () => void;
+        resolveStarted: () => void;
+        started: Promise<void>;
+      }
+    | undefined;
   let loginAttempts = 0;
   let validationRequestCount = 0;
   const invalidLoginAttempts = options.invalidLoginAttempts ?? 0;
@@ -86,9 +167,37 @@ async function startFakeAgentsServer(
 
     const isLogin = request.method === 'POST' && request.url === '/kagent/login';
     const isValidation = request.method === 'POST' && request.url === '/kagent/system/user/validateToken';
+    const isCatalog = request.method === 'GET' && request.url === '/kagents_core/api/bridge/agents/catalog';
 
-    if (!isLogin && !isValidation) {
+    if (!isLogin && !isValidation && !isCatalog) {
       response.writeHead(404).end();
+      return;
+    }
+
+    if (isCatalog) {
+      const user = findUserByToken(request.headers.authorization);
+      if (!user) {
+        response.writeHead(401).end();
+        return;
+      }
+      const identity = identityForUser(user);
+      catalogIdentitySequence.push(identity);
+      const sendCatalog = (): void => {
+        if (response.destroyed || response.writableEnded) return;
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify(AGENTS_CATALOGS[user.token]));
+      };
+      if (heldCatalog?.identity === identity) {
+        const current = heldCatalog;
+        heldCatalog = undefined;
+        current.resolveStarted();
+        request.once('close', () => {
+          if (!response.writableEnded) current.cancelled = true;
+        });
+        void current.release.then(sendCatalog);
+        return;
+      }
+      sendCatalog();
       return;
     }
 
@@ -137,7 +246,26 @@ async function startFakeAgentsServer(
     baseUrl: `http://127.0.0.1:${port}`,
     close: () => new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve()))),
     expireToken: (token) => expiredTokens.add(token),
+    getCatalogIdentitySequence: () => [...catalogIdentitySequence],
     getValidationRequestCount: () => validationRequestCount,
+    holdNextCatalog: (identity) => {
+      if (heldCatalog) throw new Error('A catalog request is already held');
+      let resolveRelease!: () => void;
+      let resolveStarted!: () => void;
+      const release = new Promise<void>((resolve) => {
+        resolveRelease = resolve;
+      });
+      const started = new Promise<void>((resolve) => {
+        resolveStarted = resolve;
+      });
+      const state = { cancelled: false, identity, release, resolveRelease, resolveStarted, started };
+      heldCatalog = state;
+      return {
+        release: state.resolveRelease,
+        waitForStart: () => state.started,
+        wasCancelled: () => state.cancelled,
+      };
+    },
     restoreToken: (token) => expiredTokens.delete(token),
   };
 }
@@ -157,6 +285,23 @@ async function readCoreCurrentUser(page: import('@playwright/test').Page): Promi
       status: response.status,
     };
   });
+}
+
+async function readAgentsAdapterRegistration(
+  page: import('@playwright/test').Page
+): Promise<BackendMcpServer | undefined> {
+  const servers = await httpInvoke<BackendMcpServer[]>(page, 'GET', '/api/mcp/servers');
+  return servers.find(({ name }) => name === 'agents-mcp-adapter');
+}
+
+function readAgentsListResult(result: Awaited<ReturnType<Client['callTool']>>): AgentsListResult {
+  const first = Array.isArray(result.content) ? result.content[0] : null;
+  if (!first || typeof first !== 'object') throw new Error('agents_list returned no content');
+  const content = first as { text?: unknown; type?: unknown };
+  if (content.type !== 'text' || typeof content.text !== 'string') {
+    throw new Error('agents_list returned non-text content');
+  }
+  return JSON.parse(content.text) as AgentsListResult;
 }
 
 async function createCoreConversation(
@@ -649,6 +794,89 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
         });
       await expect(page.locator('input[autocomplete="username"]')).toHaveCount(0);
     } finally {
+      await page.evaluate(() => window.electronAPI?.kiBuddyAuth?.logout()).catch(() => undefined);
+      await agents.close();
+    }
+  });
+
+  test('keeps agents_list bound to the current account across a packaged Adapter session', async ({
+    isolatedPackagedApp: electronApp,
+    isolatedPackagedPage: page,
+  }) => {
+    const agents = await startFakeAgentsServer({ loginUserSequence: [AGENTS_USER_A, AGENTS_USER_B] });
+    let client: Client | null = null;
+    let heldCatalog: HeldCatalogRequest | null = null;
+
+    try {
+      await page
+        .locator('#ki-buddy-opening-guide-title, input[autocomplete="username"]')
+        .first()
+        .waitFor({ state: 'visible', timeout: 30_000 });
+      const skipGuide = page.getByRole('button', { name: /^(跳过|Skip)$/i });
+      if (await skipGuide.isVisible().catch(() => false)) await skipGuide.click();
+      await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible', timeout: 30_000 });
+      await loginThroughUi(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_A.userName });
+
+      let registration: BackendMcpServer | undefined;
+      await expect
+        .poll(
+          async () => {
+            registration = await readAgentsAdapterRegistration(page);
+            return registration;
+          },
+          { timeout: 30_000 }
+        )
+        .toMatchObject({
+          builtin: true,
+          enabled: true,
+          transport: { type: 'stdio', command: 'node', args: [expect.stringContaining('builtin-mcp-agents.js')] },
+        });
+      if (!registration?.transport.args) throw new Error('The packaged Agents MCP Adapter registration is incomplete');
+
+      const bridge = await electronApp.evaluate(() => {
+        const url = process.env.KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL;
+        const token = process.env.KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN;
+        if (!url || !token) throw new Error('The packaged Agents MCP Bridge is unavailable');
+        return { token, url };
+      });
+      const transport = new StdioClientTransport({
+        command: resolveRegisteredAdapterCommand(registration.transport.command),
+        args: registration.transport.args,
+        env: {
+          KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN: bridge.token,
+          KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL: bridge.url,
+        },
+        stderr: 'pipe',
+      });
+      let stderr = '';
+      transport.stderr?.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+      client = new Client({ name: 'ki-buddy-account-switch-e2e', version: '1.0.0' });
+      await client.connect(transport);
+      const tools = await client.listTools();
+      const accountAResult = readAgentsListResult(await client.callTool({ name: 'agents_list', arguments: {} }));
+      heldCatalog = agents.holdNextCatalog('A');
+      const staleAccountACall = client.callTool({ name: 'agents_list', arguments: {} });
+      await heldCatalog.waitForStart();
+
+      await logoutThroughUi(page);
+      await loginThroughUi(page, { baseUrl: agents.baseUrl, username: AGENTS_USER_B.userName });
+      await expect.poll(() => heldCatalog?.wasCancelled()).toBe(true);
+      heldCatalog.release();
+      const staleAccountAResult = await staleAccountACall;
+      const accountBResult = readAgentsListResult(await client.callTool({ name: 'agents_list', arguments: {} }));
+
+      expect(tools.tools.map(({ name }) => name)).toContain('agents_list');
+      expect(accountAResult).toEqual({ total: 1, agents: [expect.objectContaining({ agentId: 'agent-for-user-a' })] });
+      expect(staleAccountAResult.isError).toBe(true);
+      expect(accountBResult).toEqual({ total: 1, agents: [expect.objectContaining({ agentId: 'agent-for-user-b' })] });
+      expect(agents.getCatalogIdentitySequence()).toEqual(['A', 'A', 'B']);
+      expect(stderr).not.toContain(bridge.token);
+      expect(stderr).not.toContain(bridge.url);
+    } finally {
+      heldCatalog?.release();
+      await client?.close().catch(() => undefined);
       await page.evaluate(() => window.electronAPI?.kiBuddyAuth?.logout()).catch(() => undefined);
       await agents.close();
     }

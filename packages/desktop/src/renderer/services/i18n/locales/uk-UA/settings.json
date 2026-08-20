@@ -766,6 +766,9 @@
     "playwrightMcpConfigHint": "Використовуйте Playwright MCP для підключення через кінцеву точку CDP з підтримкою знімків доступності та автоматизації браузера."
   },
   "mcpNoDescription": "Немає опису",
+  "kiBuddy": {
+    "agentsListDescription": "Показує повний каталог Agents, доступний поточному обліковому запису."
+  },
   "mcpAuthRequired": "Потрібна автентифікація",
   "mcpOAuthLoginSuccess": "OAuth-вхід успішний",
   "mcpOAuthLoginFailed": "Помилка OAuth-входу",

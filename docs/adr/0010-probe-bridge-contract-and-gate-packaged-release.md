@@ -4,7 +4,7 @@ status: accepted
 
 # 探测 Bridge contract 并以打包目录 E2E 验收发布
 
-Agents Bridge 当前没有稳定版本化 capability contract。Ki-Buddy 不维护 Agents release 白名单，而是在登录后的集成初始化、每次实际响应和工具页手动检测中严格校验真实 catalog、describe 与 invoke envelope；不兼容时 fail closed。Ki-Buddy 从已验证 Agents 基线采集并维护脱敏 contract fixtures，Agents 平台首发不承担客户端 fixture 发布责任。
+Agents Bridge 当前没有稳定版本化 capability contract。Ki-Buddy 不维护 Agents release 白名单，而是在每次实际响应中严格校验 catalog、describe 与 invoke envelope；不兼容时 fail closed。工具页沿用通用 MCP 测试连接，只验证实际随包 Adapter 的 stdio handshake 和 `tools/list`，不建立第二套产品检测生命周期。Ki-Buddy 从已验证 Agents 基线采集并维护脱敏 contract fixtures，Agents 平台首发不承担客户端 fixture 发布责任。
 
 发布自动化以 contract tests 和 electron-builder `out/` 中 unpacked packaged app 的 Playwright Electron E2E 为门槛。真实登录、权限、invoke 和文件链路连接共享非生产部署中的专用 E2E 组织；需要精确控制断线、崩溃、超时、容量和恶意响应时使用本地 fake Bridge/file server。最终安装版发布后采用人工测试与反馈，不建设 DMG、NSIS 或 DEB 安装后的自动化 Agents E2E。
 

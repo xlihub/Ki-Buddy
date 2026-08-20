@@ -26,7 +26,44 @@ vi.mock('electron', () => ({
   },
 }));
 
-import { createAgentsNetworkFetch } from '@/process/ki-buddy/agentsNetworkClient';
+import { createAgentsNetworkFetch, resolveAgentsRequestUrl } from '@/process/ki-buddy/agents/networkClient';
+
+describe('Ki-Buddy Agents request routing', () => {
+  it.each(['/bridge/agents/catalog', '/bridge/agents/invoke', '/bridge/agents/future-capability?requestId=123'])(
+    'routes the Bridge service path %s through its deployment HTTPS server_next gateway',
+    (path) => {
+      expect(resolveAgentsRequestUrl('https://agents.example.com', path)).toBe(
+        `https://agents.example.com/kagents_core/api${path}`
+      );
+    }
+  );
+
+  it('routes Bridge paths from the deployment origin when the login URL has a path prefix', () => {
+    expect(
+      resolveAgentsRequestUrl('https://agents.example.com:28443/tenant/login-root', '/bridge/agents/catalog')
+    ).toBe('https://agents.example.com:28443/kagents_core/api/bridge/agents/catalog');
+  });
+
+  it.each([
+    {
+      baseUrl: 'https://agents.example.com',
+      path: '/kagent/system/user/validateToken',
+      expected: 'https://agents.example.com/kagent/system/user/validateToken',
+    },
+    {
+      baseUrl: 'https://agents.example.com/tenant/login-root',
+      path: '/kagent/system/user/validateToken',
+      expected: 'https://agents.example.com/tenant/login-root/kagent/system/user/validateToken',
+    },
+    {
+      baseUrl: 'https://agents.example.com',
+      path: '/bridge/agents/../system/user/validateToken',
+      expected: 'https://agents.example.com/bridge/agents/../system/user/validateToken',
+    },
+  ])('keeps $path on its authenticated deployment $baseUrl', ({ baseUrl, expected, path }) => {
+    expect(resolveAgentsRequestUrl(baseUrl, path)).toBe(expected);
+  });
+});
 
 describe('Ki-Buddy Agents network client', () => {
   beforeEach(() => {

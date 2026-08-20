@@ -5,6 +5,7 @@ import { FIRST_RELEASE_MATRIX } from './firstReleaseMatrix';
 import { MATRIX_TEST_USER, startMatrixAgentsServer } from './fakeAgentsServer';
 import {
   captureProcessTreeNetworkState,
+  findUnexpectedApplicationListeners,
   partitionExpectedPlaywrightElectronListeners,
 } from './processTreeNetworkState';
 import {
@@ -76,6 +77,7 @@ async function readFirstFrameViolations(page: Page): Promise<FirstFrameViolation
   const observerState = await page.evaluate(() => window.__getE2EUiObserverState?.());
   if (!observerState) throw new Error('The first-frame observer was not installed before renderer startup.');
   expect(observerState.selectors).toEqual([
+    '[data-testid="installation-integrity-dialog"]',
     ...new Set(Object.values(FIRST_RELEASE_MATRIX.disabledFeatureEvidence.flashObserved).flat()),
   ]);
   return observerState.violations;
@@ -140,7 +142,13 @@ async function login(page: Page, baseUrl: string): Promise<void> {
   await expect(page).toHaveURL(/#\/guid$/, { timeout: 45_000 });
 }
 
+async function ensureLoggedIn(page: Page, baseUrl: string): Promise<void> {
+  const currentUser = await httpInvoke<{ success: boolean }>(page, 'GET', '/api/auth/user').catch(() => null);
+  if (currentUser?.success !== true) await login(page, baseUrl);
+}
+
 async function readMainProcessState(electronApp: ElectronApplication): Promise<{
+  agentsMcpBridgePort: number | null;
   startedProductLifecycles: string[];
   trayMenuLabels: string[];
   windows: Array<{ title: string; url: string; visible: boolean }>;
@@ -155,9 +163,11 @@ async function readMainProcessState(electronApp: ElectronApplication): Promise<{
       url: window.webContents.getURL(),
       visible: window.isVisible(),
     }));
+    const agentsMcpBridgeUrl = process.env.KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL;
+    const agentsMcpBridgePort = agentsMcpBridgeUrl ? Number(new URL(agentsMcpBridgeUrl).port) : null;
     const trayMenuLabels = (await e2eGlobal.__aionuiE2ETrayMenuLabels?.()) ?? [];
     const startedProductLifecycles = e2eGlobal.__aionuiE2EStartedMainProductLifecycles?.() ?? [];
-    return { startedProductLifecycles, trayMenuLabels, windows };
+    return { agentsMcpBridgePort, startedProductLifecycles, trayMenuLabels, windows };
   });
 }
 
@@ -647,6 +657,48 @@ test.describe.serial('Ki-Buddy packaged first-release product matrix', () => {
     await productApp.page.unroute(skillListPattern);
   });
 
+  test('tests the packaged Agents MCP Adapter through the generic backend connection API', async () => {
+    type BackendMcpServer = Readonly<{
+      builtin?: boolean;
+      enabled: boolean;
+      id: string;
+      name: string;
+      original_json: string;
+      transport: Readonly<{ args?: string[]; command: string; type: string }>;
+    }>;
+    let agentsAdapter: BackendMcpServer | undefined;
+
+    await ensureLoggedIn(productApp.page, agents.baseUrl);
+
+    await expect
+      .poll(
+        async () => {
+          const servers = await httpInvoke<BackendMcpServer[]>(productApp.page, 'GET', '/api/mcp/servers');
+          agentsAdapter = servers.find(({ name }) => name === 'agents-mcp-adapter');
+          return agentsAdapter;
+        },
+        { timeout: 30_000 }
+      )
+      .toMatchObject({
+        builtin: true,
+        enabled: true,
+        transport: { type: 'stdio', command: 'node', args: [expect.stringContaining('builtin-mcp-agents.js')] },
+      });
+    if (!agentsAdapter) throw new Error('The packaged Agents MCP Adapter was not registered.');
+
+    const result = await httpInvoke<{
+      success: boolean;
+      tools?: Array<{ name: string }>;
+    }>(productApp.page, 'POST', '/api/mcp/test-connection', {
+      ...agentsAdapter,
+      runtime_scope_id: agentsAdapter.id,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.tools?.map(({ name }) => name)).toContain('agents_list');
+    expect(await readFirstFrameViolations(productApp.page)).toEqual([]);
+  });
+
   test('enforces the MCP origin matrix and completes Custom MCP CRUD through the UI', async () => {
     const now = Date.now();
     const visibleProductMcp = {
@@ -832,7 +884,7 @@ test.describe.serial('Ki-Buddy packaged first-release product matrix', () => {
     ]);
     const { applicationListeners, playwrightHarnessListeners } = partitionExpectedPlaywrightElectronListeners(
       processTreeNetworkState,
-      backendPort
+      state.agentsMcpBridgePort === null ? [backendPort] : [backendPort, state.agentsMcpBridgePort]
     );
     await testInfo.attach('disabled-runtime-state.json', {
       body: Buffer.from(
@@ -856,8 +908,12 @@ test.describe.serial('Ki-Buddy packaged first-release product matrix', () => {
     expect(state.windows[0]).toMatchObject({ visible: true });
     expect(processTreeNetworkState.processes.some(({ command }) => /aioncore/i.test(command))).toBe(true);
     expect(processTreeNetworkState.listeners.some(({ port }) => port === backendPort)).toBe(true);
+    expect(state.agentsMcpBridgePort).not.toBeNull();
+    expect(processTreeNetworkState.listeners.some(({ port }) => port === state.agentsMcpBridgePort)).toBe(true);
     expect(playwrightHarnessListeners).toHaveLength(2);
-    expect(applicationListeners.filter(({ command }) => !/aioncore/i.test(command))).toEqual([]);
+    expect(findUnexpectedApplicationListeners(applicationListeners, [backendPort, state.agentsMcpBridgePort])).toEqual(
+      []
+    );
     expect(state.startedProductLifecycles).not.toContain('desktopPet');
     expect(state.startedProductLifecycles).not.toContain('webUi');
     expect(state.trayMenuLabels.length).toBeGreaterThan(0);

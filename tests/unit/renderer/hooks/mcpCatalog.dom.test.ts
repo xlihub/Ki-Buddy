@@ -132,14 +132,18 @@ describe('ensureBackendMcpCatalog', () => {
     ]);
     mcpServiceMock.listServers.invoke.mockResolvedValue([
       {
-        id: 'agents-adapter',
-        name: 'Agents Adapter',
+        id: 'backend-agents-mcp-id',
+        name: 'agents-mcp-adapter',
         enabled: true,
-        transport: { type: 'stdio', command: 'managed-adapter', args: [] },
+        transport: {
+          type: 'stdio',
+          command: 'node',
+          args: ['/Applications/Ki-Buddy/resources/app.asar.unpacked/out/main/builtin-mcp-agents.js'],
+        },
         created_at: 2,
         updated_at: 2,
         original_json: '{}',
-        product_origin: 'productBuiltin',
+        builtin: true,
       },
       {
         id: 'custom-1',
@@ -165,10 +169,10 @@ describe('ensureBackendMcpCatalog', () => {
     const result = await ensureBackendMcpCatalog(createKiBuddyProductExperience(productConfig.experience));
 
     expect(result.entries.map(({ server, origin, access }) => ({ id: server.id, origin, access }))).toEqual([
-      { id: 'agents-adapter', origin: 'productBuiltin', access: 'use' },
+      { id: 'backend-agents-mcp-id', origin: 'productBuiltin', access: 'use' },
       { id: 'custom-1', origin: 'custom', access: 'manage' },
     ]);
-    expect(result.allServers.map(({ id }) => id)).toEqual(['agents-adapter', 'custom-1']);
+    expect(result.allServers.map(({ id }) => id)).toEqual(['backend-agents-mcp-id', 'custom-1']);
     expect(result.hiddenResources).toEqual([
       expect.objectContaining({ resourceId: 'unknown-1', origin: 'unclassified' }),
       expect.objectContaining({ resourceId: 'upstream-1', origin: 'upstreamBuiltin' }),
@@ -210,17 +214,16 @@ describe('ensureBackendMcpCatalog', () => {
 
 describe('loadProductBuiltinMcpResourceState', () => {
   const experience = createKiBuddyProductExperience(productConfig.experience);
-  const requirements = [{ featureId: 'agents' as const, resourceId: 'agents-adapter', resourceName: 'Agents Adapter' }];
+  const requirements = [
+    {
+      featureId: 'tools' as const,
+      resourceId: 'builtin:agents-mcp-adapter',
+      resourceName: 'agents-mcp-adapter',
+    },
+  ];
 
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('does not require a product MCP before its owning feature registers one', async () => {
-    const result = await loadProductBuiltinMcpResourceState(experience);
-
-    expect(result).toEqual({ status: 'ready', missing: [] });
-    expect(mcpServiceMock.listServers.invoke).not.toHaveBeenCalled();
   });
 
   it('reports an installation-integrity failure after a ready catalog omits a required product MCP', async () => {
@@ -233,33 +236,56 @@ describe('loadProductBuiltinMcpResourceState', () => {
       missing: [
         {
           code: 'required_product_resource_missing',
-          featureId: 'agents',
+          featureId: 'tools',
           kind: 'mcp',
           origin: 'productBuiltin',
-          resourceId: 'agents-adapter',
-          resourceName: 'Agents Adapter',
+          resourceId: 'builtin:agents-mcp-adapter',
+          resourceName: 'agents-mcp-adapter',
         },
       ],
     });
   });
 
-  it('accepts a required product MCP by stable backend ID instead of display name', async () => {
+  it('accepts the exact built-in registration without a Ki-Core product origin field', async () => {
     mcpServiceMock.listServers.invoke.mockResolvedValue([
       {
-        id: 'agents-adapter',
-        name: 'Renamed by backend',
+        id: 'generated-backend-id',
+        name: 'agents-mcp-adapter',
         enabled: true,
-        transport: { type: 'stdio', command: 'managed-adapter', args: [] },
+        transport: {
+          type: 'stdio',
+          command: 'node',
+          args: ['/Applications/Ki-Buddy/resources/app.asar.unpacked/out/main/builtin-mcp-agents.js'],
+        },
         created_at: 1,
         updated_at: 1,
         original_json: '{}',
-        product_origin: 'productBuiltin',
+        builtin: true,
       },
     ]);
 
     const result = await loadProductBuiltinMcpResourceState(experience, requirements);
 
     expect(result).toEqual({ status: 'ready', missing: [] });
+  });
+
+  it('does not classify a Custom MCP with the product name as product built-in', async () => {
+    mcpServiceMock.listServers.invoke.mockResolvedValue([
+      {
+        id: 'custom-same-name',
+        name: 'agents-mcp-adapter',
+        enabled: true,
+        transport: { type: 'stdio', command: 'node', args: ['/tmp/builtin-mcp-agents.js'] },
+        created_at: 1,
+        updated_at: 1,
+        original_json: '{}',
+        builtin: false,
+      },
+    ]);
+
+    const result = await loadProductBuiltinMcpResourceState(experience, requirements);
+
+    expect(result.status).toBe('invalid');
   });
 
   it('keeps the requirement pending when the backend catalog cannot be read', async () => {
