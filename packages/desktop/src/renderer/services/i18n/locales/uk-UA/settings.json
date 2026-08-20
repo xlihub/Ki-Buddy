@@ -767,6 +767,7 @@
   },
   "mcpNoDescription": "Немає опису",
   "kiBuddy": {
+    "agentsDescribeDescription": "Показує точну схему вхідних і вихідних даних одного Agent з поточного каталогу.",
     "agentsListDescription": "Показує повний каталог Agents, доступний поточному обліковому запису."
   },
   "mcpAuthRequired": "Потрібна автентифікація",

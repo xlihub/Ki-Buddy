@@ -1,12 +1,16 @@
 import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { startAgentsMcpRuntimeBridge } from '@/process/ki-buddy/agents';
 import { startAgentsMcpBridge, type AgentsMcpBridgeHandle } from '@/process/ki-buddy/agents/bridge';
+import { createAgentsCatalogClient, type AgentsCatalogClient } from '@/process/ki-buddy/agents/client';
 import { AgentsMcpError } from '@/process/ki-buddy/agents/errors';
 
 const projectRoot = path.resolve(__dirname, '../..');
@@ -15,6 +19,7 @@ const bridges: AgentsMcpBridgeHandle[] = [];
 const clients: Client[] = [];
 const childProcesses: ChildProcess[] = [];
 const externalProcessIds = new Set<number>();
+const fakeGateways: Array<Readonly<{ close: () => Promise<void> }>> = [];
 const adapterEnvironment = {
   KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL: 'http://127.0.0.1:43123',
   KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN: 'process-exit-secret',
@@ -29,6 +34,113 @@ const initializeRequest = `${JSON.stringify({
     clientInfo: { name: 'agents-mcp-lifecycle-test', version: '1.0.0' },
   },
 })}\n`;
+
+const fakeCatalog = {
+  status: 'ok',
+  total: 1,
+  agents: [
+    {
+      agentId: 'agent-feedback',
+      agentTitle: 'Feedback analyst',
+      agentDescription: 'Summarizes customer feedback.',
+      agentType: 'workflow',
+      defaultInputModes: [{ name: 'query', description: 'Feedback text', type: 'text', required: true }],
+      defaultOutputModes: [{ name: 'summary', description: 'Summary', type: 'text', required: true }],
+    },
+  ],
+};
+
+type FakeCatalogGateway = Readonly<{
+  baseUrl: string;
+  close: () => Promise<void>;
+  requestPaths: () => readonly string[];
+  setCatalog: (catalog: unknown) => void;
+  setStatus: (status: number) => void;
+}>;
+
+type MutableSessionBinding = {
+  deploymentUrl: string;
+  sessionEpoch: number;
+  userId: string;
+};
+
+async function startFakeCatalogGateway(initialCatalog: unknown = fakeCatalog): Promise<FakeCatalogGateway> {
+  let catalog = initialCatalog;
+  let status = 200;
+  const paths: string[] = [];
+  const server = createServer((request, response) => {
+    paths.push(request.url ?? '');
+    if (
+      request.method !== 'GET' ||
+      request.url !== '/bridge/agents/catalog' ||
+      request.headers.authorization !== 'Bearer fake-agents-token'
+    ) {
+      response.writeHead(request.headers.authorization ? 404 : 401).end();
+      return;
+    }
+    if (status !== 200) {
+      response.writeHead(status).end();
+      return;
+    }
+    response.writeHead(status, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(catalog));
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const { port } = server.address() as AddressInfo;
+  const gateway = {
+    baseUrl: `http://127.0.0.1:${port}`,
+    requestPaths: () => [...paths],
+    setCatalog: (nextCatalog: unknown) => {
+      catalog = nextCatalog;
+    },
+    setStatus: (nextStatus: number) => {
+      status = nextStatus;
+    },
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.closeAllConnections();
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  };
+  fakeGateways.push(gateway);
+  return gateway;
+}
+
+async function startGatewayBackedBridge(binding: MutableSessionBinding): Promise<AgentsMcpBridgeHandle> {
+  const authService = {
+    getSession: async () => ({
+      status: 'authenticated',
+      user: {
+        id: 'core-user',
+        agents: { deploymentUrl: binding.deploymentUrl, userId: binding.userId },
+      },
+    }),
+    getSessionEpoch: () => binding.sessionEpoch,
+    fetchAuthenticated: (requestPath: string, init: RequestInit) => {
+      const headers = new Headers(init.headers);
+      headers.set('authorization', 'Bearer fake-agents-token');
+      return fetch(`${binding.deploymentUrl}${requestPath}`, { ...init, headers });
+    },
+  };
+  const bridge = await startAgentsMcpRuntimeBridge(authService as never, {});
+  bridges.push(bridge);
+  return bridge;
+}
+
+async function createGatewayBackedClient(
+  binding: MutableSessionBinding,
+  options: Readonly<{ now?: () => number }> = {}
+): Promise<AgentsCatalogClient> {
+  const bridge = await startGatewayBackedBridge(binding);
+  return createAgentsCatalogClient({
+    bridgeToken: bridge.token,
+    bridgeUrl: bridge.url,
+    ...options,
+  });
+}
 
 async function waitForLine(stream: NodeJS.ReadableStream, timeoutMessage: string): Promise<string> {
   const lines = createInterface({ input: stream });
@@ -93,6 +205,7 @@ beforeAll(() => {
 afterEach(async () => {
   await Promise.allSettled(clients.splice(0).map((client) => client.close()));
   await Promise.allSettled(bridges.splice(0).map((bridge) => bridge.close()));
+  await Promise.allSettled(fakeGateways.splice(0).map((gateway) => gateway.close()));
   await Promise.all(
     childProcesses.splice(0).map(async (child) => {
       if (child.exitCode !== null || child.signalCode !== null) return;
@@ -118,21 +231,172 @@ afterEach(async () => {
 });
 
 describe('packaged Agents MCP stdio entry', () => {
-  it('builds a self-contained entry and serves the complete catalog over real stdio MCP', async () => {
+  it('applies TTL and force refresh through a local fake Agents Gateway', async () => {
+    let currentTime = 10_000;
+    const gateway = await startFakeCatalogGateway();
+    const client = await createGatewayBackedClient(
+      { deploymentUrl: gateway.baseUrl, sessionEpoch: 1, userId: 'user-1' },
+      { now: () => currentTime }
+    );
+
+    await client.list();
+    await client.list();
+    await client.list({ forceRefresh: true });
+    currentTime += 5 * 60 * 1000;
+    await client.list();
+
+    expect(gateway.requestPaths()).toEqual([
+      '/bridge/agents/catalog',
+      '/bridge/agents/catalog',
+      '/bridge/agents/catalog',
+    ]);
+  });
+
+  it('invalidates a local fake Gateway cache when the same account starts a new session', async () => {
+    const gateway = await startFakeCatalogGateway();
+    const binding = { deploymentUrl: gateway.baseUrl, sessionEpoch: 1, userId: 'user-1' };
+    const client = await createGatewayBackedClient(binding);
+
+    await client.list();
+    binding.sessionEpoch = 2;
+    gateway.setCatalog({
+      ...fakeCatalog,
+      agents: [{ ...fakeCatalog.agents[0], agentId: 'agent-after-reauthentication' }],
+    });
+
+    await expect(client.list()).resolves.toMatchObject({
+      agents: [{ agentId: 'agent-after-reauthentication' }],
+    });
+    expect(gateway.requestPaths()).toEqual(['/bridge/agents/catalog', '/bridge/agents/catalog']);
+  });
+
+  it('invalidates a local fake Gateway cache when deployment origin changes', async () => {
+    const gatewayA = await startFakeCatalogGateway();
+    const gatewayB = await startFakeCatalogGateway({
+      ...fakeCatalog,
+      agents: [{ ...fakeCatalog.agents[0], agentId: 'agent-other-deployment' }],
+    });
+    const binding = { deploymentUrl: gatewayA.baseUrl, sessionEpoch: 1, userId: 'user-1' };
+    const client = await createGatewayBackedClient(binding);
+
+    await client.list();
+    binding.deploymentUrl = gatewayB.baseUrl;
+
+    await expect(client.list()).resolves.toMatchObject({ agents: [{ agentId: 'agent-other-deployment' }] });
+    expect(gatewayA.requestPaths()).toEqual(['/bridge/agents/catalog']);
+    expect(gatewayB.requestPaths()).toEqual(['/bridge/agents/catalog']);
+  });
+
+  it('rejects a candidate revoked by the local fake Gateway without invoking an agent', async () => {
+    const gateway = await startFakeCatalogGateway();
+    const client = await createGatewayBackedClient({
+      deploymentUrl: gateway.baseUrl,
+      sessionEpoch: 1,
+      userId: 'user-1',
+    });
+
+    await client.list();
+    gateway.setCatalog({ status: 'ok', total: 0, agents: [] });
+
+    await expect(client.describe('agent-feedback')).rejects.toMatchObject({ code: 'not_found' });
+    await expect(client.list()).resolves.toEqual({ total: 0, agents: [] });
+    expect(gateway.requestPaths()).toEqual([
+      '/bridge/agents/catalog',
+      '/bridge/agents/catalog',
+      '/bridge/agents/catalog',
+    ]);
+  });
+
+  it('clears cached inventory when the local fake Gateway rejects authentication', async () => {
+    const gateway = await startFakeCatalogGateway();
+    const client = await createGatewayBackedClient({
+      deploymentUrl: gateway.baseUrl,
+      sessionEpoch: 1,
+      userId: 'user-1',
+    });
+
+    await client.list();
+    gateway.setStatus(401);
+    await expect(client.describe('agent-feedback')).rejects.toMatchObject({ code: 'auth' });
+    gateway.setStatus(200);
+    gateway.setCatalog({ status: 'ok', total: 0, agents: [] });
+
+    await expect(client.list()).resolves.toEqual({ total: 0, agents: [] });
+    expect(gateway.requestPaths()).toEqual([
+      '/bridge/agents/catalog',
+      '/bridge/agents/catalog',
+      '/bridge/agents/catalog',
+    ]);
+  });
+
+  it('fails closed on ambiguous and incompatible local fake Gateway catalogs', async () => {
+    const gateway = await startFakeCatalogGateway({
+      ...fakeCatalog,
+      total: 2,
+      agents: [fakeCatalog.agents[0], fakeCatalog.agents[0]],
+    });
+    const client = await createGatewayBackedClient({
+      deploymentUrl: gateway.baseUrl,
+      sessionEpoch: 1,
+      userId: 'user-1',
+    });
+
+    await expect(client.list()).rejects.toMatchObject({ code: 'ambiguous' });
+    gateway.setCatalog({
+      ...fakeCatalog,
+      agents: [{ ...fakeCatalog.agents[0], defaultInputModes: [{ name: 'query', type: 'text' }] }],
+    });
+    await expect(client.describe('agent-feedback')).rejects.toMatchObject({ code: 'contract' });
+  });
+
+  it('rejects a missing describe parameter before the local fake Gateway is called', async () => {
+    const gateway = await startFakeCatalogGateway();
+    const bridge = await startGatewayBackedBridge({
+      deploymentUrl: gateway.baseUrl,
+      sessionEpoch: 1,
+      userId: 'user-1',
+    });
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [adapterScript],
+      env: {
+        KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN: bridge.token,
+        KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL: bridge.url,
+      },
+      stderr: 'pipe',
+    });
+    const client = new Client({ name: 'ki-buddy-agents-missing-param', version: '1.0.0' });
+    clients.push(client);
+    await client.connect(transport);
+
+    const result = await client.callTool({ name: 'agents_describe', arguments: {} });
+
+    expect(result.isError).toBe(true);
+    expect(gateway.requestPaths()).toEqual([]);
+  });
+
+  it('builds a self-contained entry and serves list plus exact describe over real stdio MCP', async () => {
+    const identity = { deploymentOrigin: 'https://agents.example.test', sessionEpoch: 1, userId: 'user-1' };
     const bridge = await startAgentsMcpBridge({
       token: 'stdio-bridge-secret',
-      fetchCatalog: vi.fn().mockResolvedValue(
-        Response.json({
-          status: 'ok',
-          total: 1,
-          agents: [
-            {
-              agentId: 'agent-feedback',
-              agentTitle: 'Feedback analyst',
-              agentDescription: 'Summarizes customer feedback.',
-              agentType: 'workflow',
-            },
-          ],
+      getSessionIdentity: vi.fn().mockResolvedValue(identity),
+      fetchCatalog: vi.fn(() =>
+        Promise.resolve({
+          identity,
+          response: Response.json({
+            status: 'ok',
+            total: 1,
+            agents: [
+              {
+                agentId: 'agent-feedback',
+                agentTitle: 'Feedback analyst',
+                agentDescription: 'Summarizes customer feedback.',
+                agentType: 'workflow',
+                defaultInputModes: [{ name: 'query', description: 'Feedback text', type: 'text', required: true }],
+                defaultOutputModes: [{ name: 'summary', description: 'Summary', type: 'text', required: true }],
+              },
+            ],
+          }),
         })
       ),
     });
@@ -156,9 +420,13 @@ describe('packaged Agents MCP stdio entry', () => {
     await client.connect(transport);
     const tools = await client.listTools();
     const result = await client.callTool({ name: 'agents_list', arguments: {} });
+    const description = await client.callTool({
+      name: 'agents_describe',
+      arguments: { agentId: 'agent-feedback' },
+    });
 
     expect(existsSync(adapterScript)).toBe(true);
-    expect(tools.tools.map(({ name }) => name)).toEqual(['agents_list']);
+    expect(tools.tools.map(({ name }) => name)).toEqual(['agents_list', 'agents_describe']);
     expect(result.content).toEqual([
       {
         type: 'text',
@@ -172,6 +440,19 @@ describe('packaged Agents MCP stdio entry', () => {
               agentType: 'workflow',
             },
           ],
+        }),
+      },
+    ]);
+    expect(description.content).toEqual([
+      {
+        type: 'text',
+        text: JSON.stringify({
+          agentId: 'agent-feedback',
+          title: 'Feedback analyst',
+          description: 'Summarizes customer feedback.',
+          agentType: 'workflow',
+          inputSchema: [{ name: 'query', description: 'Feedback text', type: 'text', required: true }],
+          outputSchema: [{ name: 'summary', description: 'Summary', type: 'text', required: true }],
         }),
       },
     ]);
@@ -202,6 +483,11 @@ describe('packaged Agents MCP stdio entry', () => {
     await Promise.all(
       cases.map(async (testCase) => {
         const bridge = await startAgentsMcpBridge({
+          getSessionIdentity: vi.fn().mockResolvedValue({
+            deploymentOrigin: 'https://agents.example.test',
+            sessionEpoch: 1,
+            userId: `user-${testCase.code}`,
+          }),
           fetchCatalog: async () => {
             throw new AgentsMcpError(testCase.code, 'sensitive upstream detail');
           },

@@ -1,4 +1,11 @@
-export type AgentsMcpErrorCode = 'auth' | 'configuration' | 'contract' | 'network' | 'server';
+export type AgentsMcpErrorCode =
+  | 'ambiguous'
+  | 'auth'
+  | 'configuration'
+  | 'contract'
+  | 'network'
+  | 'not_found'
+  | 'server';
 
 type AgentsMcpErrorPresentation = Readonly<{
   bridgeError: string;
@@ -7,6 +14,11 @@ type AgentsMcpErrorPresentation = Readonly<{
 }>;
 
 const AGENTS_MCP_ERROR_PRESENTATIONS = {
+  ambiguous: {
+    bridgeError: 'agents_ambiguous',
+    bridgeStatus: 409,
+    message: 'Agent identity is ambiguous in the current catalog',
+  },
   auth: { bridgeError: 'agents_auth_required', bridgeStatus: 401, message: 'Agents login is required' },
   configuration: {
     bridgeError: 'agents_network_error',
@@ -23,6 +35,11 @@ const AGENTS_MCP_ERROR_PRESENTATIONS = {
     bridgeStatus: 502,
     message: 'Agents Adapter bridge is unavailable',
   },
+  not_found: {
+    bridgeError: 'agents_not_found',
+    bridgeStatus: 404,
+    message: 'Agent is not in the current catalog',
+  },
   server: {
     bridgeError: 'agents_server_error',
     bridgeStatus: 502,
@@ -31,9 +48,11 @@ const AGENTS_MCP_ERROR_PRESENTATIONS = {
 } as const satisfies Readonly<Record<AgentsMcpErrorCode, AgentsMcpErrorPresentation>>;
 
 const BRIDGE_ERROR_CODES = {
+  agents_ambiguous: 'ambiguous',
   agents_auth_required: 'auth',
   agents_contract_error: 'contract',
   agents_network_error: 'network',
+  agents_not_found: 'not_found',
   agents_server_error: 'server',
 } as const satisfies Readonly<Record<string, AgentsMcpErrorCode>>;
 

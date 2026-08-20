@@ -781,6 +781,7 @@
   },
   "mcpNoDescription": "No description",
   "kiBuddy": {
+    "agentsDescribeDescription": "Shows the exact input and output schema for one agent in the current catalog.",
     "agentsListDescription": "Lists the complete Agents catalog available to the current signed-in account."
   },
   "mcpAuthRequired": "Authentication required",

@@ -781,6 +781,7 @@
   },
   "mcpNoDescription": "暂无描述",
   "kiBuddy": {
+    "agentsDescribeDescription": "显示当前目录中一个 Agent 的精确输入和输出结构。",
     "agentsListDescription": "列出当前登录账号可用的完整 Agents 目录。"
   },
   "mcpAuthRequired": "需要身份验证",

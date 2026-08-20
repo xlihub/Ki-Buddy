@@ -4,6 +4,18 @@ import { AgentsMcpError } from '@/process/ki-buddy/agents/errors';
 
 const originalBridgeUrl = process.env.KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL;
 const originalBridgeToken = process.env.KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN;
+const authenticatedSession = {
+  status: 'authenticated',
+  user: {
+    id: 'core-user',
+    agents: { deploymentUrl: 'https://agents.example.test/tenant', userId: 'agents-user-1' },
+  },
+} as const;
+const accountIdentity = {
+  deploymentOrigin: 'https://agents.example.test',
+  sessionEpoch: 1,
+  userId: 'agents-user-1',
+};
 
 afterEach(() => {
   if (originalBridgeUrl === undefined) delete process.env.KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL;
@@ -22,6 +34,7 @@ describe('startAgentsMcpRuntimeBridge', () => {
     });
     const authService = {
       getSession: vi.fn(),
+      getSessionEpoch: vi.fn(),
       fetchAuthenticated: vi.fn(),
     };
 
@@ -45,7 +58,7 @@ describe('startAgentsMcpRuntimeBridge', () => {
       return { url: 'http://127.0.0.1:43123', token: 'bridge-secret', close: vi.fn() };
     });
     const handle = await startAgentsMcpRuntimeBridge(
-      { getSession, fetchAuthenticated } as never,
+      { getSession, getSessionEpoch: vi.fn().mockReturnValue(1), fetchAuthenticated } as never,
       process.env,
       startBridge as never
     );
@@ -64,7 +77,7 @@ describe('startAgentsMcpRuntimeBridge', () => {
       return { url: 'http://127.0.0.1:43123', token: 'bridge-secret', close: vi.fn() };
     });
     const handle = await startAgentsMcpRuntimeBridge(
-      { getSession, fetchAuthenticated } as never,
+      { getSession, getSessionEpoch: vi.fn().mockReturnValue(1), fetchAuthenticated } as never,
       process.env,
       startBridge as never
     );
@@ -76,21 +89,29 @@ describe('startAgentsMcpRuntimeBridge', () => {
 
   it('uses the auth service boundary for the current catalog instead of exposing credentials', async () => {
     const response = Response.json({ status: 'ok', total: 0, agents: [] });
-    const getSession = vi.fn().mockResolvedValue({ status: 'authenticated', user: { id: 'core-user' } });
+    const getSession = vi.fn().mockResolvedValue(authenticatedSession);
     const fetchAuthenticated = vi.fn().mockResolvedValue(response);
     let fetchCatalog: ((signal: AbortSignal) => Promise<Response>) | undefined;
-    const startBridge = vi.fn(async (options: { fetchCatalog: (signal: AbortSignal) => Promise<Response> }) => {
-      fetchCatalog = options.fetchCatalog;
-      return { url: 'http://127.0.0.1:43123', token: 'bridge-secret', close: vi.fn() };
-    });
+    let getSessionIdentity: (() => Promise<unknown>) | undefined;
+    const startBridge = vi.fn(
+      async (options: {
+        fetchCatalog: (signal: AbortSignal) => Promise<Response>;
+        getSessionIdentity: () => Promise<unknown>;
+      }) => {
+        fetchCatalog = options.fetchCatalog;
+        getSessionIdentity = options.getSessionIdentity;
+        return { url: 'http://127.0.0.1:43123', token: 'bridge-secret', close: vi.fn() };
+      }
+    );
     const handle = await startAgentsMcpRuntimeBridge(
-      { getSession, fetchAuthenticated } as never,
+      { getSession, getSessionEpoch: vi.fn().mockReturnValue(1), fetchAuthenticated } as never,
       process.env,
       startBridge as never
     );
 
     const signal = new AbortController().signal;
-    await expect(fetchCatalog?.(signal)).resolves.toBe(response);
+    await expect(getSessionIdentity?.()).resolves.toEqual(accountIdentity);
+    await expect(fetchCatalog?.(signal)).resolves.toEqual({ identity: accountIdentity, response });
     expect(fetchAuthenticated).toHaveBeenCalledWith('/bridge/agents/catalog', {
       method: 'GET',
       headers: { accept: 'application/json' },
@@ -100,7 +121,7 @@ describe('startAgentsMcpRuntimeBridge', () => {
   });
 
   it('classifies an unexpected catalog request failure as a network error', async () => {
-    const getSession = vi.fn().mockResolvedValue({ status: 'authenticated', user: { id: 'core-user' } });
+    const getSession = vi.fn().mockResolvedValue(authenticatedSession);
     const fetchAuthenticated = vi.fn().mockRejectedValue(new Error('private upstream detail'));
     let fetchCatalog: (() => Promise<Response>) | undefined;
     const startBridge = vi.fn(async (options: { fetchCatalog: () => Promise<Response> }) => {
@@ -108,7 +129,7 @@ describe('startAgentsMcpRuntimeBridge', () => {
       return { url: 'http://127.0.0.1:43123', token: 'bridge-secret', close: vi.fn() };
     });
     const handle = await startAgentsMcpRuntimeBridge(
-      { getSession, fetchAuthenticated } as never,
+      { getSession, getSessionEpoch: vi.fn().mockReturnValue(1), fetchAuthenticated } as never,
       process.env,
       startBridge as never
     );
@@ -120,9 +141,53 @@ describe('startAgentsMcpRuntimeBridge', () => {
     await handle.close();
   });
 
+  it('rejects a catalog response when the Agents account changes during refresh', async () => {
+    const switchedSession = {
+      ...authenticatedSession,
+      user: {
+        ...authenticatedSession.user,
+        agents: { ...authenticatedSession.user.agents, userId: 'agents-user-2' },
+      },
+    };
+    const getSession = vi.fn().mockResolvedValueOnce(authenticatedSession).mockResolvedValueOnce(switchedSession);
+    const fetchAuthenticated = vi.fn().mockResolvedValue(Response.json({ status: 'ok', total: 0, agents: [] }));
+    let fetchCatalog: ((signal: AbortSignal) => Promise<unknown>) | undefined;
+    const startBridge = vi.fn(async (options: { fetchCatalog: (signal: AbortSignal) => Promise<unknown> }) => {
+      fetchCatalog = options.fetchCatalog;
+      return { url: 'http://127.0.0.1:43123', token: 'bridge-secret', close: vi.fn() };
+    });
+    const handle = await startAgentsMcpRuntimeBridge(
+      { getSession, getSessionEpoch: vi.fn().mockReturnValue(1), fetchAuthenticated } as never,
+      process.env,
+      startBridge as never
+    );
+
+    await expect(fetchCatalog?.(new AbortController().signal)).rejects.toMatchObject({ code: 'auth' });
+    await handle.close();
+  });
+
+  it('rejects a catalog response when the same account session changes during refresh', async () => {
+    const getSession = vi.fn().mockResolvedValue(authenticatedSession);
+    const getSessionEpoch = vi.fn().mockReturnValueOnce(1).mockReturnValueOnce(2);
+    const fetchAuthenticated = vi.fn().mockResolvedValue(Response.json({ status: 'ok', total: 0, agents: [] }));
+    let fetchCatalog: ((signal: AbortSignal) => Promise<unknown>) | undefined;
+    const startBridge = vi.fn(async (options: { fetchCatalog: (signal: AbortSignal) => Promise<unknown> }) => {
+      fetchCatalog = options.fetchCatalog;
+      return { url: 'http://127.0.0.1:43123', token: 'bridge-secret', close: vi.fn() };
+    });
+    const handle = await startAgentsMcpRuntimeBridge(
+      { getSession, getSessionEpoch, fetchAuthenticated } as never,
+      process.env,
+      startBridge as never
+    );
+
+    await expect(fetchCatalog?.(new AbortController().signal)).rejects.toMatchObject({ code: 'auth' });
+    await handle.close();
+  });
+
   it('preserves an error already classified by the authenticated Agents boundary', async () => {
     const classifiedError = new AgentsMcpError('server', 'Agents catalog service is unavailable');
-    const getSession = vi.fn().mockResolvedValue({ status: 'authenticated', user: { id: 'core-user' } });
+    const getSession = vi.fn().mockResolvedValue(authenticatedSession);
     const fetchAuthenticated = vi.fn().mockRejectedValue(classifiedError);
     let fetchCatalog: (() => Promise<Response>) | undefined;
     const startBridge = vi.fn(async (options: { fetchCatalog: () => Promise<Response> }) => {
@@ -130,7 +195,7 @@ describe('startAgentsMcpRuntimeBridge', () => {
       return { url: 'http://127.0.0.1:43123', token: 'bridge-secret', close: vi.fn() };
     });
     const handle = await startAgentsMcpRuntimeBridge(
-      { getSession, fetchAuthenticated } as never,
+      { getSession, getSessionEpoch: vi.fn().mockReturnValue(1), fetchAuthenticated } as never,
       process.env,
       startBridge as never
     );

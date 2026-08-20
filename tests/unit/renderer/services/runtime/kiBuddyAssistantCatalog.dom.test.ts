@@ -73,6 +73,10 @@ describe('projectProductAssistantCatalog', () => {
         backendName: 'agents-mcp-adapter',
         scriptName: 'builtin-mcp-agents.js',
         tools: {
+          describe: {
+            name: 'agents_describe',
+            descriptionKey: 'settings.kiBuddy.agentsDescribeDescription',
+          },
           list: {
             name: 'agents_list',
             descriptionKey: 'settings.kiBuddy.agentsListDescription',

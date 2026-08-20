@@ -218,11 +218,15 @@ describe('AgentsAuthService', () => {
     };
 
     const firstLogin = await service.login(credentials);
+    const firstSessionEpoch = service.getSessionEpoch();
     await service.logout();
+    const loggedOutEpoch = service.getSessionEpoch();
     const secondLogin = await service.login(credentials);
+    const secondSessionEpoch = service.getSessionEpoch();
 
     expect(firstLogin).toMatchObject({ success: true, session: { user: { id: 'core-user-42' } } });
     expect(secondLogin).toMatchObject({ success: true, session: { user: { id: 'core-user-42' } } });
+    expect([firstSessionEpoch, loggedOutEpoch, secondSessionEpoch]).toEqual([1, 2, 3]);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(fetchMock.mock.calls[5]?.[0]);
   });
 

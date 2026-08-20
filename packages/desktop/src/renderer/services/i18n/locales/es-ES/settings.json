@@ -771,6 +771,7 @@
   },
   "mcpNoDescription": "Sin descripción",
   "kiBuddy": {
+    "agentsDescribeDescription": "Muestra el esquema exacto de entrada y salida de un Agent del catálogo actual.",
     "agentsListDescription": "Muestra el catálogo completo de Agents disponible para la cuenta que ha iniciado sesión."
   },
   "mcpAuthRequired": "Autenticación requerida",

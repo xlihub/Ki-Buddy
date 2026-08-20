@@ -773,6 +773,7 @@
   },
   "mcpNoDescription": "Keine Beschreibung",
   "kiBuddy": {
+    "agentsDescribeDescription": "Zeigt das genaue Ein- und Ausgabeschema eines Agent im aktuellen Katalog an.",
     "agentsListDescription": "Listet den vollständigen Agents-Katalog auf, der für das aktuell angemeldete Konto verfügbar ist."
   },
   "mcpAuthRequired": "Authentifizierung erforderlich",

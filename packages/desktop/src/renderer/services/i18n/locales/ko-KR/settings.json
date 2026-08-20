@@ -769,6 +769,7 @@
   },
   "mcpNoDescription": "설명 없음",
   "kiBuddy": {
+    "agentsDescribeDescription": "현재 카탈로그에 있는 Agent 하나의 정확한 입력 및 출력 스키마를 표시합니다.",
     "agentsListDescription": "현재 로그인한 계정에서 사용할 수 있는 전체 Agents 카탈로그를 표시합니다."
   },
   "mcpAuthRequired": "인증 필요",
