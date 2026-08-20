@@ -38,6 +38,12 @@ type AgentsListResult = Readonly<{
   total: number;
 }>;
 
+type AgentsDescribeResult = Readonly<{
+  agentId: string;
+  inputSchema: Array<{ name: string; required: boolean; type: string }>;
+  outputSchema: Array<{ name: string; required: boolean; type: string }>;
+}>;
+
 type HeldCatalogRequest = Readonly<{
   release: () => void;
   waitForStart: () => Promise<void>;
@@ -79,6 +85,8 @@ const AGENTS_CATALOGS = {
         agentTitle: 'Account A Agent',
         agentDescription: 'Visible only to account A.',
         agentType: 'workflow',
+        defaultInputModes: [{ name: 'query', description: 'Query', type: 'text', required: true }],
+        defaultOutputModes: [{ name: 'result', description: 'Result', type: 'text', required: true }],
       },
     ],
   },
@@ -91,6 +99,8 @@ const AGENTS_CATALOGS = {
         agentTitle: 'Account B Agent',
         agentDescription: 'Visible only to account B.',
         agentType: 'workflow',
+        defaultInputModes: [{ name: 'query', description: 'Query', type: 'text', required: true }],
+        defaultOutputModes: [{ name: 'result', description: 'Result', type: 'text', required: true }],
       },
     ],
   },
@@ -294,14 +304,24 @@ async function readAgentsAdapterRegistration(
   return servers.find(({ name }) => name === 'agents-mcp-adapter');
 }
 
-function readAgentsListResult(result: Awaited<ReturnType<Client['callTool']>>): AgentsListResult {
+type AgentsToolResult = Awaited<ReturnType<Client['callTool']>>;
+
+type AgentsToolResults = Readonly<{
+  agents_describe: AgentsDescribeResult;
+  agents_list: AgentsListResult;
+}>;
+
+function readAgentsToolResult<T extends keyof AgentsToolResults>(
+  toolName: T,
+  result: AgentsToolResult
+): AgentsToolResults[T] {
   const first = Array.isArray(result.content) ? result.content[0] : null;
-  if (!first || typeof first !== 'object') throw new Error('agents_list returned no content');
+  if (!first || typeof first !== 'object') throw new Error(`${toolName} returned no content`);
   const content = first as { text?: unknown; type?: unknown };
   if (content.type !== 'text' || typeof content.text !== 'string') {
-    throw new Error('agents_list returned non-text content');
+    throw new Error(`${toolName} returned non-text content`);
   }
-  return JSON.parse(content.text) as AgentsListResult;
+  return JSON.parse(content.text) as AgentsToolResults[T];
 }
 
 async function createCoreConversation(
@@ -855,9 +875,12 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
       client = new Client({ name: 'ki-buddy-account-switch-e2e', version: '1.0.0' });
       await client.connect(transport);
       const tools = await client.listTools();
-      const accountAResult = readAgentsListResult(await client.callTool({ name: 'agents_list', arguments: {} }));
+      const accountAResult = readAgentsToolResult(
+        'agents_list',
+        await client.callTool({ name: 'agents_list', arguments: {} })
+      );
       heldCatalog = agents.holdNextCatalog('A');
-      const staleAccountACall = client.callTool({ name: 'agents_list', arguments: {} });
+      const staleAccountACall = client.callTool({ name: 'agents_list', arguments: { forceRefresh: true } });
       await heldCatalog.waitForStart();
 
       await logoutThroughUi(page);
@@ -865,13 +888,26 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
       await expect.poll(() => heldCatalog?.wasCancelled()).toBe(true);
       heldCatalog.release();
       const staleAccountAResult = await staleAccountACall;
-      const accountBResult = readAgentsListResult(await client.callTool({ name: 'agents_list', arguments: {} }));
+      const accountBResult = readAgentsToolResult(
+        'agents_list',
+        await client.callTool({ name: 'agents_list', arguments: {} })
+      );
+      const accountBDescription = readAgentsToolResult(
+        'agents_describe',
+        await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-for-user-b' } })
+      );
 
       expect(tools.tools.map(({ name }) => name)).toContain('agents_list');
+      expect(tools.tools.map(({ name }) => name)).toContain('agents_describe');
       expect(accountAResult).toEqual({ total: 1, agents: [expect.objectContaining({ agentId: 'agent-for-user-a' })] });
       expect(staleAccountAResult.isError).toBe(true);
       expect(accountBResult).toEqual({ total: 1, agents: [expect.objectContaining({ agentId: 'agent-for-user-b' })] });
-      expect(agents.getCatalogIdentitySequence()).toEqual(['A', 'A', 'B']);
+      expect(accountBDescription).toMatchObject({
+        agentId: 'agent-for-user-b',
+        inputSchema: [{ name: 'query', type: 'text', required: true }],
+        outputSchema: [{ name: 'result', type: 'text', required: true }],
+      });
+      expect(agents.getCatalogIdentitySequence()).toEqual(['A', 'A', 'B', 'B']);
       expect(stderr).not.toContain(bridge.token);
       expect(stderr).not.toContain(bridge.url);
     } finally {

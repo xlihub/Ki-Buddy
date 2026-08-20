@@ -3,6 +3,7 @@ import { startAgentsMcpBridge, type AgentsMcpBridgeHandle } from '@/process/ki-b
 import { AgentsMcpError } from '@/process/ki-buddy/agents/errors';
 
 const handles: AgentsMcpBridgeHandle[] = [];
+const identity = { deploymentOrigin: 'https://agents.example.test', sessionEpoch: 1, userId: 'user-1' };
 
 afterEach(async () => {
   await Promise.all(handles.splice(0).map((handle) => handle.close()));
@@ -15,22 +16,30 @@ describe('startAgentsMcpBridge', () => {
       total: 1,
       agents: [{ agentId: 'agent-1', agentTitle: 'Agent 1', agentType: 'workflow' }],
     };
-    const fetchCatalog = vi.fn().mockResolvedValue(Response.json(catalog));
-    const bridge = await startAgentsMcpBridge({ fetchCatalog, token: 'bridge-secret' });
+    const getSessionIdentity = vi.fn().mockResolvedValue(identity);
+    const fetchCatalog = vi.fn().mockResolvedValue({ identity, response: Response.json(catalog) });
+    const bridge = await startAgentsMcpBridge({ fetchCatalog, getSessionIdentity, token: 'bridge-secret' });
     handles.push(bridge);
 
-    const response = await fetch(`${bridge.url}/catalog`, {
+    const catalogResponse = await fetch(`${bridge.url}/catalog`, {
+      headers: { authorization: `Bearer ${bridge.token}` },
+    });
+    const sessionResponse = await fetch(`${bridge.url}/session`, {
       headers: { authorization: `Bearer ${bridge.token}` },
     });
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual(catalog);
+    expect(catalogResponse.status).toBe(200);
+    await expect(catalogResponse.json()).resolves.toEqual({ identity, catalog });
+    expect(sessionResponse.status).toBe(200);
+    await expect(sessionResponse.json()).resolves.toEqual(identity);
     expect(fetchCatalog).toHaveBeenCalledOnce();
+    expect(getSessionIdentity).toHaveBeenCalledOnce();
   });
 
   it('rejects requests without the exact Adapter token before reading the Agents session', async () => {
     const fetchCatalog = vi.fn();
-    const bridge = await startAgentsMcpBridge({ fetchCatalog, token: 'bridge-secret' });
+    const getSessionIdentity = vi.fn();
+    const bridge = await startAgentsMcpBridge({ fetchCatalog, getSessionIdentity, token: 'bridge-secret' });
     handles.push(bridge);
 
     const response = await fetch(`${bridge.url}/catalog`, {
@@ -39,7 +48,24 @@ describe('startAgentsMcpBridge', () => {
 
     expect(response.status).toBe(401);
     expect(fetchCatalog).not.toHaveBeenCalled();
+    expect(getSessionIdentity).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toEqual({ error: 'adapter_auth_required' });
+  });
+
+  it('returns an authentication status when the current session identity is unavailable', async () => {
+    const bridge = await startAgentsMcpBridge({
+      fetchCatalog: vi.fn(),
+      getSessionIdentity: vi.fn().mockRejectedValue(new AgentsMcpError('auth', 'private session detail')),
+      token: 'bridge-secret',
+    });
+    handles.push(bridge);
+
+    const response = await fetch(`${bridge.url}/session`, {
+      headers: { authorization: `Bearer ${bridge.token}` },
+    });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: 'agents_auth_required' });
   });
 
   it('cancels the upstream catalog request when the Adapter request disconnects', async () => {
@@ -51,11 +77,15 @@ describe('startAgentsMcpBridge', () => {
     const fetchCatalog = vi.fn((signal?: AbortSignal) => {
       upstreamSignal = signal;
       releaseStarted?.();
-      return new Promise<Response>((_resolve, reject) => {
+      return new Promise<never>((_resolve, reject) => {
         signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
       });
     });
-    const bridge = await startAgentsMcpBridge({ fetchCatalog, token: 'bridge-secret' });
+    const bridge = await startAgentsMcpBridge({
+      fetchCatalog,
+      getSessionIdentity: vi.fn().mockResolvedValue(identity),
+      token: 'bridge-secret',
+    });
     handles.push(bridge);
     const requestController = new AbortController();
     const request = fetch(`${bridge.url}/catalog`, {
@@ -79,11 +109,15 @@ describe('startAgentsMcpBridge', () => {
     const fetchCatalog = vi.fn((signal: AbortSignal) => {
       upstreamSignal = signal;
       releaseStarted?.();
-      return new Promise<Response>((_resolve, reject) => {
+      return new Promise<never>((_resolve, reject) => {
         signal.addEventListener('abort', () => reject(signal.reason), { once: true });
       });
     });
-    const bridge = await startAgentsMcpBridge({ fetchCatalog, token: 'bridge-secret' });
+    const bridge = await startAgentsMcpBridge({
+      fetchCatalog,
+      getSessionIdentity: vi.fn().mockResolvedValue(identity),
+      token: 'bridge-secret',
+    });
     const request = fetch(`${bridge.url}/catalog`, {
       headers: { authorization: `Bearer ${bridge.token}` },
     }).catch(() => undefined);
@@ -114,6 +148,7 @@ describe('startAgentsMcpBridge', () => {
     for (const testCase of cases) {
       const bridge = await startAgentsMcpBridge({
         fetchCatalog: vi.fn().mockRejectedValue(testCase.error),
+        getSessionIdentity: vi.fn().mockResolvedValue(identity),
         token: `bridge-secret-${testCase.expectedCode}`,
       });
       handles.push(bridge);

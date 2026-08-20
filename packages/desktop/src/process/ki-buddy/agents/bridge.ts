@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import type { AgentsCatalogIdentity } from './catalog';
 import { AgentsMcpError, getAgentsMcpErrorPresentation, type AgentsMcpErrorCode } from './errors';
 import { readBoundedJsonResponse } from './json';
 
@@ -7,7 +8,8 @@ const BRIDGE_HOST = '127.0.0.1';
 const MAX_CATALOG_RESPONSE_BYTES = 5 * 1024 * 1024;
 
 type StartAgentsMcpBridgeOptions = Readonly<{
-  fetchCatalog: (signal: AbortSignal) => Promise<Response>;
+  fetchCatalog: (signal: AbortSignal) => Promise<Readonly<{ identity: AgentsCatalogIdentity; response: Response }>>;
+  getSessionIdentity: () => Promise<AgentsCatalogIdentity>;
   token?: string;
 }>;
 
@@ -44,17 +46,26 @@ async function handleCatalogRequest(
   signal: AbortSignal
 ): Promise<void> {
   try {
-    const upstream = await options.fetchCatalog(signal);
+    const { identity, response: upstream } = await options.fetchCatalog(signal);
     if (signal.aborted) return;
     if (upstream.status === 401 || upstream.status === 403) {
       throw new AgentsMcpError('auth', 'Agents login is required');
     }
     if (!upstream.ok) throw new AgentsMcpError('server', 'Agents catalog service is unavailable');
     const payload = await readBoundedJsonResponse(upstream, MAX_CATALOG_RESPONSE_BYTES);
-    sendJson(response, 200, payload);
+    sendJson(response, 200, { identity, catalog: payload });
   } catch (error) {
     if (signal.aborted) return;
     const safe = bridgeError(error instanceof AgentsMcpError ? error.code : 'network');
+    sendJson(response, safe.status, safe.body);
+  }
+}
+
+async function handleSessionRequest(options: StartAgentsMcpBridgeOptions, response: ServerResponse): Promise<void> {
+  try {
+    sendJson(response, 200, await options.getSessionIdentity());
+  } catch (error) {
+    const safe = bridgeError(error instanceof AgentsMcpError ? error.code : 'auth');
     sendJson(response, safe.status, safe.body);
   }
 }
@@ -68,8 +79,12 @@ export async function startAgentsMcpBridge(options: StartAgentsMcpBridgeOptions)
       sendJson(response, 401, { error: 'adapter_auth_required' });
       return;
     }
-    if (request.method !== 'GET' || request.url !== '/catalog') {
+    if (request.method !== 'GET' || !['/catalog', '/session'].includes(request.url ?? '')) {
       sendJson(response, 404, { error: 'not_found' });
+      return;
+    }
+    if (request.url === '/session') {
+      void handleSessionRequest(options, response);
       return;
     }
     const controller = new AbortController();

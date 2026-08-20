@@ -1,8 +1,30 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeAgentsCatalog } from '@/process/ki-buddy/agents/catalog';
+import { normalizeAgentsCatalog, normalizeAgentsCatalogSelection } from '@/process/ki-buddy/agents/catalog';
 import catalogFixture from '../../../../fixtures/ki-buddy/agents/catalog.json';
 
 describe('normalizeAgentsCatalog', () => {
+  it('projects the exact supported schema for one fixture candidate without credential fields', () => {
+    const result = normalizeAgentsCatalogSelection(catalogFixture, 'fixture-feedback-analysis').description;
+
+    expect(result).toEqual({
+      agentId: 'fixture-feedback-analysis',
+      title: '客户反馈分析',
+      description: '分析脱敏后的客户反馈文本并生成摘要。',
+      agentType: 'workflow',
+      inputSchema: [
+        {
+          name: 'feedbackFile',
+          description: '脱敏后的反馈文件',
+          type: 'file',
+          required: true,
+          allowed_file_types: ['text/plain'],
+        },
+      ],
+      outputSchema: [{ name: 'summary', description: '分析摘要', type: 'text', required: true }],
+    });
+    expect(JSON.stringify(result)).not.toMatch(/apiKey|token|userId/u);
+  });
+
   it('returns the complete safe inventory and excludes fields outside the public catalog summary', () => {
     const result = normalizeAgentsCatalog(catalogFixture);
 

@@ -182,6 +182,11 @@ export class AgentsAuthService {
   /** Creates the service with explicit network, credential, and Core-session dependencies. */
   constructor(private readonly dependencies: AgentsAuthServiceDependencies) {}
 
+  /** Returns the non-secret epoch that binds callers to the current authenticated session. */
+  getSessionEpoch(): number {
+    return this.sessionGeneration;
+  }
+
   /** Restores a saved Agents token and projects its verified identity into Core. */
   async getSession(): Promise<KiBuddyAuthSession> {
     if (this.session.status === 'authenticated' || this.restoreAttempted) {

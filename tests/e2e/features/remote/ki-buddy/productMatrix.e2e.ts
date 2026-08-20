@@ -696,6 +696,7 @@ test.describe.serial('Ki-Buddy packaged first-release product matrix', () => {
 
     expect(result.success).toBe(true);
     expect(result.tools?.map(({ name }) => name)).toContain('agents_list');
+    expect(result.tools?.map(({ name }) => name)).toContain('agents_describe');
     expect(await readFirstFrameViolations(productApp.page)).toEqual([]);
   });
 

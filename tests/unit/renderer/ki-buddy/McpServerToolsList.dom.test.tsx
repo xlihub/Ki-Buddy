@@ -10,8 +10,14 @@ import McpServerToolsList from '@/renderer/pages/settings/ToolsSettings/McpServe
 
 const PROTOCOL_DESCRIPTION = 'Protocol-provided Agents description';
 const PRODUCT_DESCRIPTIONS = {
-  'en-US': 'Lists the complete Agents catalog available to the current signed-in account.',
-  'zh-CN': '列出当前登录账号可用的完整 Agents 目录。',
+  'en-US': {
+    list: 'Lists the complete Agents catalog available to the current signed-in account.',
+    describe: 'Shows the exact input and output schema for one agent in the current catalog.',
+  },
+  'zh-CN': {
+    list: '列出当前登录账号可用的完整 Agents 目录。',
+    describe: '显示当前目录中一个 Agent 的精确输入和输出结构。',
+  },
 } as const;
 
 const buildServer = (overrides: Partial<IMcpServer> = {}): IMcpServer => ({
@@ -24,7 +30,10 @@ const buildServer = (overrides: Partial<IMcpServer> = {}): IMcpServer => ({
     command: 'node',
     args: ['/Applications/Ki-Buddy.app/Contents/Resources/app.asar.unpacked/out/main/builtin-mcp-agents.js'],
   },
-  tools: [{ name: 'agents_list', description: PROTOCOL_DESCRIPTION }],
+  tools: [
+    { name: 'agents_list', description: PROTOCOL_DESCRIPTION },
+    { name: 'agents_describe', description: PROTOCOL_DESCRIPTION },
+  ],
   created_at: 0,
   updated_at: 0,
   original_json: '{}',
@@ -37,9 +46,18 @@ async function createTestI18n(language: keyof typeof PRODUCT_DESCRIPTIONS): Prom
     lng: language,
     fallbackLng: 'en-US',
     resources: Object.fromEntries(
-      Object.entries(PRODUCT_DESCRIPTIONS).map(([locale, description]) => [
+      Object.entries(PRODUCT_DESCRIPTIONS).map(([locale, descriptions]) => [
         locale,
-        { translation: { settings: { kiBuddy: { agentsListDescription: description } } } },
+        {
+          translation: {
+            settings: {
+              kiBuddy: {
+                agentsListDescription: descriptions.list,
+                agentsDescribeDescription: descriptions.describe,
+              },
+            },
+          },
+        },
       ])
     ),
   });
@@ -80,14 +98,16 @@ describe('Ki-Buddy Agents MCP tool presentation', () => {
       </I18nextProvider>
     );
 
-    expect(screen.getByText(PRODUCT_DESCRIPTIONS['en-US'])).toBeInTheDocument();
+    expect(screen.getByText(PRODUCT_DESCRIPTIONS['en-US'].list)).toBeInTheDocument();
+    expect(screen.getByText(PRODUCT_DESCRIPTIONS['en-US'].describe)).toBeInTheDocument();
     expect(screen.queryByText(PROTOCOL_DESCRIPTION)).not.toBeInTheDocument();
   });
 
   it.each(['en-US', 'zh-CN'] as const)('shows the localized Agents description in %s', async (language) => {
     await renderTools(language, buildServer(), 'productBuiltin');
 
-    expect(screen.getByText(PRODUCT_DESCRIPTIONS[language])).toBeInTheDocument();
+    expect(screen.getByText(PRODUCT_DESCRIPTIONS[language].list)).toBeInTheDocument();
+    expect(screen.getByText(PRODUCT_DESCRIPTIONS[language].describe)).toBeInTheDocument();
     expect(screen.queryByText(PROTOCOL_DESCRIPTION)).not.toBeInTheDocument();
   });
 
@@ -97,11 +117,11 @@ describe('Ki-Buddy Agents MCP tool presentation', () => {
     [
       'for another tool',
       'productBuiltin' as const,
-      buildServer({ tools: [{ name: 'agents_describe', description: PROTOCOL_DESCRIPTION }] }),
+      buildServer({ tools: [{ name: 'agents_unknown', description: PROTOCOL_DESCRIPTION }] }),
     ],
   ])('keeps the protocol description %s', async (_scenario, origin, server) => {
     await renderTools('en-US', server, origin);
 
-    expect(screen.getByText(PROTOCOL_DESCRIPTION)).toBeInTheDocument();
+    expect(screen.getAllByText(PROTOCOL_DESCRIPTION)).not.toHaveLength(0);
   });
 });

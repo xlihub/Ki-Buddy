@@ -74,6 +74,10 @@ export const KI_BUDDY_PRODUCT_RESOURCE_REGISTRY = {
       backendName: 'agents-mcp-adapter',
       scriptName: 'builtin-mcp-agents.js',
       tools: {
+        describe: {
+          name: 'agents_describe',
+          descriptionKey: 'settings.kiBuddy.agentsDescribeDescription',
+        },
         list: {
           name: 'agents_list',
           descriptionKey: 'settings.kiBuddy.agentsListDescription',
@@ -106,13 +110,11 @@ export function resolveKiBuddyMcpToolDescriptionKey(
   server: Pick<IMcpServer, 'builtin' | 'name' | 'transport'>,
   origin: ProductResourceOrigin | undefined,
   toolName: string
-): 'settings.kiBuddy.agentsListDescription' | null {
+): 'settings.kiBuddy.agentsDescribeDescription' | 'settings.kiBuddy.agentsListDescription' | null {
   const definition = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp.agentsAdapter;
-  return origin === 'productBuiltin' &&
-    resolveKiBuddyProductMcpResourceId(server) === definition.id &&
-    toolName === definition.tools.list.name
-    ? definition.tools.list.descriptionKey
-    : null;
+  if (origin !== 'productBuiltin' || resolveKiBuddyProductMcpResourceId(server) !== definition.id) return null;
+  const tool = Object.values(definition.tools).find(({ name }) => name === toolName);
+  return tool?.descriptionKey ?? null;
 }
 
 export const KI_CLI_PRODUCT_RESOURCE_ID = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.agent.kiCli.id;

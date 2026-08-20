@@ -769,6 +769,7 @@
   },
   "mcpNoDescription": "説明なし",
   "kiBuddy": {
+    "agentsDescribeDescription": "現在のカタログ内の1つの Agent について、正確な入力と出力のスキーマを表示します。",
     "agentsListDescription": "現在サインインしているアカウントで利用可能な完全な Agents カタログを一覧表示します。"
   },
   "mcpAuthRequired": "認証が必要です",
