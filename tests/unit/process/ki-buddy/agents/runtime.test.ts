@@ -120,6 +120,83 @@ describe('startAgentsMcpRuntimeBridge', () => {
     await handle.close();
   });
 
+  it('posts only the validated invoke projection through the authenticated Agents boundary', async () => {
+    const response = Response.json({ status: 'completed' });
+    const getSession = vi.fn().mockResolvedValue(authenticatedSession);
+    const fetchAuthenticated = vi.fn().mockResolvedValue(response);
+    let invokeAgent:
+      | ((request: unknown, identity: typeof accountIdentity, signal: AbortSignal) => Promise<Response>)
+      | undefined;
+    const startBridge = vi.fn(
+      async (options: {
+        invokeAgent: (request: unknown, identity: typeof accountIdentity, signal: AbortSignal) => Promise<Response>;
+      }) => {
+        invokeAgent = options.invokeAgent;
+        return { url: 'http://127.0.0.1:43123', token: 'bridge-secret', close: vi.fn() };
+      }
+    );
+    const handle = await startAgentsMcpRuntimeBridge(
+      { getSession, getSessionEpoch: vi.fn().mockReturnValue(1), fetchAuthenticated } as never,
+      process.env,
+      startBridge as never
+    );
+    const signal = new AbortController().signal;
+    const request = {
+      agentId: 'agent-1',
+      agentType: 'workflow',
+      conversationId: 'ki-buddy-request-1',
+      inputs: { query: 'Summarize this.' },
+    };
+
+    await expect(invokeAgent?.(request, accountIdentity, signal)).resolves.toBe(response);
+
+    expect(fetchAuthenticated).toHaveBeenCalledWith('/bridge/agents/invoke', {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(request),
+      signal,
+    });
+    await handle.close();
+  });
+
+  it('stops invoke dispatch when the authenticated Agents identity changed after catalog validation', async () => {
+    const switchedSession = {
+      ...authenticatedSession,
+      user: {
+        ...authenticatedSession.user,
+        agents: { ...authenticatedSession.user.agents, userId: 'agents-user-2' },
+      },
+    };
+    const getSession = vi.fn().mockResolvedValue(switchedSession);
+    const fetchAuthenticated = vi.fn();
+    let invokeAgent:
+      | ((request: unknown, identity: typeof accountIdentity, signal: AbortSignal) => Promise<Response>)
+      | undefined;
+    const startBridge = vi.fn(
+      async (options: {
+        invokeAgent: (request: unknown, identity: typeof accountIdentity, signal: AbortSignal) => Promise<Response>;
+      }) => {
+        invokeAgent = options.invokeAgent;
+        return { url: 'http://127.0.0.1:43123', token: 'bridge-secret', close: vi.fn() };
+      }
+    );
+    const handle = await startAgentsMcpRuntimeBridge(
+      { getSession, getSessionEpoch: vi.fn().mockReturnValue(1), fetchAuthenticated } as never,
+      process.env,
+      startBridge as never
+    );
+
+    await expect(
+      invokeAgent?.(
+        { agentId: 'agent-1', agentType: 'workflow', conversationId: 'ki-buddy-request-1', inputs: {} },
+        accountIdentity,
+        new AbortController().signal
+      )
+    ).rejects.toMatchObject({ code: 'auth' });
+    expect(fetchAuthenticated).not.toHaveBeenCalled();
+    await handle.close();
+  });
+
   it('classifies an unexpected catalog request failure as a network error', async () => {
     const getSession = vi.fn().mockResolvedValue(authenticatedSession);
     const fetchAuthenticated = vi.fn().mockRejectedValue(new Error('private upstream detail'));

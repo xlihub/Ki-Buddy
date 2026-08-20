@@ -1,0 +1,18 @@
+{
+  "status": "completed",
+  "request_id": "request-redacted-1",
+  "conversation_id": "conversation-redacted-1",
+  "flow_instance_id": "task-redacted-1",
+  "result": {
+    "status": "completed",
+    "text": "Done.",
+    "outputs": [
+      {
+        "url": "https://must-not-be-exposed.invalid/result.pdf"
+      }
+    ]
+  },
+  "debug": {
+    "deploymentUrl": "https://must-not-be-exposed.invalid"
+  }
+}

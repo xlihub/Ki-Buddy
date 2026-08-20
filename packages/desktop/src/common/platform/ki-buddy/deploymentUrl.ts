@@ -4,6 +4,9 @@ export function normalizeAgentsBaseUrl(value: unknown): string | null {
   try {
     const url = new URL(value.trim());
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]', '::1'].includes(url.hostname.toLowerCase())) {
+      return null;
+    }
     if (url.username || url.password || url.search || url.hash) return null;
     url.pathname = url.pathname.replace(/\/+$/, '');
     return url.toString().replace(/\/$/, '');

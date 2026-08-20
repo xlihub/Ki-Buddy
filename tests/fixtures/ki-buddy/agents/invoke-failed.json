@@ -1,0 +1,12 @@
+{
+  "status": "failed",
+  "request_id": "request-redacted-failed-1",
+  "conversation_id": "conversation-redacted-failed-1",
+  "result": {
+    "status": "failed",
+    "message": "Redacted remote failure detail."
+  },
+  "debug": {
+    "deploymentUrl": "https://must-not-be-exposed.invalid"
+  }
+}

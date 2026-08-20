@@ -1,6 +1,7 @@
 import type { AgentsAuthService } from '../AgentsAuthService';
 import { startAgentsMcpBridge, type AgentsMcpBridgeHandle } from './bridge';
-import { isSameAgentsCatalogIdentity, type AgentsCatalogIdentity } from './catalog';
+import { isSameAgentsCatalogIdentity, type AgentsCatalogIdentity } from './contracts';
+import type { AgentsInvokeRequest } from './bridge';
 import { AGENTS_MCP_BRIDGE_TOKEN_ENV, AGENTS_MCP_BRIDGE_URL_ENV } from './client';
 import { AgentsMcpError } from './errors';
 
@@ -54,6 +55,23 @@ export async function startAgentsMcpRuntimeBridge(
       } catch (error) {
         if (error instanceof AgentsMcpError) throw error;
         throw new AgentsMcpError('network', 'Agents catalog request failed');
+      }
+    },
+    invokeAgent: async (request: AgentsInvokeRequest, identity, signal) => {
+      const currentIdentity = await getSessionIdentity();
+      if (!isSameAgentsCatalogIdentity(currentIdentity, identity)) {
+        throw new AgentsMcpError('auth', 'Agents session changed before invoke dispatch');
+      }
+      try {
+        return await authService.fetchAuthenticated('/bridge/agents/invoke', {
+          method: 'POST',
+          headers: { accept: 'application/json', 'content-type': 'application/json' },
+          body: JSON.stringify(request),
+          signal,
+        });
+      } catch (error) {
+        if (error instanceof AgentsMcpError) throw error;
+        throw new AgentsMcpError('network', 'Agents invoke request failed');
       }
     },
   });

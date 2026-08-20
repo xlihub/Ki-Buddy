@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { AGENTS_MCP_BRIDGE_TOKEN_ENV, AGENTS_MCP_BRIDGE_URL_ENV, createAgentsCatalogClient } from './client';
+import { AGENTS_MCP_BRIDGE_TOKEN_ENV, AGENTS_MCP_BRIDGE_URL_ENV, createAgentsClient } from './client';
 import { AgentsMcpError } from './errors';
 import { createAgentsMcpServer } from './mcpServer';
 
@@ -8,15 +8,15 @@ type AdapterProcess = Pick<NodeJS.Process, 'env' | 'exitCode' | 'once' | 'ppid' 
 type AdapterServer = ReturnType<typeof createAgentsMcpServer>;
 type AdapterTransport = InstanceType<typeof StdioServerTransport>;
 type AgentsMcpAdapterDependencies = Readonly<{
-  createClient: typeof createAgentsCatalogClient;
-  createServer: (client: ReturnType<typeof createAgentsCatalogClient>) => AdapterServer;
+  createClient: typeof createAgentsClient;
+  createServer: (client: ReturnType<typeof createAgentsClient>) => AdapterServer;
   createTransport: () => AdapterTransport;
   process: AdapterProcess;
   watchParent: (checkParent: () => void) => () => void;
 }>;
 
 const defaultDependencies: AgentsMcpAdapterDependencies = {
-  createClient: createAgentsCatalogClient,
+  createClient: createAgentsClient,
   createServer: createAgentsMcpServer,
   createTransport: () => new StdioServerTransport(),
   process,

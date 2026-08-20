@@ -31,6 +31,7 @@ function linkedTransports(): [LinkedTransport, LinkedTransport] {
 }
 
 const clients: Client[] = [];
+const identity = { deploymentOrigin: 'https://agents.example.test', sessionEpoch: 1, userId: 'user-1' };
 
 afterEach(async () => {
   await Promise.all(clients.splice(0).map((client) => client.close()));
@@ -38,9 +39,23 @@ afterEach(async () => {
 
 async function connect(
   list: (options?: { forceRefresh?: boolean }) => Promise<unknown>,
-  describeAgent: (agentId: string) => Promise<unknown> = async () => ({})
+  describeAgent: (agentId: string) => Promise<unknown> = async () => ({}),
+  invoke: (
+    grant: { agentId: string; identity: typeof identity },
+    inputs: Record<string, boolean | number | string>
+  ) => Promise<unknown> = async () => ({})
 ) {
-  const server = createAgentsMcpServer({ describe: describeAgent, list } as never);
+  const server = createAgentsMcpServer({
+    describe: async (agentId: string) => {
+      const description = await describeAgent(agentId);
+      return {
+        description,
+        grant: { agentId: (description as { agentId: string }).agentId, identity },
+      };
+    },
+    invoke,
+    list,
+  } as never);
   const client = new Client({ name: 'agents-mcp-test', version: '1.0.0' });
   const [serverTransport, clientTransport] = linkedTransports();
   await server.connect(serverTransport);
@@ -55,7 +70,7 @@ describe('createAgentsMcpServer', () => {
 
     const result = await client.listTools();
 
-    expect(result.tools.map(({ name }) => name)).toEqual(['agents_list', 'agents_describe']);
+    expect(result.tools.map(({ name }) => name)).toEqual(['agents_list', 'agents_describe', 'agents_invoke']);
     expect(result.tools[0]).toMatchObject({
       name: 'agents_list',
       annotations: { readOnlyHint: true },
@@ -68,6 +83,183 @@ describe('createAgentsMcpServer', () => {
         properties: { agentId: { type: 'string' } },
       },
     });
+  });
+
+  it('direct invokes only the candidate established by the latest exact describe', async () => {
+    const description = {
+      agentId: 'agent-1',
+      title: 'Agent 1',
+      description: '',
+      agentType: 'workflow',
+      inputSchema: [{ name: 'query', description: 'Query', type: 'text', required: true }],
+      outputSchema: [],
+    };
+    const invoke = vi.fn().mockResolvedValue({
+      agentId: 'agent-1',
+      taskId: 'task-1',
+      requestId: 'request-1',
+      text: 'Done.',
+    });
+    const client = await connect(
+      async () => ({ total: 0, agents: [] }),
+      async () => description,
+      invoke
+    );
+
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-1' } });
+    const result = await client.callTool({
+      name: 'agents_invoke',
+      arguments: { agentId: 'agent-1', inputs: { query: 'Summarize this.' } },
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(result.content).toEqual([
+      {
+        type: 'text',
+        text: JSON.stringify({ agentId: 'agent-1', taskId: 'task-1', requestId: 'request-1', text: 'Done.' }),
+      },
+    ]);
+    expect(invoke).toHaveBeenCalledOnce();
+    expect(invoke).toHaveBeenCalledWith({ agentId: 'agent-1', identity }, { query: 'Summarize this.' });
+  });
+
+  it('consumes the authorization when invoke rewrites the described agentId', async () => {
+    const invoke = vi
+      .fn()
+      .mockResolvedValue({ agentId: 'agent-1', taskId: 'task-1', requestId: 'request-1', text: '' });
+    const client = await connect(
+      async () => ({ total: 0, agents: [] }),
+      async (agentId) => ({ agentId }),
+      invoke
+    );
+
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-selected' } });
+    const rewritten = await client.callTool({
+      name: 'agents_invoke',
+      arguments: { agentId: 'agent-rewritten', inputs: {} },
+    });
+    const retry = await client.callTool({
+      name: 'agents_invoke',
+      arguments: { agentId: 'agent-selected', inputs: {} },
+    });
+
+    expect(rewritten).toMatchObject({
+      isError: true,
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            ok: false,
+            error: { code: 'invalid_input', message: 'Agent inputs do not match the current scalar schema' },
+          }),
+        },
+      ],
+    });
+    expect(retry.isError).toBe(true);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('invalidates an earlier authorization when the next describe fails', async () => {
+    const describeAgent = vi
+      .fn()
+      .mockResolvedValueOnce({ agentId: 'agent-1' })
+      .mockRejectedValueOnce(new AgentsMcpError('not_found', 'private catalog detail'));
+    const invoke = vi
+      .fn()
+      .mockResolvedValue({ agentId: 'agent-1', taskId: 'task-1', requestId: 'request-1', text: '' });
+    const client = await connect(async () => ({ total: 0, agents: [] }), describeAgent, invoke);
+
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-1' } });
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'missing-agent' } });
+    const result = await client.callTool({ name: 'agents_invoke', arguments: { agentId: 'agent-1', inputs: {} } });
+
+    expect(result.isError).toBe(true);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('consumes one described selection before dispatch so one selection cannot invoke twice', async () => {
+    const invoke = vi
+      .fn()
+      .mockResolvedValue({ agentId: 'agent-1', taskId: 'task-1', requestId: 'request-1', text: '' });
+    const client = await connect(
+      async () => ({ total: 0, agents: [] }),
+      async (agentId) => ({ agentId }),
+      invoke
+    );
+
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-1' } });
+    await client.callTool({ name: 'agents_invoke', arguments: { agentId: 'agent-1', inputs: {} } });
+    const duplicate = await client.callTool({ name: 'agents_invoke', arguments: { agentId: 'agent-1', inputs: {} } });
+
+    expect(duplicate.isError).toBe(true);
+    expect(invoke).toHaveBeenCalledOnce();
+  });
+
+  it('does not restore an authorization after the invoke client fails', async () => {
+    const invoke = vi.fn().mockRejectedValue(new AgentsMcpError('server', 'private invoke detail'));
+    const client = await connect(
+      async () => ({ total: 0, agents: [] }),
+      async (agentId) => ({ agentId }),
+      invoke
+    );
+
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-1' } });
+    await client.callTool({ name: 'agents_invoke', arguments: { agentId: 'agent-1', inputs: {} } });
+    const retry = await client.callTool({ name: 'agents_invoke', arguments: { agentId: 'agent-1', inputs: {} } });
+
+    expect(retry.isError).toBe(true);
+    expect(invoke).toHaveBeenCalledOnce();
+  });
+
+  it('returns safe invoke correlations when a dispatched Gateway task fails', async () => {
+    const failure = new AgentsMcpError('invoke_failed', 'private invoke detail', {
+      agentId: 'agent-1',
+      taskId: 'task-1',
+      requestId: 'request-1',
+    });
+    const client = await connect(
+      async () => ({ total: 0, agents: [] }),
+      async (agentId) => ({ agentId }),
+      vi.fn().mockRejectedValue(failure)
+    );
+
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-1' } });
+    const result = await client.callTool({ name: 'agents_invoke', arguments: { agentId: 'agent-1', inputs: {} } });
+
+    expect(result).toMatchObject({
+      isError: true,
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            ok: false,
+            agentId: 'agent-1',
+            taskId: 'task-1',
+            requestId: 'request-1',
+            error: { code: 'invoke_failed', message: 'Agent execution failed' },
+          }),
+        },
+      ],
+    });
+  });
+
+  it('allows a new successful describe to authorize another invoke', async () => {
+    const invoke = vi
+      .fn()
+      .mockResolvedValue({ agentId: 'agent-1', taskId: 'task-1', requestId: 'request-1', text: '' });
+    const client = await connect(
+      async () => ({ total: 0, agents: [] }),
+      async (agentId) => ({ agentId }),
+      invoke
+    );
+
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-1' } });
+    await client.callTool({ name: 'agents_invoke', arguments: { agentId: 'agent-1', inputs: {} } });
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-1' } });
+    const second = await client.callTool({ name: 'agents_invoke', arguments: { agentId: 'agent-1', inputs: {} } });
+
+    expect(second.isError).not.toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(2);
   });
 
   it('returns the complete safe inventory as MCP text content', async () => {
@@ -121,6 +313,24 @@ describe('createAgentsMcpServer', () => {
       { type: 'text', text: expect.stringMatching(/-32602:.*Invalid arguments.*agentId/su) },
     ]);
     expect(describeAgent).not.toHaveBeenCalled();
+  });
+
+  it('rejects nested invoke inputs before dispatching to the invoke client', async () => {
+    const invoke = vi.fn();
+    const client = await connect(
+      async () => ({ total: 0, agents: [] }),
+      async (agentId) => ({ agentId }),
+      invoke
+    );
+
+    await client.callTool({ name: 'agents_describe', arguments: { agentId: 'agent-1' } });
+    const result = await client.callTool({
+      name: 'agents_invoke',
+      arguments: { agentId: 'agent-1', inputs: { query: { nested: true } } },
+    });
+
+    expect(result).toMatchObject({ isError: true });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('returns a distinct safe status when the exact candidate is no longer available', async () => {

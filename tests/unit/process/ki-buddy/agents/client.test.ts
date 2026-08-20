@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createAgentsCatalogClient } from '@/process/ki-buddy/agents/client';
+import { createAgentsClient } from '@/process/ki-buddy/agents/client';
 
 const validCatalog = {
   status: 'ok',
@@ -25,38 +25,42 @@ const validCatalog = {
 };
 
 const accountIdentity = { deploymentOrigin: 'https://agents.example.test', sessionEpoch: 1, userId: 'user-1' };
+const invokeGrant = { agentId: 'agent-feedback', identity: accountIdentity };
 
-describe('createAgentsCatalogClient', () => {
+describe('createAgentsClient', () => {
   it('describes the exact schema for one current catalog candidate', async () => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ identity: accountIdentity, catalog: validCatalog }));
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock,
     });
 
     await expect(client.describe('agent-feedback')).resolves.toEqual({
-      agentId: 'agent-feedback',
-      title: 'Feedback analyst',
-      description: 'Summarizes customer feedback.',
-      agentType: 'workflow',
-      inputSchema: [
-        {
-          name: 'attachment',
-          description: 'A source document.',
-          type: 'file',
-          required: true,
-          allowed_file_types: ['application/pdf'],
-        },
-      ],
-      outputSchema: [{ name: 'summary', description: 'The generated summary.', type: 'text', required: true }],
+      grant: invokeGrant,
+      description: {
+        agentId: 'agent-feedback',
+        title: 'Feedback analyst',
+        description: 'Summarizes customer feedback.',
+        agentType: 'workflow',
+        inputSchema: [
+          {
+            name: 'attachment',
+            description: 'A source document.',
+            type: 'file',
+            required: true,
+            allowed_file_types: ['application/pdf'],
+          },
+        ],
+        outputSchema: [{ name: 'summary', description: 'The generated summary.', type: 'text', required: true }],
+      },
     });
     expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:43123/catalog', expect.any(Object));
   });
 
   it('loads a complete inventory only through the authenticated loopback bridge', async () => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ identity: accountIdentity, catalog: validCatalog }));
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock,
@@ -92,7 +96,7 @@ describe('createAgentsCatalogClient', () => {
         Response.json(path === '/session' ? accountIdentity : { identity: accountIdentity, catalog: validCatalog })
       );
     });
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock as typeof fetch,
@@ -113,7 +117,7 @@ describe('createAgentsCatalogClient', () => {
 
   it('forces a catalog refresh without using the cached inventory', async () => {
     const fetchMock = vi.fn(() => Promise.resolve(Response.json({ identity: accountIdentity, catalog: validCatalog })));
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock,
@@ -148,7 +152,7 @@ describe('createAgentsCatalogClient', () => {
       Response.json({ identity: accountBIdentity, catalog: accountBCatalog }),
     ];
     const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock,
@@ -176,7 +180,7 @@ describe('createAgentsCatalogClient', () => {
       Response.json({ identity: renewedIdentity, catalog: renewedCatalog }),
     ];
     const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock,
@@ -210,7 +214,7 @@ describe('createAgentsCatalogClient', () => {
       Response.json({ identity: otherDeploymentIdentity, catalog: otherDeploymentCatalog }),
     ];
     const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock,
@@ -229,12 +233,12 @@ describe('createAgentsCatalogClient', () => {
   it('does not share inventory across Adapter sessions', async () => {
     const fetchA = vi.fn(() => Promise.resolve(Response.json({ identity: accountIdentity, catalog: validCatalog })));
     const fetchB = vi.fn(() => Promise.resolve(Response.json({ identity: accountIdentity, catalog: validCatalog })));
-    const clientA = createAgentsCatalogClient({
+    const clientA = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret-a',
       fetchImpl: fetchA as typeof fetch,
     });
-    const clientB = createAgentsCatalogClient({
+    const clientB = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43124',
       bridgeToken: 'bridge-secret-b',
       fetchImpl: fetchB as typeof fetch,
@@ -254,7 +258,7 @@ describe('createAgentsCatalogClient', () => {
       Response.json({ identity: accountIdentity, catalog: validCatalog }),
     ];
     const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock,
@@ -278,7 +282,7 @@ describe('createAgentsCatalogClient', () => {
       Response.json({ identity: accountIdentity, catalog: validCatalog }),
     ];
     const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock,
@@ -303,7 +307,7 @@ describe('createAgentsCatalogClient', () => {
       Response.json({ identity: accountIdentity, catalog: emptyCatalog }),
     ];
     const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock,
@@ -328,7 +332,7 @@ describe('createAgentsCatalogClient', () => {
     const fetchMock = vi.fn(() =>
       Promise.resolve(Response.json({ identity: accountIdentity, catalog: incompatibleCatalog }))
     );
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock as typeof fetch,
@@ -349,7 +353,7 @@ describe('createAgentsCatalogClient', () => {
       Response.json({ identity: accountIdentity, catalog: validCatalog }),
     ];
     const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsCatalogClient({
+    const client = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: fetchMock,
@@ -370,7 +374,7 @@ describe('createAgentsCatalogClient', () => {
     const fetchMock = vi.fn();
 
     expect(() =>
-      createAgentsCatalogClient({
+      createAgentsClient({
         bridgeUrl: 'https://agents.example.test',
         bridgeToken: 'bridge-secret',
         fetchImpl: fetchMock,
@@ -380,27 +384,27 @@ describe('createAgentsCatalogClient', () => {
   });
 
   it('returns stable error categories without exposing bridge response details', async () => {
-    const authClient = createAgentsCatalogClient({
+    const authClient = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: vi.fn().mockResolvedValue(Response.json({ error: 'secret detail' }, { status: 401 })),
     });
-    const contractClient = createAgentsCatalogClient({
+    const contractClient = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: vi.fn().mockResolvedValue(Response.json({ error: 'agents_contract_error' }, { status: 502 })),
     });
-    const upstreamNetworkClient = createAgentsCatalogClient({
+    const upstreamNetworkClient = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: vi.fn().mockResolvedValue(Response.json({ error: 'agents_network_error' }, { status: 502 })),
     });
-    const serverClient = createAgentsCatalogClient({
+    const serverClient = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: vi.fn().mockResolvedValue(Response.json({ error: 'agents_server_error' }, { status: 502 })),
     });
-    const networkClient = createAgentsCatalogClient({
+    const networkClient = createAgentsClient({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
       fetchImpl: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:43123')),
@@ -422,6 +426,86 @@ describe('createAgentsCatalogClient', () => {
     await expect(networkClient.list()).rejects.toMatchObject({
       code: 'network',
       message: 'Agents Adapter bridge is unavailable',
+    });
+  });
+
+  it('preserves validated invoke correlations from a safe Bridge failure', async () => {
+    const client = createAgentsClient({
+      bridgeUrl: 'http://127.0.0.1:43123',
+      bridgeToken: 'bridge-secret',
+      fetchImpl: vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: 'agents_invoke_failed',
+            correlation: { agentId: 'agent-feedback', requestId: 'request-1' },
+          },
+          { status: 502 }
+        )
+      ),
+    });
+
+    await expect(client.invoke(invokeGrant, { query: 'Summarize this.' })).rejects.toMatchObject({
+      code: 'invoke_failed',
+      message: 'Agent execution failed',
+      correlation: { agentId: 'agent-feedback', requestId: 'request-1' },
+    });
+  });
+
+  it.each([
+    ['a missing agentId', { taskId: 'task-1', requestId: 'request-1' }],
+    ['a rewritten agentId', { agentId: 'other-agent', taskId: 'task-1', requestId: 'request-1' }],
+    ['an empty requestId', { agentId: 'agent-feedback', taskId: 'task-1', requestId: ' ' }],
+    ['an oversized taskId', { agentId: 'agent-feedback', taskId: 't'.repeat(201), requestId: 'request-1' }],
+  ])('rejects Bridge failure correlation with %s', async (_name, correlation) => {
+    const client = createAgentsClient({
+      bridgeUrl: 'http://127.0.0.1:43123',
+      bridgeToken: 'bridge-secret',
+      fetchImpl: vi
+        .fn()
+        .mockResolvedValue(Response.json({ error: 'agents_invoke_failed', correlation }, { status: 502 })),
+    });
+
+    await expect(client.invoke(invokeGrant, {})).rejects.toMatchObject({ code: 'contract' });
+  });
+
+  it.each([
+    ['missing', { taskId: 'task-1', requestId: 'request-1', text: 'Done.' }],
+    ['rewritten', { agentId: 'other-agent', taskId: 'task-1', requestId: 'request-1', text: 'Done.' }],
+  ])('rejects a successful Bridge invoke result with %s agentId', async (_name, result) => {
+    const client = createAgentsClient({
+      bridgeUrl: 'http://127.0.0.1:43123',
+      bridgeToken: 'bridge-secret',
+      fetchImpl: vi.fn().mockResolvedValue(Response.json(result)),
+    });
+
+    await expect(client.invoke(invokeGrant, {})).rejects.toMatchObject({ code: 'contract' });
+  });
+
+  it('sends the describe-bound identity and returns the validated Bridge result', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      Response.json({
+        agentId: 'agent-feedback',
+        taskId: 'task-1',
+        requestId: 'request-1',
+        text: 'Done.',
+      })
+    );
+    const client = createAgentsClient({
+      bridgeUrl: 'http://127.0.0.1:43123',
+      bridgeToken: 'bridge-secret',
+      fetchImpl: fetchMock,
+    });
+
+    await expect(client.invoke(invokeGrant, { query: 'Summarize this.' })).resolves.toEqual({
+      agentId: 'agent-feedback',
+      taskId: 'task-1',
+      requestId: 'request-1',
+      text: 'Done.',
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      agentId: 'agent-feedback',
+      catalogIdentity: accountIdentity,
+      inputs: { query: 'Summarize this.' },
     });
   });
 });

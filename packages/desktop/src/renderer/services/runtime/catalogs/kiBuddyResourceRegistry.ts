@@ -78,6 +78,10 @@ export const KI_BUDDY_PRODUCT_RESOURCE_REGISTRY = {
           name: 'agents_describe',
           descriptionKey: 'settings.kiBuddy.agentsDescribeDescription',
         },
+        invoke: {
+          name: 'agents_invoke',
+          descriptionKey: 'settings.kiBuddy.agentsInvokeDescription',
+        },
         list: {
           name: 'agents_list',
           descriptionKey: 'settings.kiBuddy.agentsListDescription',
@@ -110,7 +114,11 @@ export function resolveKiBuddyMcpToolDescriptionKey(
   server: Pick<IMcpServer, 'builtin' | 'name' | 'transport'>,
   origin: ProductResourceOrigin | undefined,
   toolName: string
-): 'settings.kiBuddy.agentsDescribeDescription' | 'settings.kiBuddy.agentsListDescription' | null {
+):
+  | 'settings.kiBuddy.agentsDescribeDescription'
+  | 'settings.kiBuddy.agentsInvokeDescription'
+  | 'settings.kiBuddy.agentsListDescription'
+  | null {
   const definition = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp.agentsAdapter;
   if (origin !== 'productBuiltin' || resolveKiBuddyProductMcpResourceId(server) !== definition.id) return null;
   const tool = Object.values(definition.tools).find(({ name }) => name === toolName);

@@ -1,28 +1,36 @@
 import {
   isSameAgentsCatalogIdentity,
   normalizeAgentsCatalog,
+  normalizeAgentsCatalogIdentity,
   normalizeAgentsCatalogSelection,
-  type AgentsCatalogDescription,
+  normalizeAgentsBridgeInvokeResult,
+  type AgentsAuthorizedDescription,
   type AgentsCatalogIdentity,
   type AgentsCatalogInventory,
-} from './catalog';
+  type AgentsInvokeCorrelation,
+  type AgentsInvokeGrant,
+  type AgentsInvokeResult,
+  type AgentsScalarInputs,
+} from './contracts';
 import { AgentsMcpError, getAgentsMcpErrorPresentation, resolveAgentsBridgeErrorCode } from './errors';
 import { readBoundedJsonResponse } from './json';
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 const MAX_SESSION_RESPONSE_BYTES = 16 * 1024;
 const MAX_CATALOG_RESPONSE_BYTES = 5 * 1024 * 1024 + MAX_SESSION_RESPONSE_BYTES;
+const MAX_INVOKE_RESPONSE_BYTES = 5 * 1024 * 1024 + 1024;
 const DEFAULT_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export const AGENTS_MCP_BRIDGE_URL_ENV = 'KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL';
 export const AGENTS_MCP_BRIDGE_TOKEN_ENV = 'KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN';
 
-export type AgentsCatalogClient = Readonly<{
-  describe: (agentId: string) => Promise<AgentsCatalogDescription>;
+export type AgentsClient = Readonly<{
+  describe: (agentId: string) => Promise<AgentsAuthorizedDescription>;
+  invoke: (grant: AgentsInvokeGrant, inputs: AgentsScalarInputs) => Promise<AgentsInvokeResult>;
   list: (options?: Readonly<{ forceRefresh?: boolean }>) => Promise<AgentsCatalogInventory>;
 }>;
 
-type AgentsCatalogClientOptions = Readonly<{
+type AgentsClientOptions = Readonly<{
   bridgeToken: string;
   bridgeUrl: string;
   fetchImpl?: typeof fetch;
@@ -45,37 +53,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function normalizeIdentity(value: unknown): AgentsCatalogIdentity {
-  if (
-    !isRecord(value) ||
-    typeof value.deploymentOrigin !== 'string' ||
-    !Number.isSafeInteger(value.sessionEpoch) ||
-    (value.sessionEpoch as number) < 0 ||
-    typeof value.userId !== 'string'
-  ) {
-    throw new AgentsMcpError('contract', 'Agents catalog identity is incompatible');
-  }
-  let origin: string;
-  try {
-    const url = new URL(value.deploymentOrigin);
-    origin = url.origin;
-    if (!['http:', 'https:'].includes(url.protocol) || value.deploymentOrigin !== origin)
-      throw new Error('invalid origin');
-  } catch {
-    throw new AgentsMcpError('contract', 'Agents catalog deployment origin is incompatible');
-  }
-  const userId = value.userId.trim();
-  if (!userId || userId.length > 200) {
-    throw new AgentsMcpError('contract', 'Agents catalog user identity is incompatible');
-  }
-  return { deploymentOrigin: origin, sessionEpoch: value.sessionEpoch as number, userId };
-}
-
 function normalizeCatalogEnvelope(value: unknown): AgentsCatalogEnvelope {
   if (!isRecord(value) || !('catalog' in value)) {
     throw new AgentsMcpError('contract', 'Agents catalog bridge response is incompatible');
   }
-  return { identity: normalizeIdentity(value.identity), catalog: value.catalog };
+  return { identity: normalizeAgentsCatalogIdentity(value.identity), catalog: value.catalog };
+}
+
+function normalizeOptionalCorrelationField(field: unknown): string | undefined {
+  if (field === undefined) return undefined;
+  if (typeof field !== 'string') {
+    throw new AgentsMcpError('contract', 'Agents invoke failure correlation is incompatible');
+  }
+  const normalized = field.trim();
+  if (!normalized || normalized.length > 200) {
+    throw new AgentsMcpError('contract', 'Agents invoke failure correlation is incompatible');
+  }
+  return normalized;
+}
+
+function normalizeInvokeCorrelation(value: unknown, expectedAgentId: string): AgentsInvokeCorrelation {
+  if (!isRecord(value) || value.agentId !== expectedAgentId) {
+    throw new AgentsMcpError('contract', 'Agents invoke failure correlation is incompatible');
+  }
+  const taskId = normalizeOptionalCorrelationField(value.taskId);
+  const requestId = normalizeOptionalCorrelationField(value.requestId);
+  return {
+    agentId: expectedAgentId,
+    ...(taskId ? { taskId } : {}),
+    ...(requestId ? { requestId } : {}),
+  };
 }
 
 function resolveBridgeUrl(rawUrl: string): string {
@@ -95,7 +102,7 @@ function resolveBridgeUrl(rawUrl: string): string {
 }
 
 /** Creates the narrow client used by the external stdio process to reach its Electron-owned bridge. */
-export function createAgentsCatalogClient(options: AgentsCatalogClientOptions): AgentsCatalogClient {
+export function createAgentsClient(options: AgentsClientOptions): AgentsClient {
   const bridgeUrl = resolveBridgeUrl(options.bridgeUrl.trim());
   const bridgeToken = options.bridgeToken.trim();
   if (!bridgeToken) throw new AgentsMcpError('configuration', 'Agents Adapter bridge token is required');
@@ -115,15 +122,22 @@ export function createAgentsCatalogClient(options: AgentsCatalogClientOptions): 
     inventory: AgentsCatalogInventory;
   }> | null = null;
 
-  const request = async (path: '/catalog' | '/session', maxResponseBytes: number): Promise<unknown> => {
+  const request = async (
+    path: '/catalog' | '/invoke' | '/session',
+    maxResponseBytes: number,
+    init: Readonly<{ body?: string; method?: 'GET' | 'POST' }> = {},
+    expectedAgentId?: string
+  ): Promise<unknown> => {
     let response: Response;
     try {
       response = await fetchImpl(`${bridgeUrl}${path}`, {
-        method: 'GET',
+        method: init.method ?? 'GET',
         headers: {
           accept: 'application/json',
           authorization: `Bearer ${bridgeToken}`,
+          ...(init.body ? { 'content-type': 'application/json' } : {}),
         },
+        ...(init.body ? { body: init.body } : {}),
         redirect: 'error',
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -135,8 +149,13 @@ export function createAgentsCatalogClient(options: AgentsCatalogClientOptions): 
       throw new AgentsMcpError('auth', 'Agents login is required');
     }
     if (!response.ok) {
-      const code = resolveAgentsBridgeErrorCode(await readBoundedJsonResponse(response, 1024)) ?? ('server' as const);
-      throw new AgentsMcpError(code, getAgentsMcpErrorPresentation(code).message);
+      const body = await readBoundedJsonResponse(response, 1024);
+      const code = resolveAgentsBridgeErrorCode(body) ?? ('server' as const);
+      const correlation =
+        expectedAgentId && isRecord(body) && body.correlation !== undefined
+          ? normalizeInvokeCorrelation(body.correlation, expectedAgentId)
+          : undefined;
+      throw new AgentsMcpError(code, getAgentsMcpErrorPresentation(code).message, correlation);
     }
     return readBoundedJsonResponse(response, maxResponseBytes);
   };
@@ -150,9 +169,11 @@ export function createAgentsCatalogClient(options: AgentsCatalogClientOptions): 
     }
   };
 
-  const refreshCatalog = async <T>(project: (catalog: unknown) => AgentsCatalogProjection<T>): Promise<T> => {
+  const refreshCatalog = async <T>(
+    project: (catalog: unknown, identity: AgentsCatalogIdentity) => AgentsCatalogProjection<T>
+  ): Promise<T> => {
     const envelope = normalizeCatalogEnvelope(await request('/catalog', MAX_CATALOG_RESPONSE_BYTES));
-    const { inventory, result } = project(envelope.catalog);
+    const { inventory, result } = project(envelope.catalog, envelope.identity);
     cache = { identity: envelope.identity, inventory, expiresAt: now() + cacheTtlMs };
     return result;
   };
@@ -160,16 +181,34 @@ export function createAgentsCatalogClient(options: AgentsCatalogClientOptions): 
   return {
     async describe(agentId) {
       return withCacheInvalidation(() =>
-        refreshCatalog((catalog) => {
+        refreshCatalog((catalog, identity) => {
           const { description, inventory } = normalizeAgentsCatalogSelection(catalog, agentId);
-          return { inventory, result: description };
+          return {
+            inventory,
+            result: { description, grant: { agentId: description.agentId, identity } },
+          };
         })
       );
+    },
+    async invoke(grant, inputs) {
+      return withCacheInvalidation(async () => {
+        const agentId = grant.agentId;
+        const result = await request(
+          '/invoke',
+          MAX_INVOKE_RESPONSE_BYTES,
+          {
+            method: 'POST',
+            body: JSON.stringify({ agentId, catalogIdentity: grant.identity, inputs }),
+          },
+          agentId
+        );
+        return normalizeAgentsBridgeInvokeResult(result, agentId);
+      });
     },
     async list({ forceRefresh = false } = {}) {
       return withCacheInvalidation(async () => {
         if (!forceRefresh && cache && cache.expiresAt > now()) {
-          const currentIdentity = normalizeIdentity(await request('/session', MAX_SESSION_RESPONSE_BYTES));
+          const currentIdentity = normalizeAgentsCatalogIdentity(await request('/session', MAX_SESSION_RESPONSE_BYTES));
           if (isSameAgentsCatalogIdentity(cache.identity, currentIdentity)) return cache.inventory;
           cache = null;
         }
