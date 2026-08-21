@@ -114,14 +114,126 @@ describe('Ki-Buddy Agents network client', () => {
     expect(callback).toHaveBeenCalledWith(-3);
   });
 
-  it('uses a non-persistent cache-free Electron session for Agents requests', async () => {
+  it('routes requests without stdio identity through the catalog session', async () => {
     electronMock.fetch.mockResolvedValue(new Response(null, { status: 204 }));
 
     const agentsFetch = createAgentsNetworkFetch();
     expect(electronMock.fromPartition).not.toHaveBeenCalled();
     await agentsFetch('https://192.168.0.8:8443/kagent/login', { method: 'POST' });
 
-    expect(electronMock.fromPartition).toHaveBeenCalledWith('ki-buddy-agents-network', { cache: false });
+    expect(electronMock.fromPartition).toHaveBeenCalledWith('ki-buddy-agents-network-catalog', { cache: false });
     expect(electronMock.fetch).toHaveBeenCalledWith('https://192.168.0.8:8443/kagent/login', { method: 'POST' });
+  });
+
+  it('rejects a malformed stdio client identity before creating a network partition', () => {
+    const agentsFetch = createAgentsNetworkFetch();
+
+    expect(() =>
+      agentsFetch('https://192.168.0.8:8443/kagents_core/api/bridge/agents/catalog', {
+        headers: { 'x-ki-buddy-agents-client-id': 'not-a-client-id' },
+      })
+    ).toThrow('Agents network client identity is invalid');
+    expect(electronMock.fromPartition).not.toHaveBeenCalled();
+    expect(electronMock.fetch).not.toHaveBeenCalled();
+  });
+
+  it('does not forward a local identity supplied through Request init headers', async () => {
+    electronMock.fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const agentsFetch = createAgentsNetworkFetch();
+    const request = new Request('https://192.168.0.8:8443/kagents_core/api/bridge/agents/invoke', {
+      method: 'POST',
+    });
+
+    await agentsFetch(request, {
+      headers: {
+        'x-ki-buddy-agents-client-id': '11111111-1111-4111-8111-111111111111',
+        'x-request-context': 'preserved',
+      },
+    });
+
+    const [forwardedRequest, forwardedInit] = electronMock.fetch.mock.calls[0] ?? [];
+    expect(forwardedInit).toBeUndefined();
+    expect(new Headers((forwardedRequest as Request).headers).has('x-ki-buddy-agents-client-id')).toBe(false);
+    expect(new Headers((forwardedRequest as Request).headers).get('x-request-context')).toBe('preserved');
+  });
+
+  it('does not forward a local identity stored on a Request', async () => {
+    electronMock.fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const agentsFetch = createAgentsNetworkFetch();
+    const request = new Request('https://192.168.0.8:8443/kagents_core/api/bridge/agents/catalog', {
+      headers: {
+        'x-ki-buddy-agents-client-id': '11111111-1111-4111-8111-111111111111',
+        'x-request-context': 'preserved',
+      },
+    });
+
+    await agentsFetch(request);
+
+    const [forwardedRequest, forwardedInit] = electronMock.fetch.mock.calls[0] ?? [];
+    expect(forwardedInit).toBeUndefined();
+    expect(new Headers((forwardedRequest as Request).headers).has('x-ki-buddy-agents-client-id')).toBe(false);
+    expect(new Headers((forwardedRequest as Request).headers).get('x-request-context')).toBe('preserved');
+  });
+
+  it('uses fixed catalog and invoke sessions across many stdio clients without forwarding local identities', async () => {
+    const invokeFetch = vi.fn().mockResolvedValue(Response.json({ state: 'completed' }));
+    const catalogFetch = vi.fn().mockResolvedValue(Response.json({ status: 'ok', agents: [] }));
+    electronMock.fromPartition.mockImplementation((partition: string) => ({
+      fetch: partition.endsWith('-invoke') ? invokeFetch : catalogFetch,
+      setCertificateVerifyProc: vi.fn(),
+    }));
+    const agentsFetch = createAgentsNetworkFetch();
+
+    const requests = Array.from({ length: 40 }, (_, index) => {
+      const suffix = String(index + 1).padStart(12, '0');
+      const clientId = `11111111-1111-4111-8111-${suffix}`;
+      const requestKind = index % 2 === 0 ? 'invoke' : 'catalog';
+      return agentsFetch(`https://192.168.0.8:8443/kagents_core/api/bridge/agents/${requestKind}`, {
+        method: requestKind === 'invoke' ? 'POST' : 'GET',
+        headers: { 'x-ki-buddy-agents-client-id': clientId },
+      });
+    });
+    await Promise.all(requests);
+
+    expect(electronMock.fromPartition).toHaveBeenCalledWith('ki-buddy-agents-network-invoke', { cache: false });
+    expect(electronMock.fromPartition).toHaveBeenCalledWith('ki-buddy-agents-network-catalog', { cache: false });
+    expect(electronMock.fromPartition).toHaveBeenCalledTimes(2);
+    expect(invokeFetch.mock.calls[0]?.[1]).toMatchObject({ headers: expect.any(Headers) });
+    const invokeHeaders = invokeFetch.mock.calls[0]?.[1]?.headers;
+    const catalogHeaders = catalogFetch.mock.calls[0]?.[1]?.headers;
+    expect(invokeHeaders).toBeInstanceOf(Headers);
+    expect(catalogHeaders).toBeInstanceOf(Headers);
+    expect(new Headers(invokeHeaders).has('x-ki-buddy-agents-client-id')).toBe(false);
+    expect(new Headers(catalogHeaders).has('x-ki-buddy-agents-client-id')).toBe(false);
+  });
+
+  it('lets two invokes enter the shared network session concurrently', async () => {
+    const finishInvokes: Array<(response: Response) => void> = [];
+    const invokeFetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finishInvokes.push(resolve);
+        })
+    );
+    electronMock.fromPartition.mockImplementation(() => ({
+      fetch: invokeFetch,
+      setCertificateVerifyProc: vi.fn(),
+    }));
+    const agentsFetch = createAgentsNetworkFetch();
+
+    const firstInvoke = agentsFetch('https://192.168.0.8:8443/kagents_core/api/bridge/agents/invoke', {
+      method: 'POST',
+      headers: { 'x-ki-buddy-agents-client-id': '11111111-1111-4111-8111-111111111111' },
+    });
+    const secondInvoke = agentsFetch('https://192.168.0.8:8443/kagents_core/api/bridge/agents/invoke', {
+      method: 'POST',
+      headers: { 'x-ki-buddy-agents-client-id': '22222222-2222-4222-8222-222222222222' },
+    });
+
+    await vi.waitFor(() => expect(invokeFetch).toHaveBeenCalledTimes(2));
+    expect(electronMock.fromPartition).toHaveBeenCalledTimes(1);
+
+    finishInvokes.forEach((finish) => finish(Response.json({ state: 'completed' })));
+    await Promise.all([firstInvoke, secondInvoke]);
   });
 });

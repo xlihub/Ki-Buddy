@@ -45,12 +45,7 @@ type AgentsDescribeResult = Readonly<{
   outputSchema: Array<{ name: string; required: boolean; type: string }>;
 }>;
 
-type AgentsInvokeResult = Readonly<{
-  agentId: string;
-  requestId: string;
-  taskId: string;
-  text: string;
-}>;
+type AgentsInvokeResult = typeof invokeFixture;
 
 type HeldCatalogRequest = Readonly<{
   release: () => void;
@@ -429,7 +424,7 @@ async function createCoreConversation(
   workspace = os.tmpdir()
 ): Promise<string> {
   return page.evaluate(
-    async ({ conversationName, workspace }) => {
+    async ({ conversationName, workspace: workspacePath }) => {
       const port = (window as Window & { __backendPort?: number }).__backendPort;
       if (!port) throw new Error('Ki-Core backend port is unavailable in the renderer');
       const baseUrl = `http://127.0.0.1:${port}`;
@@ -450,7 +445,7 @@ async function createCoreConversation(
         body: JSON.stringify({
           name: conversationName,
           assistant: { id: assistantId },
-          extra: { workspace, custom_workspace: true, session_mode: 'default' },
+          extra: { workspace: workspacePath, custom_workspace: true, session_mode: 'default' },
         }),
       });
       if (!response.ok) {
@@ -934,7 +929,7 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
         await client.callTool({ name: 'agents_list', arguments: {} })
       );
       heldCatalog = agents.holdNextCatalog('A');
-      const staleAccountACall = client.callTool({ name: 'agents_list', arguments: { forceRefresh: true } });
+      const staleAccountACall = client.callTool({ name: 'agents_list', arguments: {} });
       await heldCatalog.waitForStart();
 
       await logoutThroughUi(page);
@@ -975,7 +970,7 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
     }
   });
 
-  test('dispatches one packaged scalar invoke for one successful describe', async ({
+  test('dispatches repeated packaged scalar invokes and returns the complete success response', async ({
     isolatedPackagedApp: electronApp,
     isolatedPackagedPage: page,
   }) => {
@@ -996,27 +991,26 @@ test.describe('Ki-Buddy packaged Agents authentication', () => {
           arguments: { agentId: 'agent-for-user-a', inputs: { query: 'Summarize this scalar input.' } },
         })
       );
-      const duplicateInvoke = await client.callTool({
+      const secondInvoke = await client.callTool({
         name: 'agents_invoke',
         arguments: { agentId: 'agent-for-user-a', inputs: { query: 'Dispatch this twice.' } },
       });
 
-      expect({ description, invokeResult, duplicateIsError: duplicateInvoke.isError }).toMatchObject({
-        description: { agentId: 'agent-for-user-a' },
-        invokeResult: {
-          agentId: 'agent-for-user-a',
-          requestId: 'request-redacted-1',
-          taskId: 'task-redacted-1',
-          text: 'Done.',
-        },
-        duplicateIsError: true,
-      });
+      expect(description).toMatchObject({ agentId: 'agent-for-user-a' });
+      expect(invokeResult).toEqual(invokeFixture);
+      expect(secondInvoke.isError).toBeUndefined();
       expect(agents.getInvokeRequests()).toEqual([
         {
           agentId: 'agent-for-user-a',
           agentType: 'workflow',
           conversationId: expect.stringMatching(/^ki-buddy-/u),
           inputs: { query: 'Summarize this scalar input.' },
+        },
+        {
+          agentId: 'agent-for-user-a',
+          agentType: 'workflow',
+          conversationId: expect.stringMatching(/^ki-buddy-/u),
+          inputs: { query: 'Dispatch this twice.' },
         },
       ]);
     } finally {

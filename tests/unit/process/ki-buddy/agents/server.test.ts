@@ -29,6 +29,7 @@ function createAdapterHarness() {
     once: processEvents.once.bind(processEvents),
   };
   const createClient = vi.fn(() => client);
+  const createClientId = vi.fn(() => '11111111-1111-4111-8111-111111111111');
   const createServer = vi.fn(() => server);
   const createTransport = vi.fn(() => transport);
   const watchParent = vi.fn((callback: () => void) => {
@@ -44,7 +45,7 @@ function createAdapterHarness() {
     createClient,
     createServer,
     createTransport,
-    dependencies: { createClient, createServer, createTransport, process: runtimeProcess, watchParent },
+    dependencies: { createClient, createClientId, createServer, createTransport, process: runtimeProcess, watchParent },
     processEvents,
     runtimeProcess,
     server,
@@ -66,9 +67,33 @@ describe('startAgentsMcpAdapter', () => {
     expect(harness.createClient).toHaveBeenCalledWith({
       bridgeUrl: 'http://127.0.0.1:43123',
       bridgeToken: 'bridge-secret',
+      clientId: '11111111-1111-4111-8111-111111111111',
     });
     expect(harness.createServer).toHaveBeenCalledWith(harness.client);
     expect(harness.connect).toHaveBeenCalledWith(harness.transport);
+  });
+
+  it('assigns a distinct client identity to every stdio process', async () => {
+    const first = createAdapterHarness();
+    const second = createAdapterHarness();
+    first.dependencies.createClientId.mockReturnValue('11111111-1111-4111-8111-111111111111');
+    second.dependencies.createClientId.mockReturnValue('22222222-2222-4222-8222-222222222222');
+
+    await Promise.all([
+      startAgentsMcpAdapter(first.dependencies as never),
+      startAgentsMcpAdapter(second.dependencies as never),
+    ]);
+
+    expect(first.createClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: '11111111-1111-4111-8111-111111111111',
+      })
+    );
+    expect(second.createClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: '22222222-2222-4222-8222-222222222222',
+      })
+    );
   });
 
   it('uses the production stdio transport and parent watcher by default', async () => {

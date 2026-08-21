@@ -8,9 +8,18 @@ import { _electron as electron } from 'playwright';
 import { createE2EEnvironment, resolveMainWindow, resolvePackagedApp, type PackagedApp } from '../../../fixtures';
 import { FIRST_RELEASE_MATRIX } from './firstReleaseMatrix';
 
-const { createSourceStateSha256 } = require('../../../../../packages/shared-scripts/src/kiBuddyRelease.js') as {
-  createSourceStateSha256: (root: string) => string;
-};
+type KiCoreReleaseIdentity = Readonly<{
+  releaseCommit: string;
+  repository: string;
+  tag: string;
+  version: string;
+}>;
+
+const { createSourceStateSha256, readKiBuddyRelease } =
+  require('../../../../../packages/shared-scripts/src/kiBuddyRelease.js') as {
+    createSourceStateSha256: (root: string) => string;
+    readKiBuddyRelease: (root: string) => Readonly<{ kiCore: KiCoreReleaseIdentity }>;
+  };
 
 export type ProductBuildEvidence = Readonly<{
   schemaVersion: 1;
@@ -120,6 +129,10 @@ export function readBackendBundleEvidence(packaged: PackagedApp): BackendBundleE
 
 export function currentSourceCommit(): string {
   return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: projectRoot, encoding: 'utf8' }).trim();
+}
+
+export function currentKiCoreRelease(): KiCoreReleaseIdentity {
+  return readKiBuddyRelease(projectRoot).kiCore;
 }
 
 export function currentSourceStateSha256(): string {

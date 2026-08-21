@@ -10,502 +10,224 @@ const validCatalog = {
       agentTitle: 'Feedback analyst',
       agentDescription: 'Summarizes customer feedback.',
       agentType: 'workflow',
-      defaultInputModes: [
-        {
-          name: 'attachment',
-          description: 'A source document.',
-          type: 'file',
-          required: true,
-          allowed_file_types: ['application/pdf'],
-        },
-      ],
-      defaultOutputModes: [{ name: 'summary', description: 'The generated summary.', type: 'text', required: true }],
+      defaultInputModes: [{ name: 'query', description: 'Query', type: 'text', required: true }],
+      defaultOutputModes: [{ name: 'summary', description: 'Summary', type: 'text', required: true }],
     },
   ],
 };
 
-const accountIdentity = { deploymentOrigin: 'https://agents.example.test', sessionEpoch: 1, userId: 'user-1' };
-const invokeGrant = { agentId: 'agent-feedback', identity: accountIdentity };
-
-describe('createAgentsClient', () => {
-  it('describes the exact schema for one current catalog candidate', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(Response.json({ identity: accountIdentity, catalog: validCatalog }));
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
-    });
-
-    await expect(client.describe('agent-feedback')).resolves.toEqual({
-      grant: invokeGrant,
-      description: {
-        agentId: 'agent-feedback',
-        title: 'Feedback analyst',
-        description: 'Summarizes customer feedback.',
-        agentType: 'workflow',
-        inputSchema: [
-          {
-            name: 'attachment',
-            description: 'A source document.',
-            type: 'file',
-            required: true,
-            allowed_file_types: ['application/pdf'],
-          },
-        ],
-        outputSchema: [{ name: 'summary', description: 'The generated summary.', type: 'text', required: true }],
-      },
-    });
-    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:43123/catalog', expect.any(Object));
+const createClient = (fetchImpl: typeof fetch, timeoutMs?: number) =>
+  createAgentsClient({
+    bridgeUrl: 'http://127.0.0.1:43123',
+    bridgeToken: 'bridge-secret',
+    clientId: '11111111-1111-4111-8111-111111111111',
+    fetchImpl,
+    ...(timeoutMs ? { timeoutMs, invokeTimeoutMs: timeoutMs } : {}),
   });
 
-  it('loads a complete inventory only through the authenticated loopback bridge', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(Response.json({ identity: accountIdentity, catalog: validCatalog }));
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
-    });
+describe('createAgentsClient', () => {
+  it('loads a safe inventory directly from the authenticated loopback bridge', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(Response.json(validCatalog)));
+    const client = createClient(fetchMock);
 
-    await expect(client.list()).resolves.toEqual({
+    await expect(client.list()).resolves.toMatchObject({
       total: 1,
-      agents: [
-        {
-          agentId: 'agent-feedback',
-          title: 'Feedback analyst',
-          description: 'Summarizes customer feedback.',
-          agentType: 'workflow',
-        },
-      ],
+      agents: [{ agentId: 'agent-feedback', title: 'Feedback analyst' }],
     });
     expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:43123/catalog', {
       method: 'GET',
       headers: {
         accept: 'application/json',
         authorization: 'Bearer bridge-secret',
+        'x-ki-buddy-agents-client-id': '11111111-1111-4111-8111-111111111111',
       },
       redirect: 'error',
       signal: expect.any(AbortSignal),
     });
   });
 
-  it('caches inventory for five minutes within the same deployment, account, and Adapter session', async () => {
-    let currentTime = 10_000;
-    const fetchMock = vi.fn((input: string | URL | Request) => {
-      const path = new URL(String(input)).pathname;
-      return Promise.resolve(
-        Response.json(path === '/session' ? accountIdentity : { identity: accountIdentity, catalog: validCatalog })
-      );
-    });
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock as typeof fetch,
-      now: () => currentTime,
+  it('fetches the current catalog for every list and describe call without session cache state', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(Response.json(validCatalog)));
+    const client = createClient(fetchMock);
+
+    await client.list();
+    await client.list();
+    await expect(client.describe('agent-feedback')).resolves.toMatchObject({
+      agentId: 'agent-feedback',
+      inputSchema: [{ name: 'query', type: 'text', required: true }],
     });
 
-    await client.list();
-    await client.list();
-    currentTime += 5 * 60 * 1000;
-    await client.list();
-
-    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
-      '/catalog',
-      '/session',
-      '/catalog',
-    ]);
-  });
-
-  it('forces a catalog refresh without using the cached inventory', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(Response.json({ identity: accountIdentity, catalog: validCatalog })));
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
-    });
-
-    await client.list();
-    await client.list({ forceRefresh: true });
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls.every(([input]) => new URL(String(input)).pathname === '/catalog')).toBe(true);
   });
 
-  it('does not reuse a previous account inventory after the session identity changes', async () => {
-    const accountBIdentity = { deploymentOrigin: 'https://agents.example.test', sessionEpoch: 2, userId: 'user-2' };
-    const accountBCatalog = {
-      status: 'ok',
-      total: 1,
-      agents: [
-        {
-          agentId: 'agent-account-b',
-          agentTitle: 'Account B agent',
-          agentDescription: '',
-          agentType: 'workflow',
-          defaultInputModes: [],
-          defaultOutputModes: [],
-        },
-      ],
+  it('sends only the selected agent and scalar inputs to the loopback invoke endpoint', async () => {
+    const remoteResult = {
+      status: 'submitted',
+      flow_instance_id: 'task-1',
+      request_id: 'request-1',
+      result: { result_file: { name: 'statement.xlsx' }, rows: [{ amount: 12.5 }] },
     };
-    const responses = [
-      Response.json({ identity: accountIdentity, catalog: validCatalog }),
-      Response.json(accountBIdentity),
-      Response.json({ identity: accountBIdentity, catalog: accountBCatalog }),
-    ];
-    const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
+    const fetchMock = vi.fn().mockResolvedValue(Response.json(remoteResult));
+    const client = createClient(fetchMock);
+
+    await expect(client.invoke('agent-feedback', { query: 'Summarize this.' })).resolves.toEqual(remoteResult);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      agentId: 'agent-feedback',
+      inputs: { query: 'Summarize this.' },
     });
-
-    await client.list();
-    await expect(client.list()).resolves.toMatchObject({ agents: [{ agentId: 'agent-account-b' }] });
-
-    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
-      '/catalog',
-      '/session',
-      '/catalog',
-    ]);
   });
 
-  it('does not reuse inventory after the same account starts a new authenticated session', async () => {
-    const renewedIdentity = { ...accountIdentity, sessionEpoch: 2 };
-    const renewedCatalog = {
-      ...validCatalog,
-      agents: [{ ...validCatalog.agents[0], agentId: 'agent-after-reauthentication' }],
-    };
-    const responses = [
-      Response.json({ identity: accountIdentity, catalog: validCatalog }),
-      Response.json(renewedIdentity),
-      Response.json({ identity: renewedIdentity, catalog: renewedCatalog }),
-    ];
-    const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
-    });
+  it('does not require a fixed Bridge invoke result envelope', async () => {
+    const result = ['remote', { nested: true }, 12];
+    const client = createClient(vi.fn().mockResolvedValue(Response.json(result)));
 
-    await client.list();
-    await expect(client.list()).resolves.toMatchObject({
-      agents: [{ agentId: 'agent-after-reauthentication' }],
-    });
-
-    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
-      '/catalog',
-      '/session',
-      '/catalog',
-    ]);
+    await expect(client.invoke('agent-feedback', {})).resolves.toEqual(result);
   });
 
-  it('does not reuse inventory when the same Adapter session changes deployment origin', async () => {
-    const otherDeploymentIdentity = {
-      deploymentOrigin: 'https://other-agents.example.test',
-      sessionEpoch: 1,
-      userId: 'user-1',
-    };
-    const otherDeploymentCatalog = {
-      ...validCatalog,
-      agents: [{ ...validCatalog.agents[0], agentId: 'agent-other-deployment' }],
-    };
-    const responses = [
-      Response.json({ identity: accountIdentity, catalog: validCatalog }),
-      Response.json(otherDeploymentIdentity),
-      Response.json({ identity: otherDeploymentIdentity, catalog: otherDeploymentCatalog }),
-    ];
-    const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
-    });
+  it('uses a short catalog timeout and a separate long invoke timeout by default', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const client = createClient(vi.fn().mockImplementation(() => Promise.resolve(Response.json(validCatalog))));
 
     await client.list();
-    await expect(client.list()).resolves.toMatchObject({ agents: [{ agentId: 'agent-other-deployment' }] });
+    await client.invoke('agent-feedback', {});
 
-    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
-      '/catalog',
-      '/session',
-      '/catalog',
-    ]);
+    expect(timeout).toHaveBeenNthCalledWith(1, 30_000);
+    expect(timeout).toHaveBeenNthCalledWith(2, 310_000);
+    timeout.mockRestore();
   });
 
-  it('does not share inventory across Adapter sessions', async () => {
-    const fetchA = vi.fn(() => Promise.resolve(Response.json({ identity: accountIdentity, catalog: validCatalog })));
-    const fetchB = vi.fn(() => Promise.resolve(Response.json({ identity: accountIdentity, catalog: validCatalog })));
-    const clientA = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret-a',
-      fetchImpl: fetchA as typeof fetch,
-    });
-    const clientB = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43124',
-      bridgeToken: 'bridge-secret-b',
-      fetchImpl: fetchB as typeof fetch,
-    });
-
-    await clientA.list();
-    await clientB.list();
-
-    expect(fetchA).toHaveBeenCalledOnce();
-    expect(fetchB).toHaveBeenCalledOnce();
-  });
-
-  it('clears the cached account after authentication is invalidated', async () => {
-    const responses = [
-      Response.json({ identity: accountIdentity, catalog: validCatalog }),
-      Response.json({ error: 'agents_auth_required' }, { status: 401 }),
-      Response.json({ identity: accountIdentity, catalog: validCatalog }),
-    ];
-    const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
-    });
-
-    await client.list();
-    await expect(client.list()).rejects.toMatchObject({ code: 'auth' });
-    await client.list();
-
-    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
-      '/catalog',
-      '/session',
-      '/catalog',
-    ]);
-  });
-
-  it('clears cached inventory when the session epoch is incompatible', async () => {
-    const responses = [
-      Response.json({ identity: accountIdentity, catalog: validCatalog }),
-      Response.json({ ...accountIdentity, sessionEpoch: -1 }),
-      Response.json({ identity: accountIdentity, catalog: validCatalog }),
-    ];
-    const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
-    });
-
-    await client.list();
-    await expect(client.list()).rejects.toMatchObject({ code: 'contract' });
-    await client.list();
-
-    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
-      '/catalog',
-      '/session',
-      '/catalog',
-    ]);
-  });
-
-  it('reconfirms catalog membership before describe and discards a revoked candidate', async () => {
-    const emptyCatalog = { status: 'ok', total: 0, agents: [] };
-    const responses = [
-      Response.json({ identity: accountIdentity, catalog: validCatalog }),
-      Response.json({ identity: accountIdentity, catalog: emptyCatalog }),
-      Response.json({ identity: accountIdentity, catalog: emptyCatalog }),
-    ];
-    const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
-    });
-
-    await client.list();
-    await expect(client.describe('agent-feedback')).rejects.toMatchObject({ code: 'not_found' });
-    await expect(client.list()).resolves.toEqual({ total: 0, agents: [] });
-
-    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
-      '/catalog',
-      '/catalog',
-      '/catalog',
-    ]);
-  });
-
-  it('fails closed when the selected candidate schema is incompatible', async () => {
-    const incompatibleCatalog = {
-      ...validCatalog,
-      agents: [{ ...validCatalog.agents[0], defaultInputModes: [{ name: 'query', type: 'text' }] }],
-    };
-    const fetchMock = vi.fn(() =>
-      Promise.resolve(Response.json({ identity: accountIdentity, catalog: incompatibleCatalog }))
+  it('reports a disconnected dispatched invoke as result unknown', async () => {
+    let dispatched = false;
+    const fetchMock = vi.fn(
+      (_input: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          dispatched = true;
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+        })
     );
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock as typeof fetch,
-    });
+    const client = createClient(fetchMock as typeof fetch, 1_000);
 
-    await expect(client.describe('agent-feedback')).rejects.toMatchObject({ code: 'contract' });
+    await expect(client.invoke('agent-feedback', {})).rejects.toMatchObject({
+      code: 'result_unknown',
+      message: 'Agent execution result is unknown',
+      correlation: { agentId: 'agent-feedback' },
+    });
+    expect(dispatched).toBe(true);
   });
 
-  it('discards cached inventory when a forced refresh finds an ambiguous catalog', async () => {
-    const duplicateCatalog = {
-      ...validCatalog,
-      total: 2,
-      agents: [validCatalog.agents[0], validCatalog.agents[0]],
-    };
-    const responses = [
-      Response.json({ identity: accountIdentity, catalog: validCatalog }),
-      Response.json({ identity: accountIdentity, catalog: duplicateCatalog }),
-      Response.json({ identity: accountIdentity, catalog: validCatalog }),
-    ];
-    const fetchMock = vi.fn(() => Promise.resolve(responses.shift() as Response));
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
-    });
+  it('keeps only the dispatched agent identity from a sanitized Bridge failure', async () => {
+    const client = createClient(
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: 'agents_result_unknown',
+            correlation: { agentId: 'agent-feedback', requestId: 'request-1' },
+          },
+          { status: 502 }
+        )
+      )
+    );
 
-    await client.list();
-    await expect(client.list({ forceRefresh: true })).rejects.toMatchObject({ code: 'ambiguous' });
-    await client.list();
+    const error = await client.invoke('agent-feedback', {}).catch((value: unknown) => value);
 
-    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
-      '/catalog',
-      '/catalog',
-      '/catalog',
-    ]);
+    expect(error).toMatchObject({ code: 'result_unknown' });
+    expect((error as { correlation?: unknown }).correlation).toEqual({ agentId: 'agent-feedback' });
   });
 
-  it('rejects non-loopback bridge configuration before making a request', async () => {
+  it.each([null, [], 'agent-feedback'])('rejects malformed invoke failure correlation %j', async (correlation) => {
+    const client = createClient(
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: 'agents_result_unknown',
+            correlation,
+          },
+          { status: 502 }
+        )
+      )
+    );
+
+    await expect(client.invoke('agent-feedback', {})).rejects.toMatchObject({
+      code: 'contract',
+      message: 'Agents invoke failure correlation is incompatible',
+    });
+  });
+
+  it('rejects result-unknown invoke failure without correlation', async () => {
+    const client = createClient(
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: 'agents_result_unknown',
+          },
+          { status: 502 }
+        )
+      )
+    );
+
+    await expect(client.invoke('agent-feedback', {})).rejects.toMatchObject({
+      code: 'contract',
+      message: 'Agents invoke failure correlation is incompatible',
+    });
+  });
+
+  it('rejects invoke failure correlation for a different agent', async () => {
+    const client = createClient(
+      vi.fn().mockResolvedValue(
+        Response.json(
+          {
+            error: 'agents_result_unknown',
+            correlation: { agentId: 'another-agent' },
+          },
+          { status: 502 }
+        )
+      )
+    );
+
+    await expect(client.invoke('agent-feedback', {})).rejects.toMatchObject({
+      code: 'contract',
+      message: 'Agents invoke failure correlation is incompatible',
+    });
+  });
+
+  it('maps catalog connection failure to network without exposing transport details', async () => {
+    const client = createClient(vi.fn().mockRejectedValue(new Error('ECONNREFUSED token=secret')));
+
+    await expect(client.list()).rejects.toMatchObject({
+      code: 'network',
+      message: 'Agents service is temporarily unavailable',
+    });
+  });
+
+  it('rejects non-loopback bridge configuration before making a request', () => {
     const fetchMock = vi.fn();
 
     expect(() =>
       createAgentsClient({
         bridgeUrl: 'https://agents.example.test',
         bridgeToken: 'bridge-secret',
+        clientId: '11111111-1111-4111-8111-111111111111',
         fetchImpl: fetchMock,
       })
     ).toThrow('Agents Adapter bridge URL must use loopback HTTP');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('returns stable error categories without exposing bridge response details', async () => {
-    const authClient = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: vi.fn().mockResolvedValue(Response.json({ error: 'secret detail' }, { status: 401 })),
-    });
-    const contractClient = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: vi.fn().mockResolvedValue(Response.json({ error: 'agents_contract_error' }, { status: 502 })),
-    });
-    const upstreamNetworkClient = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: vi.fn().mockResolvedValue(Response.json({ error: 'agents_network_error' }, { status: 502 })),
-    });
-    const serverClient = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: vi.fn().mockResolvedValue(Response.json({ error: 'agents_server_error' }, { status: 502 })),
-    });
-    const networkClient = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:43123')),
-    });
+  it.each(['', 'not-a-client-id', '11111111-1111-1111-1111-111111111111'])(
+    'rejects invalid stdio client identity %j before making a request',
+    (clientId) => {
+      const fetchMock = vi.fn();
 
-    await expect(authClient.list()).rejects.toMatchObject({ code: 'auth', message: 'Agents login is required' });
-    await expect(contractClient.list()).rejects.toMatchObject({
-      code: 'contract',
-      message: 'Agents catalog response is incompatible',
-    });
-    await expect(upstreamNetworkClient.list()).rejects.toMatchObject({
-      code: 'network',
-      message: 'Agents Adapter bridge is unavailable',
-    });
-    await expect(serverClient.list()).rejects.toMatchObject({
-      code: 'server',
-      message: 'Agents catalog service is unavailable',
-    });
-    await expect(networkClient.list()).rejects.toMatchObject({
-      code: 'network',
-      message: 'Agents Adapter bridge is unavailable',
-    });
-  });
-
-  it('preserves validated invoke correlations from a safe Bridge failure', async () => {
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: vi.fn().mockResolvedValue(
-        Response.json(
-          {
-            error: 'agents_invoke_failed',
-            correlation: { agentId: 'agent-feedback', requestId: 'request-1' },
-          },
-          { status: 502 }
-        )
-      ),
-    });
-
-    await expect(client.invoke(invokeGrant, { query: 'Summarize this.' })).rejects.toMatchObject({
-      code: 'invoke_failed',
-      message: 'Agent execution failed',
-      correlation: { agentId: 'agent-feedback', requestId: 'request-1' },
-    });
-  });
-
-  it.each([
-    ['a missing agentId', { taskId: 'task-1', requestId: 'request-1' }],
-    ['a rewritten agentId', { agentId: 'other-agent', taskId: 'task-1', requestId: 'request-1' }],
-    ['an empty requestId', { agentId: 'agent-feedback', taskId: 'task-1', requestId: ' ' }],
-    ['an oversized taskId', { agentId: 'agent-feedback', taskId: 't'.repeat(201), requestId: 'request-1' }],
-  ])('rejects Bridge failure correlation with %s', async (_name, correlation) => {
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: vi
-        .fn()
-        .mockResolvedValue(Response.json({ error: 'agents_invoke_failed', correlation }, { status: 502 })),
-    });
-
-    await expect(client.invoke(invokeGrant, {})).rejects.toMatchObject({ code: 'contract' });
-  });
-
-  it.each([
-    ['missing', { taskId: 'task-1', requestId: 'request-1', text: 'Done.' }],
-    ['rewritten', { agentId: 'other-agent', taskId: 'task-1', requestId: 'request-1', text: 'Done.' }],
-  ])('rejects a successful Bridge invoke result with %s agentId', async (_name, result) => {
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: vi.fn().mockResolvedValue(Response.json(result)),
-    });
-
-    await expect(client.invoke(invokeGrant, {})).rejects.toMatchObject({ code: 'contract' });
-  });
-
-  it('sends the describe-bound identity and returns the validated Bridge result', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      Response.json({
-        agentId: 'agent-feedback',
-        taskId: 'task-1',
-        requestId: 'request-1',
-        text: 'Done.',
-      })
-    );
-    const client = createAgentsClient({
-      bridgeUrl: 'http://127.0.0.1:43123',
-      bridgeToken: 'bridge-secret',
-      fetchImpl: fetchMock,
-    });
-
-    await expect(client.invoke(invokeGrant, { query: 'Summarize this.' })).resolves.toEqual({
-      agentId: 'agent-feedback',
-      taskId: 'task-1',
-      requestId: 'request-1',
-      text: 'Done.',
-    });
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
-      agentId: 'agent-feedback',
-      catalogIdentity: accountIdentity,
-      inputs: { query: 'Summarize this.' },
-    });
-  });
+      expect(() =>
+        createAgentsClient({
+          bridgeUrl: 'http://127.0.0.1:43123',
+          bridgeToken: 'bridge-secret',
+          clientId,
+          fetchImpl: fetchMock,
+        })
+      ).toThrow('Agents Adapter client identity is invalid');
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
+  );
 });

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { randomUUID } from 'node:crypto';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { AGENTS_MCP_BRIDGE_TOKEN_ENV, AGENTS_MCP_BRIDGE_URL_ENV, createAgentsClient } from './client';
 import { AgentsMcpError } from './errors';
@@ -9,6 +10,7 @@ type AdapterServer = ReturnType<typeof createAgentsMcpServer>;
 type AdapterTransport = InstanceType<typeof StdioServerTransport>;
 type AgentsMcpAdapterDependencies = Readonly<{
   createClient: typeof createAgentsClient;
+  createClientId: () => string;
   createServer: (client: ReturnType<typeof createAgentsClient>) => AdapterServer;
   createTransport: () => AdapterTransport;
   process: AdapterProcess;
@@ -17,6 +19,7 @@ type AgentsMcpAdapterDependencies = Readonly<{
 
 const defaultDependencies: AgentsMcpAdapterDependencies = {
   createClient: createAgentsClient,
+  createClientId: randomUUID,
   createServer: createAgentsMcpServer,
   createTransport: () => new StdioServerTransport(),
   process,
@@ -39,6 +42,7 @@ export async function startAgentsMcpAdapter(overrides: Partial<AgentsMcpAdapterD
     const client = dependencies.createClient({
       bridgeUrl: runtimeProcess.env[AGENTS_MCP_BRIDGE_URL_ENV] ?? '',
       bridgeToken: runtimeProcess.env[AGENTS_MCP_BRIDGE_TOKEN_ENV] ?? '',
+      clientId: dependencies.createClientId(),
     });
     const server = dependencies.createServer(client);
     const transport = dependencies.createTransport();

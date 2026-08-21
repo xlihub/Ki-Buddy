@@ -1,14 +1,13 @@
 import type { AgentsInvokeCorrelation } from './contracts';
 
 export type AgentsMcpErrorCode =
-  | 'ambiguous'
   | 'auth'
   | 'configuration'
   | 'contract'
   | 'invalid_input'
-  | 'invoke_failed'
   | 'network'
   | 'not_found'
+  | 'result_unknown'
   | 'server';
 
 type AgentsMcpErrorPresentation = Readonly<{
@@ -18,11 +17,6 @@ type AgentsMcpErrorPresentation = Readonly<{
 }>;
 
 const AGENTS_MCP_ERROR_PRESENTATIONS = {
-  ambiguous: {
-    bridgeError: 'agents_ambiguous',
-    bridgeStatus: 409,
-    message: 'Agent identity is ambiguous in the current catalog',
-  },
   auth: { bridgeError: 'agents_auth_required', bridgeStatus: 401, message: 'Agents login is required' },
   configuration: {
     bridgeError: 'agents_network_error',
@@ -32,43 +26,42 @@ const AGENTS_MCP_ERROR_PRESENTATIONS = {
   contract: {
     bridgeError: 'agents_contract_error',
     bridgeStatus: 502,
-    message: 'Agents catalog response is incompatible',
+    message: 'Agents response is incompatible',
   },
   invalid_input: {
     bridgeError: 'agents_invalid_input',
     bridgeStatus: 400,
     message: 'Agent inputs do not match the current scalar schema',
   },
-  invoke_failed: {
-    bridgeError: 'agents_invoke_failed',
-    bridgeStatus: 502,
-    message: 'Agent execution failed',
-  },
   network: {
     bridgeError: 'agents_network_error',
     bridgeStatus: 502,
-    message: 'Agents Adapter bridge is unavailable',
+    message: 'Agents service is temporarily unavailable',
   },
   not_found: {
     bridgeError: 'agents_not_found',
     bridgeStatus: 404,
     message: 'Agent is not in the current catalog',
   },
+  result_unknown: {
+    bridgeError: 'agents_result_unknown',
+    bridgeStatus: 502,
+    message: 'Agent execution result is unknown',
+  },
   server: {
     bridgeError: 'agents_server_error',
     bridgeStatus: 502,
-    message: 'Agents catalog service is unavailable',
+    message: 'Agents service returned an error',
   },
 } as const satisfies Readonly<Record<AgentsMcpErrorCode, AgentsMcpErrorPresentation>>;
 
 const BRIDGE_ERROR_CODES = {
-  agents_ambiguous: 'ambiguous',
   agents_auth_required: 'auth',
   agents_contract_error: 'contract',
   agents_invalid_input: 'invalid_input',
-  agents_invoke_failed: 'invoke_failed',
   agents_network_error: 'network',
   agents_not_found: 'not_found',
+  agents_result_unknown: 'result_unknown',
   agents_server_error: 'server',
 } as const satisfies Readonly<Record<string, AgentsMcpErrorCode>>;
 

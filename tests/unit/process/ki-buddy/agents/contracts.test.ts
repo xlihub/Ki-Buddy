@@ -2,21 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeAgentsCatalog,
   normalizeAgentsCatalogSelection,
-  normalizeAgentsInvokeResponse,
   validateAgentsScalarInputs,
 } from '@/process/ki-buddy/agents/contracts';
 import catalogFixture from '../../../../fixtures/ki-buddy/agents/catalog.json';
-import failedInvokeFixture from '../../../../fixtures/ki-buddy/agents/invoke-failed.json';
-import invokeFixture from '../../../../fixtures/ki-buddy/agents/invoke.json';
-
-function captureInvokeFailure(value: unknown): unknown {
-  try {
-    normalizeAgentsInvokeResponse(value, 'agent-1');
-  } catch (error) {
-    return error;
-  }
-  throw new Error('Expected Agents invoke response normalization to fail');
-}
 
 describe('safe Agents catalog projection', () => {
   it('projects the exact supported schema for one fixture candidate without current catalog credential fields', () => {
@@ -80,8 +68,8 @@ describe('safe Agents catalog projection', () => {
     });
   });
 
-  it('rejects a catalog whose declared total does not match the complete inventory', () => {
-    expect(() =>
+  it('derives the public total from usable entries instead of trusting the remote total', () => {
+    expect(
       normalizeAgentsCatalog({
         status: 'ok',
         total: 2,
@@ -94,14 +82,14 @@ describe('safe Agents catalog projection', () => {
           },
         ],
       })
-    ).toThrow('Agents catalog total does not match the inventory');
+    ).toMatchObject({ total: 1 });
   });
 
-  it('rejects malformed or duplicate entries instead of silently omitting them', () => {
-    expect(() =>
+  it('keeps usable entries when unrelated entries are malformed or duplicated', () => {
+    expect(
       normalizeAgentsCatalog({
         status: 'ok',
-        total: 2,
+        total: 4,
         agents: [
           {
             agentId: 'agent-feedback',
@@ -109,23 +97,22 @@ describe('safe Agents catalog projection', () => {
             agentDescription: 'Summarizes customer feedback.',
             agentType: 'workflow',
           },
-          {
-            agentId: 'agent-feedback',
-            agentTitle: 'Duplicate',
-            agentDescription: '',
-            agentType: 'workflow',
-          },
+          { agentId: 'agent-feedback', agentTitle: 'Duplicate', agentType: 'workflow' },
+          { agentId: 'agent-malformed', agentTitle: '', agentType: 'workflow' },
+          null,
         ],
       })
-    ).toThrow('Agents catalog contains a duplicate agentId');
-
-    expect(() =>
-      normalizeAgentsCatalog({
-        status: 'ok',
-        total: 1,
-        agents: [{ agentId: 'agent-feedback', agentTitle: '', agentType: 'workflow' }],
-      })
-    ).toThrow('Agents catalog agentTitle must be a non-empty string');
+    ).toEqual({
+      total: 1,
+      agents: [
+        {
+          agentId: 'agent-feedback',
+          title: 'Feedback analyst',
+          description: 'Summarizes customer feedback.',
+          agentType: 'workflow',
+        },
+      ],
+    });
   });
 
   it('fails when a catalog exceeds the supported complete-inventory capacity', () => {
@@ -209,66 +196,5 @@ describe('scalar invoke input enforcement', () => {
     };
 
     expect(() => validateAgentsScalarInputs(description, { query: ['not', 'scalar'] })).toThrow('scalar schema');
-  });
-});
-
-describe('safe invoke result projection', () => {
-  it('returns only standardized invoke correlations and text from a compatible fixture response', () => {
-    expect(normalizeAgentsInvokeResponse(invokeFixture, 'agent-1')).toEqual({
-      agentId: 'agent-1',
-      taskId: 'task-redacted-1',
-      requestId: 'request-redacted-1',
-      text: 'Done.',
-    });
-  });
-
-  it('rejects a successful invoke response without stable request correlation', () => {
-    expect(() =>
-      normalizeAgentsInvokeResponse(
-        {
-          status: 'completed',
-          flow_instance_id: 'task-1',
-          result: { text: 'Done.' },
-        },
-        'agent-1'
-      )
-    ).toThrow('Agents invoke request_id must be a string');
-  });
-
-  it('preserves only stable correlations when the Gateway reports a failed invoke', () => {
-    expect(captureInvokeFailure(failedInvokeFixture)).toMatchObject({
-      code: 'invoke_failed',
-      correlation: {
-        agentId: 'agent-1',
-        requestId: 'request-redacted-failed-1',
-      },
-    });
-  });
-
-  it.each([
-    ['task correlation', { status: 'failed', flow_instance_id: 'task-1' }, { agentId: 'agent-1', taskId: 'task-1' }],
-    ['agent correlation', { status: 'failed' }, { agentId: 'agent-1' }],
-  ])('preserves the available %s for an early Gateway failure', (_name, response, correlation) => {
-    expect(captureInvokeFailure(response)).toMatchObject({ code: 'invoke_failed', correlation });
-  });
-
-  it.each([
-    [
-      'non-string request_id',
-      { status: 'failed', flow_instance_id: 'task-1', request_id: 42 },
-      { agentId: 'agent-1', taskId: 'task-1' },
-    ],
-    [
-      'empty flow_instance_id',
-      { status: 'failed', flow_instance_id: ' ', request_id: 'request-1' },
-      { agentId: 'agent-1', requestId: 'request-1' },
-    ],
-    [
-      'oversized request_id',
-      { status: 'failed', flow_instance_id: 'task-1', request_id: 'r'.repeat(201) },
-      { agentId: 'agent-1', taskId: 'task-1' },
-    ],
-  ])('rejects a failed Gateway response with %s while preserving valid correlation', (_name, response, correlation) => {
-    expect(captureInvokeFailure(response)).toMatchObject({ code: 'contract', correlation });
   });
 });

@@ -1,11 +1,20 @@
 import type { ProductFeatureId, ProductResourceOrigin } from '@/common/platform/ki-buddy';
 import type { IMcpServer } from '@/common/config/storage';
+import type { Assistant } from '@/common/types/agent/assistantTypes';
+import type { KiBuddyProductRuntime } from '../kiBuddyRuntime';
 
 type ProductResourceDefinition = Readonly<{
   featureId: ProductFeatureId;
   id: string;
   resourceName?: string;
 }>;
+
+type ProductMcpResourceDefinition = ProductResourceDefinition &
+  Readonly<{
+    backendName: string;
+    scriptName: string;
+    tools: Readonly<Record<string, Readonly<{ descriptionKey: string; name: string }>>>;
+  }>;
 
 const KI_CLI_AGENT = {
   id: '632f31d2',
@@ -14,6 +23,28 @@ const KI_CLI_AGENT = {
   agentSource: 'internal',
   agentType: 'aionrs',
 } as const satisfies ProductResourceDefinition & { agentSource: string; agentType: string };
+
+const AGENTS_MCP_ADAPTER = {
+  id: 'builtin:agents-mcp-adapter',
+  featureId: 'tools',
+  resourceName: 'agents-mcp-adapter',
+  backendName: 'agents-mcp-adapter',
+  scriptName: 'builtin-mcp-agents.js',
+  tools: {
+    describe: {
+      name: 'agents_describe',
+      descriptionKey: 'settings.kiBuddy.agentsDescribeDescription',
+    },
+    invoke: {
+      name: 'agents_invoke',
+      descriptionKey: 'settings.kiBuddy.agentsInvokeDescription',
+    },
+    list: {
+      name: 'agents_list',
+      descriptionKey: 'settings.kiBuddy.agentsListDescription',
+    },
+  },
+} as const satisfies ProductMcpResourceDefinition;
 
 /** Stable product-owned identities used by every Agent, Assistant, Skill, and MCP catalog projection. */
 export const KI_BUDDY_PRODUCT_RESOURCE_REGISTRY = {
@@ -38,6 +69,12 @@ export const KI_BUDDY_PRODUCT_RESOURCE_REGISTRY = {
       featureId: 'assistants',
       resourceName: 'Excel Creator',
       source: 'builtin',
+    },
+    agentsExecution: {
+      id: 'agents-executor',
+      featureId: 'assistants',
+      source: 'builtin',
+      requiredMcpResourceIds: [AGENTS_MCP_ADAPTER.id],
     },
     kiCli: {
       id: `bare:${KI_CLI_AGENT.id}`,
@@ -65,29 +102,14 @@ export const KI_BUDDY_PRODUCT_RESOURCE_REGISTRY = {
       featureId: 'skills',
       backendName: 'officecli-xlsx',
     },
+    agentsExecution: {
+      id: 'builtin:ki-buddy-agents-execution',
+      featureId: 'skills',
+      backendName: 'ki-buddy-agents-execution',
+    },
   },
   mcp: {
-    agentsAdapter: {
-      id: 'builtin:agents-mcp-adapter',
-      featureId: 'tools',
-      resourceName: 'agents-mcp-adapter',
-      backendName: 'agents-mcp-adapter',
-      scriptName: 'builtin-mcp-agents.js',
-      tools: {
-        describe: {
-          name: 'agents_describe',
-          descriptionKey: 'settings.kiBuddy.agentsDescribeDescription',
-        },
-        invoke: {
-          name: 'agents_invoke',
-          descriptionKey: 'settings.kiBuddy.agentsInvokeDescription',
-        },
-        list: {
-          name: 'agents_list',
-          descriptionKey: 'settings.kiBuddy.agentsListDescription',
-        },
-      },
-    },
+    agentsAdapter: AGENTS_MCP_ADAPTER,
   },
 } as const;
 
@@ -107,6 +129,34 @@ export function resolveKiBuddyProductMcpResourceId(
   }
   const normalizedScriptPath = server.transport.args[0].replace(/\\/gu, '/');
   return normalizedScriptPath.endsWith(`/${definition.scriptName}`) ? definition.id : null;
+}
+
+/** Resolves required product MCP resources for one official Assistant to current backend server ids. */
+export function resolveKiBuddyAssistantRequiredMcpServerIds(
+  assistantIdentity: Pick<Assistant, 'id' | 'source'> | null | undefined,
+  servers: readonly Pick<IMcpServer, 'builtin' | 'id' | 'name' | 'transport'>[]
+): string[] {
+  const assistant = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant.agentsExecution;
+  if (assistantIdentity?.id !== assistant.id || assistantIdentity.source !== assistant.source) return [];
+  const requiredResourceIds = new Set<string>(assistant.requiredMcpResourceIds);
+  return servers
+    .filter((server) => {
+      const resourceId = resolveKiBuddyProductMcpResourceId(server);
+      return resourceId !== null && requiredResourceIds.has(resourceId);
+    })
+    .map(({ id }) => id);
+}
+
+/** Applies required MCP resources only when the explicit Ki-Buddy runtime capability is present. */
+export function resolveKiBuddyAssistantEffectiveMcpServerIds(
+  productRuntime: Pick<KiBuddyProductRuntime, 'id'> | null,
+  assistantIdentity: Pick<Assistant, 'id' | 'source'> | null | undefined,
+  servers: readonly Pick<IMcpServer, 'builtin' | 'id' | 'name' | 'transport'>[],
+  selectedServerIds: readonly string[]
+): string[] {
+  if (!productRuntime) return [...selectedServerIds];
+  const requiredServerIds = resolveKiBuddyAssistantRequiredMcpServerIds(assistantIdentity, servers);
+  return [...new Set([...selectedServerIds, ...requiredServerIds])];
 }
 
 /** Resolves product-owned UI copy without changing the Adapter's stable MCP protocol metadata. */
