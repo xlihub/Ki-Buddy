@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { KI_BUDDY_PRODUCT_RESOURCE_REGISTRY } from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
 
 const {
   modelSelectionMock,
@@ -22,6 +23,8 @@ const {
   sendMock,
   navigateMock,
   loadProductSkillCatalogMock,
+  ensureBackendMcpCatalogMock,
+  getKiBuddyProductRuntimeMock,
 } = vi.hoisted(() => ({
   modelSelectionMock: {
     modelList: [],
@@ -125,6 +128,8 @@ const {
   },
   navigateMock: vi.fn(),
   loadProductSkillCatalogMock: vi.fn(),
+  ensureBackendMcpCatalogMock: vi.fn(),
+  getKiBuddyProductRuntimeMock: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -151,8 +156,12 @@ vi.mock('@/renderer/services/runtime/kiBuddySkillCatalog', () => ({
   loadProductSkillCatalog: loadProductSkillCatalogMock,
 }));
 
+vi.mock('@/renderer/services/runtime/kiBuddyRuntime', () => ({
+  getKiBuddyProductRuntime: getKiBuddyProductRuntimeMock,
+}));
+
 vi.mock('@/renderer/hooks/mcp/catalog', () => ({
-  ensureBackendMcpCatalog: vi.fn().mockResolvedValue({ allServers: [] }),
+  ensureBackendMcpCatalog: ensureBackendMcpCatalogMock,
 }));
 
 vi.mock('@/renderer/hooks/chat/useInputFocusRing', () => ({
@@ -273,6 +282,21 @@ const assistantDetailFixture = {
   },
 };
 
+const agentsAdapterServerFixture = {
+  id: 'mcp-current-account',
+  name: KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp.agentsAdapter.backendName,
+  enabled: true,
+  builtin: true,
+  transport: {
+    type: 'stdio' as const,
+    command: 'node',
+    args: [`/app/${KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp.agentsAdapter.scriptName}`],
+  },
+  created_at: 1,
+  updated_at: 1,
+  original_json: '{}',
+};
+
 vi.mock('swr', async () => {
   const actual = await vi.importActual<typeof import('swr')>('swr');
   return {
@@ -313,6 +337,10 @@ describe('GuidPage', () => {
     navigateMock.mockReset();
     loadProductSkillCatalogMock.mockReset();
     loadProductSkillCatalogMock.mockResolvedValue({ entries: [], hiddenResources: [], visibleSkills: [] });
+    ensureBackendMcpCatalogMock.mockReset();
+    ensureBackendMcpCatalogMock.mockResolvedValue({ allServers: [] });
+    getKiBuddyProductRuntimeMock.mockReset();
+    getKiBuddyProductRuntimeMock.mockReturnValue({ id: 'ki-buddy' });
     swrMock.useSWRMock.mockReturnValue({ data: null });
     capturedGuidActionRowProps.length = 0;
     capturedAssistantSelectionAreaProps.length = 0;
@@ -329,6 +357,7 @@ describe('GuidPage', () => {
     modelSelectionMock.resetCurrentModel.mockReset();
     agentSelectionMock.currentAgentModeOptions = [];
     agentSelectionMock.currentAcpCachedModelInfo = null;
+    agentSelectionMock.selectedAssistantId = 'bare-aionrs';
     agentSelectionMock.selectedAssistantBackend = 'aionrs';
     agentSelectionMock.setSelectedAcpModel.mockReset();
     agentSelectionMock.setSelectedMode.mockReset();
@@ -354,6 +383,81 @@ describe('GuidPage', () => {
         deletable: false,
       },
     ];
+    agentSelectionMock.selectedAssistant = agentSelectionMock.assistants[0];
+  });
+
+  it('keeps the official Agents execution Assistant bound to its required Adapter', async () => {
+    const agentsAssistant = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant.agentsExecution;
+    agentSelectionMock.selectedAssistantId = agentsAssistant.id;
+    agentSelectionMock.selectedAssistant = {
+      ...agentSelectionMock.selectedAssistant,
+      id: agentsAssistant.id,
+      source: agentsAssistant.source,
+    };
+    swrMock.useSWRMock.mockReturnValue({
+      data: { ...assistantDetailFixture, id: agentsAssistant.id, source: agentsAssistant.source },
+    });
+    ensureBackendMcpCatalogMock.mockResolvedValue({ allServers: [agentsAdapterServerFixture] });
+
+    render(<GuidPage />);
+
+    await waitFor(() => {
+      expect(capturedGuidSendDeps.at(-1)?.selectedMcpServerIds).toEqual([agentsAdapterServerFixture.id]);
+      expect(capturedGuidActionRowProps.at(-1)?.selectedMcpServerIds).toEqual([agentsAdapterServerFixture.id]);
+    });
+
+    act(() => {
+      capturedGuidActionRowProps.at(-1)?.onToggleMcpServer(agentsAdapterServerFixture.id);
+    });
+
+    await waitFor(() => {
+      expect(capturedGuidSendDeps.at(-1)?.selectedMcpServerIds).toEqual([agentsAdapterServerFixture.id]);
+      expect(capturedGuidActionRowProps.at(-1)?.selectedMcpServerIds).toEqual([agentsAdapterServerFixture.id]);
+    });
+  });
+
+  it('does not bind the Adapter to a user Assistant that reuses the product id', async () => {
+    const agentsAssistant = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant.agentsExecution;
+    agentSelectionMock.selectedAssistantId = agentsAssistant.id;
+    agentSelectionMock.selectedAssistant = {
+      ...agentSelectionMock.selectedAssistant,
+      id: agentsAssistant.id,
+      source: 'user',
+    };
+    swrMock.useSWRMock.mockReturnValue({
+      data: { ...assistantDetailFixture, id: agentsAssistant.id, source: 'user' },
+    });
+    ensureBackendMcpCatalogMock.mockResolvedValue({ allServers: [agentsAdapterServerFixture] });
+
+    render(<GuidPage />);
+
+    await waitFor(() => {
+      expect(ensureBackendMcpCatalogMock).toHaveBeenCalledOnce();
+      expect(capturedGuidSendDeps.at(-1)?.selectedMcpServerIds).toEqual([]);
+      expect(capturedGuidActionRowProps.at(-1)?.selectedMcpServerIds).toEqual([]);
+    });
+  });
+
+  it('preserves AionUi MCP selection when the Ki-Buddy capability is absent', async () => {
+    const agentsAssistant = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant.agentsExecution;
+    getKiBuddyProductRuntimeMock.mockReturnValue(null);
+    agentSelectionMock.selectedAssistantId = agentsAssistant.id;
+    agentSelectionMock.selectedAssistant = {
+      ...agentSelectionMock.selectedAssistant,
+      id: agentsAssistant.id,
+      source: agentsAssistant.source,
+    };
+    swrMock.useSWRMock.mockReturnValue({
+      data: { ...assistantDetailFixture, id: agentsAssistant.id, source: agentsAssistant.source },
+    });
+    ensureBackendMcpCatalogMock.mockResolvedValue({ allServers: [agentsAdapterServerFixture] });
+
+    render(<GuidPage />);
+
+    await waitFor(() => {
+      expect(capturedGuidSendDeps.at(-1)?.selectedMcpServerIds).toEqual([]);
+      expect(capturedGuidActionRowProps.at(-1)?.selectedMcpServerIds).toEqual([]);
+    });
   });
 
   it('uses the product-projected Skill catalog on the home page', async () => {

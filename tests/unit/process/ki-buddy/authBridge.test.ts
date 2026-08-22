@@ -176,7 +176,7 @@ describe('Ki-Buddy authentication IPC bridge', () => {
       password: 'password',
     });
 
-    expect(electronMock.fromPartition).toHaveBeenCalledWith('ki-buddy-agents-network', { cache: false });
+    expect(electronMock.fromPartition).toHaveBeenCalledWith('ki-buddy-agents-network-catalog', { cache: false });
     expect(electronMock.agentsFetch).toHaveBeenCalledWith(
       'https://agents.example.com/kagent/login',
       expect.objectContaining({ method: 'POST', redirect: 'manual' })

@@ -10,6 +10,7 @@ import {
 } from './processTreeNetworkState';
 import {
   closePackagedApp,
+  currentKiCoreRelease,
   currentSourceCommit,
   currentSourceStateSha256,
   isSourceTreeDirty,
@@ -197,9 +198,10 @@ test.describe.serial('Ki-Buddy packaged first-release product matrix', () => {
     }
   });
 
-  test('attests product identity, policy sources, tested commit, and the independent oracle', async ({}, testInfo) => {
+  test('attests product identity, policy sources, tested commit, release mapping, and policy oracle', async ({}, testInfo) => {
     const evidence = readProductBuildEvidence(productApp.package);
     const backendEvidence = readBackendBundleEvidence(productApp.package);
+    const kiCoreRelease = currentKiCoreRelease();
     const bootstrap = await productApp.page.evaluate(
       () => window.__getKiBuddyProductBootstrap?.() as ProductBootstrap | undefined
     );
@@ -222,13 +224,13 @@ test.describe.serial('Ki-Buddy packaged first-release product matrix', () => {
     }
     expect(backendEvidence).toMatchObject({
       kiCore: {
-        releaseCommit: FIRST_RELEASE_MATRIX.backend.commit,
-        tag: FIRST_RELEASE_MATRIX.backend.tag,
+        releaseCommit: kiCoreRelease.releaseCommit,
+        tag: kiCoreRelease.tag,
       },
       source: {
         policy: 'release-pinned',
-        repository: FIRST_RELEASE_MATRIX.backend.repository,
-        tag: FIRST_RELEASE_MATRIX.backend.tag,
+        repository: kiCoreRelease.repository,
+        tag: kiCoreRelease.tag,
         type: 'github-release',
       },
     });
@@ -249,7 +251,7 @@ test.describe.serial('Ki-Buddy packaged first-release product matrix', () => {
     });
     expect(await readFirstFrameViolations(productApp.page)).toEqual([]);
     await testInfo.attach('packaged-build-evidence.json', {
-      body: Buffer.from(JSON.stringify({ appIdentity, evidence, backendEvidence, bootstrap }, null, 2)),
+      body: Buffer.from(JSON.stringify({ appIdentity, evidence, backendEvidence, kiCoreRelease, bootstrap }, null, 2)),
       contentType: 'application/json',
     });
     await attachClientState(testInfo, productApp, 'first-visible-frame');

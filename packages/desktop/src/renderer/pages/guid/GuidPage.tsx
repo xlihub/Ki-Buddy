@@ -29,6 +29,8 @@ import { useGuidSend } from './hooks/useGuidSend';
 import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
 import { loadProductSkillCatalog } from '@/renderer/services/runtime/kiBuddySkillCatalog';
+import { getKiBuddyProductRuntime } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { resolveKiBuddyAssistantEffectiveMcpServerIds } from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
 import { resolveGuidAssistantDefaults } from './utils/assistantDefaults';
 import SpeechInputButton from '@/renderer/components/chat/SpeechInputButton';
 import { chatFileRefPath, uploadFileRef } from '@/common/types/chatFile';
@@ -58,6 +60,7 @@ const GuidPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const kiBuddyProductRuntime = useMemo(() => getKiBuddyProductRuntime(), []);
   const guidContainerRef = useRef<HTMLDivElement>(null);
   const { activeBorderColor, inactiveBorderColor, activeShadow } = useInputFocusRing();
 
@@ -172,6 +175,22 @@ const GuidPage: React.FC = () => {
     () => resolveGuidAssistantDefaults(selectedAssistantDetail),
     [selectedAssistantDetail]
   );
+  const effectiveSelectedMcpServerIds = useMemo(
+    () =>
+      resolveKiBuddyAssistantEffectiveMcpServerIds(
+        kiBuddyProductRuntime,
+        agentSelection.selectedAssistant,
+        availableMcpServers,
+        guidSelectedMcpServerIds ?? resolvedAssistantDefaults.mcpIds
+      ),
+    [
+      agentSelection.selectedAssistant,
+      availableMcpServers,
+      guidSelectedMcpServerIds,
+      kiBuddyProductRuntime,
+      resolvedAssistantDefaults.mcpIds,
+    ]
+  );
   const selectedSkillNames = useMemo(() => {
     const disabledBuiltinSkillSet = new Set(
       guidDisabledBuiltinSkills ?? resolvedAssistantDefaults.disabledBuiltinSkillIds
@@ -270,7 +289,7 @@ const GuidPage: React.FC = () => {
     assistantDefaultSkillIds: resolvedAssistantDefaults.skillIds,
     assistantDefaultDisabledBuiltinSkillIds: resolvedAssistantDefaults.disabledBuiltinSkillIds,
     availableMcpServers,
-    selectedMcpServerIds: guidSelectedMcpServerIds,
+    selectedMcpServerIds: effectiveSelectedMcpServerIds,
     assistantDefaultMcpIds: resolvedAssistantDefaults.mcpIds,
     isGoogleAuth: modelSelection.isGoogleAuth,
 
@@ -377,6 +396,7 @@ const GuidPage: React.FC = () => {
         last_thought_level_value: selectedAssistantDetail.preferences.last_thought_level_value,
         last_mcp_ids: selectedAssistantDetail.preferences.last_mcp_ids,
       },
+      resolvedMcpDefaults: resolvedAssistantDefaults.mcpIds,
       availableModels: {
         acp: agentSelection.currentAcpCachedModelInfo?.available_models.map((model) => model.id) ?? [],
         aionrs: modelSelection.modelList.map((provider) => ({
@@ -393,7 +413,7 @@ const GuidPage: React.FC = () => {
     appliedAssistantDefaultsKeyRef.current = signature;
 
     const applyAssistantDefaults = async () => {
-      const resolvedDefaults = resolveGuidAssistantDefaults(selectedAssistantDetail);
+      const resolvedDefaults = resolvedAssistantDefaults;
       const effectiveBackend = agentSelection.selectedAssistantBackend;
       const shouldApplyDefaultModel = manualModelSelectionAssistantRef.current !== selectedAssistantId;
       const shouldApplyDefaultThoughtLevel = manualThoughtLevelSelectionAssistantRef.current !== selectedAssistantId;
@@ -469,6 +489,7 @@ const GuidPage: React.FC = () => {
     modelSelection.modelList,
     modelSelection.resetCurrentModel,
     modelSelection.setCurrentModel,
+    resolvedAssistantDefaults,
     selectedAssistantId,
     selectedAssistantDetail,
   ]);
@@ -634,7 +655,7 @@ const GuidPage: React.FC = () => {
       enabledSkills={guidEnabledSkills ?? []}
       onToggleSkill={handleToggleSkill}
       mcpServers={availableMcpServers}
-      selectedMcpServerIds={guidSelectedMcpServerIds ?? []}
+      selectedMcpServerIds={effectiveSelectedMcpServerIds}
       onToggleMcpServer={handleToggleMcpServer}
       speechInputNode={
         <SpeechInputButton onLiveTranscript={handleLiveTranscript} onTranscript={handleSpeechTranscript} />

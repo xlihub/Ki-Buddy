@@ -1,11 +1,10 @@
 import type { AgentsAuthService } from '../AgentsAuthService';
-import { startAgentsMcpBridge, type AgentsMcpBridgeHandle } from './bridge';
-import { isSameAgentsCatalogIdentity, type AgentsCatalogIdentity } from './contracts';
-import type { AgentsInvokeRequest } from './bridge';
+import { startAgentsMcpBridge, type AgentsInvokeRequest, type AgentsMcpBridgeHandle } from './bridge';
 import { AGENTS_MCP_BRIDGE_TOKEN_ENV, AGENTS_MCP_BRIDGE_URL_ENV } from './client';
 import { AgentsMcpError } from './errors';
+import { AGENTS_MCP_CLIENT_ID_HEADER } from './contracts';
 
-type AgentsMcpAuthService = Pick<AgentsAuthService, 'fetchAuthenticated' | 'getSession' | 'getSessionEpoch'>;
+type AgentsMcpAuthService = Pick<AgentsAuthService, 'fetchAuthenticated' | 'getSessionEpoch'>;
 type StartBridge = typeof startAgentsMcpBridge;
 
 /** Starts the product bridge and publishes only its ephemeral loopback coordinates for Ki-Core inheritance. */
@@ -14,64 +13,44 @@ export async function startAgentsMcpRuntimeBridge(
   env: NodeJS.ProcessEnv = process.env,
   startBridge: StartBridge = startAgentsMcpBridge
 ): Promise<AgentsMcpBridgeHandle> {
-  const getSessionIdentity = async (): Promise<AgentsCatalogIdentity> => {
-    let session: Awaited<ReturnType<AgentsAuthService['getSession']>>;
-    try {
-      session = await authService.getSession();
-    } catch {
-      throw new AgentsMcpError('auth', 'Agents login is required');
-    }
-    if (session.status !== 'authenticated') {
-      throw new AgentsMcpError('auth', 'Agents login is required');
-    }
-    let deploymentOrigin: string;
-    try {
-      deploymentOrigin = new URL(session.user.agents.deploymentUrl).origin;
-    } catch {
-      throw new AgentsMcpError('contract', 'Agents session deployment is incompatible');
-    }
-    return {
-      deploymentOrigin,
-      sessionEpoch: authService.getSessionEpoch(),
-      userId: session.user.agents.userId,
-    };
-  };
-
   const handle = await startBridge({
-    getSessionIdentity,
-    fetchCatalog: async (signal) => {
-      const identity = await getSessionIdentity();
+    fetchCatalog: async (clientId, signal) => {
+      const sessionEpoch = authService.getSessionEpoch();
       try {
         const response = await authService.fetchAuthenticated('/bridge/agents/catalog', {
           method: 'GET',
-          headers: { accept: 'application/json' },
+          headers: { accept: 'application/json', [AGENTS_MCP_CLIENT_ID_HEADER]: clientId },
           signal,
         });
-        const currentIdentity = await getSessionIdentity();
-        if (!isSameAgentsCatalogIdentity(currentIdentity, identity)) {
+        if (authService.getSessionEpoch() !== sessionEpoch) {
           throw new AgentsMcpError('auth', 'Agents session changed during catalog refresh');
         }
-        return { identity, response };
+        return { response, sessionEpoch };
       } catch (error) {
         if (error instanceof AgentsMcpError) throw error;
         throw new AgentsMcpError('network', 'Agents catalog request failed');
       }
     },
-    invokeAgent: async (request: AgentsInvokeRequest, identity, signal) => {
-      const currentIdentity = await getSessionIdentity();
-      if (!isSameAgentsCatalogIdentity(currentIdentity, identity)) {
+    invokeAgent: async (request: AgentsInvokeRequest, sessionEpoch, clientId, signal) => {
+      if (authService.getSessionEpoch() !== sessionEpoch) {
         throw new AgentsMcpError('auth', 'Agents session changed before invoke dispatch');
       }
       try {
         return await authService.fetchAuthenticated('/bridge/agents/invoke', {
           method: 'POST',
-          headers: { accept: 'application/json', 'content-type': 'application/json' },
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+            [AGENTS_MCP_CLIENT_ID_HEADER]: clientId,
+          },
           body: JSON.stringify(request),
           signal,
         });
       } catch (error) {
         if (error instanceof AgentsMcpError) throw error;
-        throw new AgentsMcpError('network', 'Agents invoke request failed');
+        throw new AgentsMcpError('result_unknown', 'Agents invoke result is unknown', {
+          agentId: request.agentId,
+        });
       }
     },
   });

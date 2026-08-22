@@ -8,6 +8,10 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMcpServer } from '@/common/config/storage';
 import { useGuidSend, type GuidSendDeps } from '@/renderer/pages/guid/hooks/useGuidSend';
+import {
+  KI_BUDDY_PRODUCT_RESOURCE_REGISTRY,
+  resolveKiBuddyAssistantEffectiveMcpServerIds,
+} from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
 
 const createConversationInvokeMock = vi.fn();
 const swrMutateMock = vi.fn();
@@ -194,6 +198,47 @@ describe('useGuidSend', () => {
     expect(payload.assistant?.conversation_overrides?.mcp_ids).toEqual(['mcp-user', 'builtin-mcp']);
     expect(payload.extra.selected_mcp_server_ids).toEqual(['mcp-user']);
     expect(payload.extra.selected_session_mcp_servers).toEqual([expect.objectContaining({ id: 'builtin-mcp' })]);
+  });
+
+  it('sends the official Assistant required Adapter after the user clears the checkbox selection', async () => {
+    const deps = createDeps();
+    const officialAssistant = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant.agentsExecution;
+    const adapter = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp.agentsAdapter;
+    const agentsAdapterServer = {
+      id: 'mcp-current-account',
+      name: adapter.backendName,
+      enabled: true,
+      builtin: true,
+      transport: {
+        type: 'stdio',
+        command: 'node',
+        args: [`/app/${adapter.scriptName}`],
+      },
+      created_at: 1,
+      updated_at: 1,
+      original_json: '{}',
+    } as IMcpServer;
+    deps.selectedAssistantId = officialAssistant.id;
+    deps.availableMcpServers = [agentsAdapterServer];
+    deps.selectedMcpServerIds = resolveKiBuddyAssistantEffectiveMcpServerIds(
+      { id: 'ki-buddy' },
+      { id: officialAssistant.id, source: officialAssistant.source },
+      [agentsAdapterServer],
+      []
+    );
+
+    const { result } = renderHook(() => useGuidSend(deps));
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const payload = createConversationInvokeMock.mock.calls[0][0];
+    expect(payload.assistant?.conversation_overrides?.mcp_ids).toEqual([agentsAdapterServer.id]);
+    expect(payload.extra.selected_mcp_server_ids).toEqual([]);
+    expect(payload.extra.selected_session_mcp_servers).toEqual([
+      expect.objectContaining({ id: agentsAdapterServer.id }),
+    ]);
   });
 
   it('does not write legacy preset_assistant_id for preset assistant sends', async () => {

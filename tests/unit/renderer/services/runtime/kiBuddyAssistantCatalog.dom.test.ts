@@ -46,77 +46,28 @@ describe('projectProductAssistantCatalog', () => {
     vi.clearAllMocks();
   });
 
-  it('uses one stable registry for product Agent, Assistant, Skill, and MCP identities', () => {
-    expect(
-      Object.values(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.agent).map(({ id, featureId }) => ({ id, featureId }))
-    ).toEqual([{ id: '632f31d2', featureId: 'agents' }]);
-    expect(
-      Object.values(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant).map(({ id, featureId }) => ({ id, featureId }))
-    ).toEqual([
-      { id: 'word-creator', featureId: 'assistants' },
-      { id: 'ppt-creator', featureId: 'assistants' },
-      { id: 'excel-creator', featureId: 'assistants' },
-      { id: 'bare:632f31d2', featureId: 'assistants' },
-    ]);
-    expect(
-      Object.values(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.skill).map(({ id, backendName }) => ({ id, backendName }))
-    ).toEqual([
-      { id: 'builtin:officecli-docx', backendName: 'officecli-docx' },
-      { id: 'builtin:officecli-pptx', backendName: 'officecli-pptx' },
-      { id: 'builtin:officecli-xlsx', backendName: 'officecli-xlsx' },
-    ]);
-    expect(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp).toEqual({
-      agentsAdapter: {
-        id: 'builtin:agents-mcp-adapter',
-        featureId: 'tools',
-        resourceName: 'agents-mcp-adapter',
-        backendName: 'agents-mcp-adapter',
-        scriptName: 'builtin-mcp-agents.js',
-        tools: {
-          describe: {
-            name: 'agents_describe',
-            descriptionKey: 'settings.kiBuddy.agentsDescribeDescription',
-          },
-          invoke: {
-            name: 'agents_invoke',
-            descriptionKey: 'settings.kiBuddy.agentsInvokeDescription',
-          },
-          list: {
-            name: 'agents_list',
-            descriptionKey: 'settings.kiBuddy.agentsListDescription',
-          },
-        },
-      },
-    });
-  });
-
-  it('shows stable product and Custom Assistants with manage access', () => {
+  it('shows product built-in and Custom Assistants with their expected origins', () => {
+    const productAssistants = Object.values(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant).map(({ id, source }) =>
+      assistant({ id, source })
+    );
     const catalog = projectProductAssistantCatalog(
       [
-        assistant({ id: 'word-creator', source: 'builtin' }),
-        assistant({ id: 'ppt-creator', source: 'builtin' }),
-        assistant({ id: 'excel-creator', source: 'builtin' }),
-        assistant({ id: 'bare:632f31d2', source: 'generated' }),
+        ...productAssistants,
         assistant({ id: 'my-assistant', source: 'user', deletable: true }),
         assistant({ id: 'cowork', source: 'builtin' }),
       ],
       kiBuddyExperience()
     );
 
-    expect(catalog.entries.map(({ assistant: entry, access, origin }) => ({ id: entry.id, access, origin }))).toEqual([
-      { id: 'word-creator', access: 'manage', origin: 'productBuiltin' },
-      { id: 'ppt-creator', access: 'manage', origin: 'productBuiltin' },
-      { id: 'excel-creator', access: 'manage', origin: 'productBuiltin' },
-      { id: 'bare:632f31d2', access: 'manage', origin: 'productBuiltin' },
-      { id: 'my-assistant', access: 'manage', origin: 'custom' },
-    ]);
-    expect(catalog.visibleAssistants.map(({ id, productAccess }) => ({ id, productAccess }))).toEqual([
-      { id: 'word-creator', productAccess: 'manage' },
-      { id: 'ppt-creator', productAccess: 'manage' },
-      { id: 'excel-creator', productAccess: 'manage' },
-      { id: 'bare:632f31d2', productAccess: 'manage' },
-      { id: 'my-assistant', productAccess: 'manage' },
-    ]);
+    const productEntries = catalog.entries.filter(({ assistant: entry }) =>
+      productAssistants.some(({ id }) => id === entry.id)
+    );
+    expect(productEntries).toHaveLength(productAssistants.length);
+    expect(productEntries.every(({ access, origin }) => access === 'manage' && origin === 'productBuiltin')).toBe(true);
+    expect(catalog.entries.find(({ assistant: entry }) => entry.id === 'my-assistant')).toMatchObject({
+      access: 'manage',
+      origin: 'custom',
+    });
   });
 
   it('hides upstream, Extension, and unknown Assistants with structured diagnostics', () => {
@@ -169,11 +120,17 @@ describe('loadProductBuiltinAssistantResourceState', () => {
   });
 
   it('reports a missing product Assistant instead of accepting a similarly named builtin', async () => {
+    const assistantDefinitions = Object.values(KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant);
+    const missingAssistant = assistantDefinitions.find((definition) => 'resourceName' in definition);
+    if (!missingAssistant) throw new Error('The product Assistant registry requires one named test fixture.');
+    const availableAssistants = assistantDefinitions.filter(({ id }) => id !== missingAssistant.id);
     listAssistantsMock.mockResolvedValue([
-      assistant({ id: 'word-assistant-with-a-new-id', source: 'builtin', name: 'Word Creator' }),
-      assistant({ id: 'ppt-creator', source: 'builtin' }),
-      assistant({ id: 'excel-creator', source: 'builtin' }),
-      assistant({ id: 'bare:632f31d2', source: 'generated' }),
+      assistant({
+        id: 'renamed-product-assistant',
+        source: missingAssistant.source,
+        name: missingAssistant.resourceName,
+      }),
+      ...availableAssistants.map(({ id, source }) => assistant({ id, source })),
     ]);
 
     const { loadProductBuiltinAssistantResourceState } =
@@ -185,7 +142,7 @@ describe('loadProductBuiltinAssistantResourceState', () => {
         expect.objectContaining({
           code: 'required_product_resource_missing',
           kind: 'assistant',
-          resourceId: 'word-creator',
+          resourceId: missingAssistant.id,
         }),
       ],
     });

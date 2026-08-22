@@ -1,12 +1,10 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import {
-  isSameAgentsCatalogIdentity,
+  AGENTS_MCP_CLIENT_ID_HEADER,
+  isAgentsMcpClientId,
   normalizeAgentsCatalogSelection,
-  normalizeAgentsCatalogIdentity,
-  normalizeAgentsInvokeResponse,
   validateAgentsScalarInputs,
-  type AgentsCatalogIdentity,
   type AgentsScalarInputs,
 } from './contracts';
 import { AgentsMcpError, getAgentsMcpErrorPresentation, type AgentsMcpErrorCode } from './errors';
@@ -25,11 +23,14 @@ export type AgentsInvokeRequest = Readonly<{
 }>;
 
 type StartAgentsMcpBridgeOptions = Readonly<{
-  fetchCatalog: (signal: AbortSignal) => Promise<Readonly<{ identity: AgentsCatalogIdentity; response: Response }>>;
-  getSessionIdentity: () => Promise<AgentsCatalogIdentity>;
-  invokeAgent: (
+  fetchCatalog: (
+    clientId: string,
+    signal: AbortSignal
+  ) => Promise<Readonly<{ response: Response; sessionEpoch: number }>>;
+  invokeAgent?: (
     request: AgentsInvokeRequest,
-    identity: AgentsCatalogIdentity,
+    sessionEpoch: number,
+    clientId: string,
     signal: AbortSignal
   ) => Promise<Response>;
   token?: string;
@@ -46,6 +47,14 @@ function tokenMatches(actualHeader: string | undefined, expectedToken: string): 
   const actual = Buffer.from(actualHeader.slice('Bearer '.length), 'utf8');
   const expected = Buffer.from(expectedToken, 'utf8');
   return actual.byteLength === expected.byteLength && timingSafeEqual(actual, expected);
+}
+
+function requireClientId(request: IncomingMessage): string {
+  const clientId = request.headers[AGENTS_MCP_CLIENT_ID_HEADER];
+  if (!isAgentsMcpClientId(clientId)) {
+    throw new AgentsMcpError('invalid_input', 'Agents Adapter client identity is invalid');
+  }
+  return clientId;
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
@@ -82,30 +91,21 @@ function runActiveRequest(
 
 async function handleCatalogRequest(
   options: StartAgentsMcpBridgeOptions,
+  clientId: string,
   response: ServerResponse,
   signal: AbortSignal
 ): Promise<void> {
   try {
-    const { identity, response: upstream } = await options.fetchCatalog(signal);
+    const { response: upstream } = await options.fetchCatalog(clientId, signal);
     if (signal.aborted) return;
     if (upstream.status === 401 || upstream.status === 403) {
       throw new AgentsMcpError('auth', 'Agents login is required');
     }
     if (!upstream.ok) throw new AgentsMcpError('server', 'Agents catalog service is unavailable');
-    const payload = await readBoundedJsonResponse(upstream, MAX_CATALOG_RESPONSE_BYTES);
-    sendJson(response, 200, { identity, catalog: payload });
+    sendJson(response, 200, await readBoundedJsonResponse(upstream, MAX_CATALOG_RESPONSE_BYTES));
   } catch (error) {
     if (signal.aborted) return;
     const safe = bridgeError(error instanceof AgentsMcpError ? error.code : 'network');
-    sendJson(response, safe.status, safe.body);
-  }
-}
-
-async function handleSessionRequest(options: StartAgentsMcpBridgeOptions, response: ServerResponse): Promise<void> {
-  try {
-    sendJson(response, 200, await options.getSessionIdentity());
-  } catch (error) {
-    const safe = bridgeError(error instanceof AgentsMcpError ? error.code : 'auth');
     sendJson(response, safe.status, safe.body);
   }
 }
@@ -114,8 +114,10 @@ async function handleInvokeRequest(
   options: StartAgentsMcpBridgeOptions,
   request: IncomingMessage,
   response: ServerResponse,
+  clientId: string,
   signal: AbortSignal
 ): Promise<void> {
+  let dispatchedAgentId: string | undefined;
   try {
     const body = await readBoundedJsonRequest(request, MAX_INVOKE_REQUEST_BYTES);
     if (
@@ -128,26 +130,19 @@ async function handleInvokeRequest(
     }
     const agentId = (body as { agentId: string }).agentId.trim();
     if (!agentId) throw new AgentsMcpError('invalid_input', 'Agents invoke requires one agentId');
-    let catalogIdentity: AgentsCatalogIdentity;
-    try {
-      catalogIdentity = normalizeAgentsCatalogIdentity((body as { catalogIdentity?: unknown }).catalogIdentity);
-    } catch {
-      throw new AgentsMcpError('invalid_input', 'Agents invoke requires the described catalog identity');
-    }
 
-    const { identity, response: catalogResponse } = await options.fetchCatalog(signal);
+    const { response: catalogResponse, sessionEpoch } = await options.fetchCatalog(clientId, signal);
     if (catalogResponse.status === 401 || catalogResponse.status === 403) {
       throw new AgentsMcpError('auth', 'Agents login is required');
     }
     if (!catalogResponse.ok) throw new AgentsMcpError('server', 'Agents catalog service is unavailable');
-    const currentIdentity = normalizeAgentsCatalogIdentity(identity);
-    if (!isSameAgentsCatalogIdentity(catalogIdentity, currentIdentity)) {
-      throw new AgentsMcpError('invalid_input', 'Agents invoke describe authorization is no longer current');
-    }
     const catalog = await readBoundedJsonResponse(catalogResponse, MAX_CATALOG_RESPONSE_BYTES);
     const { description } = normalizeAgentsCatalogSelection(catalog, agentId);
     const bodyInputs = (body as { inputs?: unknown }).inputs;
     const inputs = validateAgentsScalarInputs(description, bodyInputs === undefined ? {} : bodyInputs);
+    if (!options.invokeAgent) throw new AgentsMcpError('configuration', 'Agents invoke is unavailable');
+
+    dispatchedAgentId = agentId;
     const upstream = await options.invokeAgent(
       {
         agentId,
@@ -155,7 +150,8 @@ async function handleInvokeRequest(
         conversationId: `ki-buddy-${randomUUID()}`,
         inputs,
       },
-      currentIdentity,
+      sessionEpoch,
+      clientId,
       signal
     );
     if (upstream.status === 401 || upstream.status === 403) {
@@ -163,33 +159,28 @@ async function handleInvokeRequest(
     }
     const payload = await readBoundedJsonResponse(upstream, MAX_INVOKE_RESPONSE_BYTES);
     if (!upstream.ok) {
-      try {
-        normalizeAgentsInvokeResponse(payload, agentId);
-      } catch (error) {
-        if (
-          error instanceof AgentsMcpError &&
-          (error.code === 'invoke_failed' ||
-            (error.code === 'contract' &&
-              typeof (payload as { status?: unknown })?.status === 'string' &&
-              ['failed', 'error'].includes((payload as { status: string }).status.trim().toLowerCase())))
-        ) {
-          throw error;
-        }
+      if (upstream.status >= 500) {
+        throw new AgentsMcpError('result_unknown', 'Agents invoke result is unknown', { agentId });
       }
       throw new AgentsMcpError('server', 'Agents invoke service is unavailable');
     }
-    const result = normalizeAgentsInvokeResponse(payload, agentId);
-    sendJson(response, 200, result);
+    sendJson(response, 200, payload);
   } catch (error) {
     if (signal.aborted) return;
-    const safe = bridgeError(error instanceof AgentsMcpError ? error.code : 'network');
-    sendJson(
-      response,
-      safe.status,
+    const code =
+      dispatchedAgentId && (!(error instanceof AgentsMcpError) || error.code === 'network' || error.code === 'contract')
+        ? 'result_unknown'
+        : error instanceof AgentsMcpError
+          ? error.code
+          : 'network';
+    const safe = bridgeError(code);
+    const correlation =
       error instanceof AgentsMcpError && error.correlation
-        ? { ...safe.body, correlation: error.correlation }
-        : safe.body
-    );
+        ? error.correlation
+        : dispatchedAgentId
+          ? { agentId: dispatchedAgentId }
+          : undefined;
+    sendJson(response, safe.status, correlation ? { ...safe.body, correlation } : safe.body);
   }
 }
 
@@ -202,21 +193,27 @@ export async function startAgentsMcpBridge(options: StartAgentsMcpBridgeOptions)
       sendJson(response, 401, { error: 'adapter_auth_required' });
       return;
     }
+    let clientId: string;
+    try {
+      clientId = requireClientId(request);
+    } catch (error) {
+      const safe = bridgeError(error instanceof AgentsMcpError ? error.code : 'invalid_input');
+      sendJson(response, safe.status, safe.body);
+      return;
+    }
     if (request.method === 'POST' && request.url === '/invoke') {
       runActiveRequest(request, response, activeRequests, (signal) =>
-        handleInvokeRequest(options, request, response, signal)
+        handleInvokeRequest(options, request, response, clientId, signal)
       );
       return;
     }
-    if (request.method !== 'GET' || !['/catalog', '/session'].includes(request.url ?? '')) {
+    if (request.method !== 'GET' || request.url !== '/catalog') {
       sendJson(response, 404, { error: 'not_found' });
       return;
     }
-    if (request.url === '/session') {
-      void handleSessionRequest(options, response);
-      return;
-    }
-    runActiveRequest(request, response, activeRequests, (signal) => handleCatalogRequest(options, response, signal));
+    runActiveRequest(request, response, activeRequests, (signal) =>
+      handleCatalogRequest(options, clientId, response, signal)
+    );
   });
   server.maxHeadersCount = 32;
 

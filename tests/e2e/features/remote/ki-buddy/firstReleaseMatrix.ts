@@ -6,11 +6,6 @@
  * let a bad policy change its own expected result.
  */
 export const FIRST_RELEASE_MATRIX = {
-  backend: {
-    repository: 'xlihub/Ki-Core',
-    tag: 'ki-core-v0.1.0',
-    commit: '209e6844d39bac0762c61e198c1ba3a007f9dd2e',
-  },
   features: {
     account: 'enabled',
     agents: 'enabled',

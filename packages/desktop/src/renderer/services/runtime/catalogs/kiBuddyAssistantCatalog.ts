@@ -19,10 +19,10 @@ const KI_CLI_ASSISTANT_IDENTITY = KI_BUDDY_ASSISTANT_IDENTITIES.kiCli;
 
 const PRODUCT_BUILTIN_ASSISTANT_REQUIREMENTS: readonly ProductBuiltinResourceRequirement[] = Object.values(
   KI_BUDDY_ASSISTANT_IDENTITIES
-).map(({ id, resourceName, featureId }) => ({
-  featureId,
-  resourceId: id,
-  resourceName,
+).map((definition) => ({
+  featureId: definition.featureId,
+  resourceId: definition.id,
+  resourceName: 'resourceName' in definition ? definition.resourceName : undefined,
 }));
 
 export type ProductAssistant = Assistant &
