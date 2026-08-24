@@ -763,7 +763,8 @@
   "kiBuddy": {
     "agentsDescribeDescription": "Показывает точную схему входных и выходных данных одного Agent из текущего каталога.",
     "agentsInvokeDescription": "Однократно вызывает описанный Agent с полным набором скалярных входных данных после обновления прав и схемы.",
-    "agentsListDescription": "Показывает полный каталог Agents, доступный текущей учётной записи."
+    "agentsListDescription": "Показывает полный каталог Agents, доступный текущей учётной записи.",
+    "agentsUploadDescription": "Загружает один локальный файл для указанного файлового поля ввода и возвращает URL файла в Agents."
   },
   "mcpAuthRequired": "Требуется аутентификация",
   "mcpOAuthLoginSuccess": "OAuth-вход успешен",

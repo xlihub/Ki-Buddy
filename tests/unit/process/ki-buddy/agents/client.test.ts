@@ -1,5 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createAgentsClient } from '@/process/ki-buddy/agents/client';
+
+const tempDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
 
 const validCatalog = {
   status: 'ok',
@@ -75,6 +84,95 @@ describe('createAgentsClient', () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
       agentId: 'agent-feedback',
       inputs: { query: 'Summarize this.' },
+    });
+  });
+
+  it('streams the exact local file path as multipart file content', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'ki-buddy-agents-upload-'));
+    tempDirectories.push(directory);
+    const filePath = path.join(directory, 'feedback.txt');
+    await writeFile(filePath, 'customer feedback');
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      expect(url.pathname).toBe('/upload');
+      expect(init?.body).toBeInstanceOf(FormData);
+      if (!(init?.body instanceof FormData)) throw new Error('Expected multipart upload body');
+      const uploaded = init.body.get('file');
+      expect(uploaded).toBeInstanceOf(Blob);
+      expect(await (uploaded as Blob).text()).toBe('customer feedback');
+      return Response.json({
+        fileUrl: 'https://agents.example.test/files/remote-1',
+        fileName: 'feedback.txt',
+        size: 17,
+      });
+    });
+    const client = createClient(fetchMock as typeof fetch);
+
+    await client.upload('agent-file', 'source', filePath);
+  });
+
+  it('returns the remote file URL from the upload bridge', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'ki-buddy-agents-upload-'));
+    tempDirectories.push(directory);
+    const filePath = path.join(directory, 'feedback.txt');
+    await writeFile(filePath, 'customer feedback');
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        fileUrl: 'https://agents.example.test/files/remote-1',
+        fileName: 'feedback.txt',
+        size: 17,
+      })
+    );
+    const client = createClient(fetchMock as typeof fetch);
+
+    await expect(client.upload('agent-file', 'source', filePath)).resolves.toEqual({
+      fileUrl: 'https://agents.example.test/files/remote-1',
+      fileName: 'feedback.txt',
+      size: 17,
+    });
+  });
+
+  it('rejects a relative path before making a bridge request', async () => {
+    const fetchMock = vi.fn();
+    const client = createClient(fetchMock as typeof fetch);
+
+    await expect(client.upload('agent-file', 'source', 'feedback.txt')).rejects.toMatchObject({
+      code: 'invalid_input',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing local file before making a bridge request', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'ki-buddy-agents-upload-missing-'));
+    tempDirectories.push(directory);
+    const fetchMock = vi.fn();
+    const client = createClient(fetchMock as typeof fetch);
+
+    await expect(
+      client.upload('agent-file', 'source', path.join(directory, 'missing-agents-file.txt'))
+    ).rejects.toMatchObject({ code: 'invalid_input' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a local directory before making a bridge request', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'ki-buddy-agents-upload-directory-'));
+    tempDirectories.push(directory);
+    const fetchMock = vi.fn();
+    const client = createClient(fetchMock as typeof fetch);
+
+    await expect(client.upload('agent-file', 'source', directory)).rejects.toMatchObject({ code: 'invalid_input' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('forwards a remote file URL directly in invoke inputs', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ status: 'completed' }));
+    const client = createClient(fetchMock as typeof fetch);
+
+    await client.invoke('agent-file', { source: 'https://agents.example.test/files/remote-1' });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      agentId: 'agent-file',
+      inputs: { source: 'https://agents.example.test/files/remote-1' },
     });
   });
 

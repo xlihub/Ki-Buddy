@@ -39,6 +39,11 @@ async function connect(overrides: Partial<AgentsClient> = {}) {
       outputSchema: [],
     }),
     invoke: async (agentId) => ({ agentId, text: 'Done.' }),
+    upload: async (_agentId, _fieldName, _filePath) => ({
+      fileUrl: 'https://agents.example.test/files/remote-1',
+      fileName: 'feedback.txt',
+      size: 12,
+    }),
     ...overrides,
   };
   const server = createAgentsMcpServer(adapter);
@@ -54,14 +59,46 @@ async function connect(overrides: Partial<AgentsClient> = {}) {
 }
 
 describe('createAgentsMcpServer', () => {
-  it('publishes the three catalog and execution tools', async () => {
+  it('publishes catalog, upload, and execution tools', async () => {
     const client = await connect();
 
     const result = await client.listTools();
 
-    expect(result.tools.map(({ name }) => name)).toEqual(['agents_list', 'agents_describe', 'agents_invoke']);
+    expect(result.tools.map(({ name }) => name)).toEqual([
+      'agents_list',
+      'agents_describe',
+      'agents_upload_file',
+      'agents_invoke',
+    ]);
     expect(result.tools[0]).toMatchObject({ annotations: { readOnlyHint: true }, inputSchema: { properties: {} } });
-    expect(result.tools[2]).toMatchObject({ annotations: { destructiveHint: true, idempotentHint: false } });
+    expect(result.tools[2]).toMatchObject({ annotations: { destructiveHint: false, idempotentHint: false } });
+    expect(result.tools[2]?.inputSchema).toMatchObject({
+      properties: { filePath: { type: 'string' } },
+      required: expect.arrayContaining(['filePath']),
+    });
+    expect(JSON.stringify(result.tools[2]?.inputSchema)).not.toContain('attachmentIndex');
+    expect(result.tools[3]).toMatchObject({ annotations: { destructiveHint: true, idempotentHint: false } });
+  });
+
+  it('uploads one absolute local path for one exact file field', async () => {
+    const upload = vi.fn().mockResolvedValue({
+      fileUrl: 'https://agents.example.test/files/remote-1',
+      fileName: 'feedback.txt',
+      size: 12,
+    });
+    const client = await connect({ upload });
+
+    const result = await client.callTool({
+      name: 'agents_upload_file',
+      arguments: {
+        agentId: 'agent-1',
+        fieldName: 'source',
+        filePath: '/tmp/feedback.txt',
+      },
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(upload).toHaveBeenCalledWith('agent-1', 'source', '/tmp/feedback.txt');
   });
 
   it('returns the current inventory and exact selected schema', async () => {

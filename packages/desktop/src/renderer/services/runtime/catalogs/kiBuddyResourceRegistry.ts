@@ -43,6 +43,10 @@ const AGENTS_MCP_ADAPTER = {
       name: 'agents_list',
       descriptionKey: 'settings.kiBuddy.agentsListDescription',
     },
+    upload: {
+      name: 'agents_upload_file',
+      descriptionKey: 'settings.kiBuddy.agentsUploadDescription',
+    },
   },
 } as const satisfies ProductMcpResourceDefinition;
 
@@ -168,6 +172,7 @@ export function resolveKiBuddyMcpToolDescriptionKey(
   | 'settings.kiBuddy.agentsDescribeDescription'
   | 'settings.kiBuddy.agentsInvokeDescription'
   | 'settings.kiBuddy.agentsListDescription'
+  | 'settings.kiBuddy.agentsUploadDescription'
   | null {
   const definition = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp.agentsAdapter;
   if (origin !== 'productBuiltin' || resolveKiBuddyProductMcpResourceId(server) !== definition.id) return null;

@@ -13,11 +13,13 @@ const PRODUCT_DESCRIPTIONS = {
   'en-US': {
     list: 'Lists the complete Agents catalog available to the current signed-in account.',
     describe: 'Shows the exact input and output schema for one agent in the current catalog.',
+    upload: 'Uploads one local file for an exact file input field and returns its Agents file URL.',
     invoke: 'Invokes the described Agent once with complete scalar inputs.',
   },
   'zh-CN': {
     list: '列出当前登录账号可用的完整 Agents 目录。',
     describe: '显示当前目录中一个 Agent 的精确输入和输出结构。',
+    upload: '为指定的文件输入字段上传一个本地文件，并返回其 Agents 文件 URL。',
     invoke: '使用完整的标量参数调用一次已描述的 Agent。',
   },
 } as const;
@@ -35,6 +37,7 @@ const buildServer = (overrides: Partial<IMcpServer> = {}): IMcpServer => ({
   tools: [
     { name: 'agents_list', description: PROTOCOL_DESCRIPTION },
     { name: 'agents_describe', description: PROTOCOL_DESCRIPTION },
+    { name: 'agents_upload_file', description: PROTOCOL_DESCRIPTION },
     { name: 'agents_invoke', description: PROTOCOL_DESCRIPTION },
   ],
   created_at: 0,
@@ -57,6 +60,7 @@ async function createTestI18n(language: keyof typeof PRODUCT_DESCRIPTIONS): Prom
               kiBuddy: {
                 agentsListDescription: descriptions.list,
                 agentsDescribeDescription: descriptions.describe,
+                agentsUploadDescription: descriptions.upload,
                 agentsInvokeDescription: descriptions.invoke,
               },
             },
@@ -104,6 +108,7 @@ describe('Ki-Buddy Agents MCP tool presentation', () => {
 
     expect(screen.getByText(PRODUCT_DESCRIPTIONS['en-US'].list)).toBeInTheDocument();
     expect(screen.getByText(PRODUCT_DESCRIPTIONS['en-US'].describe)).toBeInTheDocument();
+    expect(screen.getByText(PRODUCT_DESCRIPTIONS['en-US'].upload)).toBeInTheDocument();
     expect(screen.getByText(PRODUCT_DESCRIPTIONS['en-US'].invoke)).toBeInTheDocument();
     expect(screen.queryByText(PROTOCOL_DESCRIPTION)).not.toBeInTheDocument();
   });
@@ -113,6 +118,7 @@ describe('Ki-Buddy Agents MCP tool presentation', () => {
 
     expect(screen.getByText(PRODUCT_DESCRIPTIONS[language].list)).toBeInTheDocument();
     expect(screen.getByText(PRODUCT_DESCRIPTIONS[language].describe)).toBeInTheDocument();
+    expect(screen.getByText(PRODUCT_DESCRIPTIONS[language].upload)).toBeInTheDocument();
     expect(screen.getByText(PRODUCT_DESCRIPTIONS[language].invoke)).toBeInTheDocument();
     expect(screen.queryByText(PROTOCOL_DESCRIPTION)).not.toBeInTheDocument();
   });

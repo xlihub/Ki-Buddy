@@ -13,6 +13,10 @@ const AGENTS_INVOKE_CONTROL_FIELDS = new Set(['apiKey', 'userId', 'flowId', 'oau
 const AGENTS_MCP_CLIENT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export const AGENTS_MCP_CLIENT_ID_HEADER = 'x-ki-buddy-agents-client-id';
+export const AGENTS_MCP_AGENT_ID_HEADER = 'x-ki-buddy-agents-agent-id';
+export const AGENTS_MCP_FIELD_NAME_HEADER = 'x-ki-buddy-agents-field-name';
+export const AGENTS_MCP_FILE_NAME_HEADER = 'x-ki-buddy-agents-file-name';
+export const AGENTS_MCP_FILE_SIZE_HEADER = 'x-ki-buddy-agents-file-size';
 
 export type AgentsCatalogSummary = Readonly<{
   agentId: string;
@@ -47,6 +51,13 @@ export type AgentsCatalogSelection = Readonly<{
 
 export type AgentsScalarInput = boolean | number | string;
 export type AgentsScalarInputs = Readonly<Record<string, AgentsScalarInput>>;
+export type AgentsInvokeInputs = AgentsScalarInputs;
+export type AgentsInvokeRequest = Readonly<{
+  agentId: string;
+  agentType: string;
+  conversationId: string;
+  inputs: AgentsInvokeInputs;
+}>;
 
 export type AgentsInvokeCorrelation = Readonly<{
   agentId: string;
@@ -198,8 +209,7 @@ function validateScalarValue(field: AgentsSchemaField, value: unknown): value is
   }
 }
 
-/** Validates one model-provided input object against the freshly fetched exact scalar schema. */
-export function validateAgentsScalarInputs(description: AgentsCatalogDescription, value: unknown): AgentsScalarInputs {
+function validateInputObject(description: AgentsCatalogDescription, value: unknown): AgentsInvokeInputs {
   if (!isRecord(value)) throw new AgentsMcpError('invalid_input', 'Agents invoke inputs must be an object');
   const schemaByName = new Map(description.inputSchema.map((field) => [field.name, field]));
   const entries = Object.entries(value);
@@ -213,6 +223,13 @@ export function validateAgentsScalarInputs(description: AgentsCatalogDescription
     if (!field || AGENTS_INVOKE_CONTROL_FIELDS.has(name)) {
       throw new AgentsMcpError('invalid_input', 'Agents invoke inputs contain a forbidden field');
     }
+    if (field.type.toLowerCase() === 'file') {
+      if (typeof input !== 'string' || input.trim().length === 0) {
+        throw new AgentsMcpError('invalid_input', 'Agents file input must be a non-empty uploaded file URL');
+      }
+      normalizedEntries.push([name, input]);
+      continue;
+    }
     if (!validateScalarValue(field, input)) {
       throw new AgentsMcpError('invalid_input', 'Agents invoke input does not match the exact scalar schema');
     }
@@ -220,12 +237,39 @@ export function validateAgentsScalarInputs(description: AgentsCatalogDescription
   }
 
   const normalized = Object.fromEntries(normalizedEntries) as Record<string, AgentsScalarInput>;
-
   for (const field of description.inputSchema) {
     const input = normalized[field.name];
     if (field.required && (input === undefined || (typeof input === 'string' && input.trim().length === 0))) {
-      throw new AgentsMcpError('invalid_input', 'Agents invoke is missing a required scalar input');
+      throw new AgentsMcpError('invalid_input', 'Agents invoke is missing a required input');
     }
   }
   return normalized;
+}
+
+/** Validates model-provided scalar values and uploaded file URLs against the current exact schema. */
+export function validateAgentsInvokeInputs(description: AgentsCatalogDescription, value: unknown): AgentsInvokeInputs {
+  return validateInputObject(description, value);
+}
+
+/** Validates one upload target and its filename metadata against an exact type=file field. */
+export function validateAgentsFileField(
+  description: AgentsCatalogDescription,
+  fieldName: string,
+  fileName: string
+): AgentsSchemaField {
+  const field = description.inputSchema.find(({ name }) => name === fieldName);
+  if (!field || AGENTS_INVOKE_CONTROL_FIELDS.has(fieldName) || field.type.toLowerCase() !== 'file') {
+    throw new AgentsMcpError('invalid_input', 'Agents upload target must be an exact file field');
+  }
+  const allowed = field.allowed_file_types;
+  if (!allowed?.length) return field;
+  const extension = fileName.includes('.') ? fileName.split('.').at(-1)?.toLowerCase() : undefined;
+  const matches = allowed.some((candidate) => {
+    const normalized = candidate.trim().toLowerCase();
+    if (!normalized) return false;
+    if (extension && (normalized === extension || normalized === `.${extension}`)) return true;
+    return false;
+  });
+  if (!matches) throw new AgentsMcpError('invalid_input', 'The attachment type is not allowed for this file field');
+  return field;
 }

@@ -783,7 +783,8 @@
   "kiBuddy": {
     "agentsDescribeDescription": "显示当前目录中一个 Agent 的精确输入和输出结构。",
     "agentsInvokeDescription": "刷新权限和输入结构后，使用完整的标量参数调用一次已描述的 Agent。",
-    "agentsListDescription": "列出当前登录账号可用的完整 Agents 目录。"
+    "agentsListDescription": "列出当前登录账号可用的完整 Agents 目录。",
+    "agentsUploadDescription": "为指定的文件输入字段上传一个本地文件，并返回其 Agents 文件 URL。"
   },
   "mcpAuthRequired": "需要身份验证",
   "mcpOAuthLoginSuccess": "OAuth 登录成功",

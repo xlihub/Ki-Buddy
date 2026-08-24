@@ -1903,6 +1903,7 @@ export type I18nKey =
   | 'settings.kiBuddy.agentsDescribeDescription'
   | 'settings.kiBuddy.agentsInvokeDescription'
   | 'settings.kiBuddy.agentsListDescription'
+  | 'settings.kiBuddy.agentsUploadDescription'
   | 'settings.language'
   | 'settings.lark.agent'
   | 'settings.lark.agentDesc'

@@ -783,7 +783,8 @@
   "kiBuddy": {
     "agentsDescribeDescription": "Shows the exact input and output schema for one agent in the current catalog.",
     "agentsInvokeDescription": "Invokes the described Agent once with complete scalar inputs after refreshing its permission and schema.",
-    "agentsListDescription": "Lists the complete Agents catalog available to the current signed-in account."
+    "agentsListDescription": "Lists the complete Agents catalog available to the current signed-in account.",
+    "agentsUploadDescription": "Uploads one local file for a specified file input field and returns its Agents file URL."
   },
   "mcpAuthRequired": "Authentication required",
   "mcpOAuthLoginSuccess": "OAuth login successful",
