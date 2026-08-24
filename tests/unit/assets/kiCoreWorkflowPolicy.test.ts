@@ -1,9 +1,53 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { load as loadYaml } from 'js-yaml';
+
+type WorkflowStep = Readonly<{
+  name?: string;
+  run?: string;
+  with?: Readonly<Record<string, unknown>>;
+}>;
+
+type WorkflowJob = Readonly<{
+  steps?: readonly WorkflowStep[];
+}>;
+
+type WorkflowDefinition = Readonly<{
+  jobs?: Readonly<Record<string, WorkflowJob>>;
+}>;
+
+const DEPENDENCY_BOUND_SCRIPT_PATHS = [
+  'packages/shared-scripts/src/kiBuddyProductExperienceConsistency.ts',
+  'packages/shared-scripts/src/kiBuddyRelease.js',
+  'packages/shared-scripts/src/kiBuddyUnpacked.js',
+  'packages/shared-scripts/src/prepare-aioncore.js',
+  'scripts/build-with-builder.js',
+  'scripts/pack-web-cli.js',
+  'scripts/prepareAioncore.js',
+];
 
 function workflow(name: string) {
   return readFileSync(resolve(process.cwd(), '.github/workflows', name), 'utf8');
+}
+
+function workflowNames(): readonly string[] {
+  return readdirSync(resolve(process.cwd(), '.github/workflows'))
+    .filter((name) => name.endsWith('.yml') || name.endsWith('.yaml'))
+    .toSorted();
+}
+
+function invokesDependencyBoundScript(command: string): boolean {
+  return command.split('\n').some((line) => {
+    const trimmed = line.trim();
+    return DEPENDENCY_BOUND_SCRIPT_PATHS.some(
+      (scriptPath) =>
+        trimmed.startsWith(`node ${scriptPath}`) ||
+        trimmed.startsWith(`bun ${scriptPath}`) ||
+        trimmed.includes(`$(node ${scriptPath}`) ||
+        trimmed.includes(`$(bun ${scriptPath}`)
+    );
+  });
 }
 
 describe('Ki-Core workflow source policies', () => {
@@ -60,6 +104,36 @@ describe('Ki-Core workflow source policies', () => {
     expect(installDependencies).toBeGreaterThan(setupBun);
     expect(fetchMappedTag).toBeGreaterThan(installDependencies);
     expect(validateJob.slice(installDependencies, fetchMappedTag)).toContain('bun install --frozen-lockfile');
+  });
+
+  it('installs workspace dependencies before every dependency-bound repository script invocation', () => {
+    const invocations: string[] = [];
+
+    for (const name of workflowNames()) {
+      const definition = loadYaml(workflow(name)) as WorkflowDefinition;
+      for (const [jobName, job] of Object.entries(definition.jobs ?? {})) {
+        const steps = job.steps ?? [];
+        for (const [stepIndex, step] of steps.entries()) {
+          const command = step.run;
+          if (!command || !invokesDependencyBoundScript(command)) continue;
+
+          const invocation = `${name}:${jobName}:${step.name ?? stepIndex + 1}`;
+          invocations.push(invocation);
+          const priorCommands = steps
+            .slice(0, stepIndex)
+            .flatMap((priorStep) => {
+              const retryCommand = priorStep.with?.command;
+              return [priorStep.run, typeof retryCommand === 'string' ? retryCommand : undefined].filter(
+                (value): value is string => Boolean(value)
+              );
+            })
+            .join('\n');
+          expect(priorCommands, invocation).toContain('bun install --frozen-lockfile');
+        }
+      }
+    }
+
+    expect(invocations.length).toBeGreaterThan(0);
   });
 
   it('creates only an approved Ki-Buddy Draft Release from a product tag', () => {
