@@ -5,6 +5,7 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileS
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { load as loadYaml } from 'js-yaml';
+import sharp from 'sharp';
 
 const {
   createKiBuddyBuildEvidence,
@@ -24,6 +25,62 @@ function readPngDimensions(relativePath: string): { height: number; width: numbe
   const data = readFileSync(join(projectRoot, relativePath));
   expect(data.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
   return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
+}
+
+function readLargestIcnsPng(relativePath: string): Buffer {
+  const data = readFileSync(join(projectRoot, relativePath));
+  expect(data.subarray(0, 4).toString('ascii')).toBe('icns');
+
+  let largestPng: Buffer | null = null;
+  let largestWidth = 0;
+  for (let offset = 8; offset < data.length; ) {
+    const chunkLength = data.readUInt32BE(offset + 4);
+    expect(chunkLength).toBeGreaterThanOrEqual(8);
+    const payload = data.subarray(offset + 8, offset + chunkLength);
+    if (payload.subarray(0, 8).toString('hex') === '89504e470d0a1a0a') {
+      const width = payload.readUInt32BE(16);
+      if (width > largestWidth) {
+        largestPng = payload;
+        largestWidth = width;
+      }
+    }
+    offset += chunkLength;
+  }
+
+  expect(largestPng).not.toBeNull();
+  return largestPng!;
+}
+
+async function readTransparentMargins(input: Buffer): Promise<{
+  bottom: number;
+  left: number;
+  right: number;
+  top: number;
+}> {
+  const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  let minX = info.width;
+  let minY = info.height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < info.height; y += 1) {
+    for (let x = 0; x < info.width; x += 1) {
+      if (data[(y * info.width + x) * info.channels + 3] === 0) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  expect(maxX).toBeGreaterThanOrEqual(0);
+  expect(maxY).toBeGreaterThanOrEqual(0);
+  return {
+    bottom: info.height - maxY - 1,
+    left: minX,
+    right: info.width - maxX - 1,
+    top: minY,
+  };
 }
 
 function sha256(relativePath: string): string {
@@ -123,6 +180,18 @@ describe('Ki-Buddy product release identity', () => {
     expect(readPngDimensions('packages/desktop/src/renderer/assets/ki-buddy/mascot.png')).toEqual({
       width: 256,
       height: 256,
+    });
+  });
+
+  it('keeps the macOS app artwork centered inside the Dock icon safe area', async () => {
+    const largestIcon = readLargestIcnsPng('resources/ki-buddy/app.icns');
+
+    expect(await sharp(largestIcon).metadata()).toMatchObject({ height: 1024, width: 1024 });
+    expect(await readTransparentMargins(largestIcon)).toEqual({
+      bottom: 100,
+      left: 100,
+      right: 100,
+      top: 100,
     });
   });
 
