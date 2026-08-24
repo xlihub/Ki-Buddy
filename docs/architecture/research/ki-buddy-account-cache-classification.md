@@ -270,16 +270,16 @@ conversation、Team、task、mailbox 已由 Core user scope 隔离，但 rendere
 
 当前 `kiBuddyAuthAdapter` 在 refresh/login/logout 需要清理时调用 `clearAccountState({ preserveRendererStorage: true })`，只重置 SWR、运行时 store 与 config cache，保留全部 renderer Web Storage。WebUI 默认路径仍执行原有 auth/preview storage 清理。
 
-### 7.2 Agents Adapter idempotency 目前是设计，不是已存在 cache
+### 7.2 Agents execution lifecycle 不属于客户端 cache
 
-ADR 0006 计划使用产品 SQLite ledger，以 `(normalized base_url, Agents user id, taskId)` 唯一，跨 logout/switch 保留，但不保存 secret 或任务结果；删除策略与工作历史一致。证据：`/Users/xli/AionUi/docs/adr/0006-guard-remote-invocations-with-local-ledger.md:5-22`。
+ADR 0006 的产品 SQLite ledger 方案已被 ADR 0012 取代。Ki-Buddy 不生成远端 taskId，不维护 invocation ledger 或 active invocation lifecycle，也不在 logout、账号切换、App 重启或异常恢复时推断 Agents 执行状态。status、cancel、resume、retry 与服务端幂等必须由 Agents 通过正式 MCP contract 提供。证据：`/Users/xli/AionUi/docs/adr/agents-execution/0006-guard-remote-invocations-with-local-ledger.md`、`/Users/xli/AionUi/docs/adr/agents-execution/0012-integrate-agents-execution-lifecycle-through-mcp.md`。
 
-ADR 0007 的 `uploadRef` 设计为 task/session/account/deployment 绑定且仅在内存中有效；ADR 0008 的 `deliveryRef` 只在当前 Adapter session 有效，不跨账号、session 或重启。证据：`/Users/xli/AionUi/docs/adr/0007-upload-authorized-local-files-inside-adapter.md:7-19`、`/Users/xli/AionUi/docs/adr/0008-deliver-remote-result-files-inside-adapter.md:7-22`。
+ADR 0007 的 `uploadRef` 与 ADR 0008 的 `deliveryRef` 仍属于计划中的客户端临时引用。它们只承担本地文件授权或交付职责，不表示远端 task identity、执行状态、恢复或取消。证据：`/Users/xli/AionUi/docs/adr/agents-execution/0007-upload-authorized-local-files-inside-adapter.md`、`/Users/xli/AionUi/docs/adr/agents-execution/0008-deliver-remote-result-files-inside-adapter.md`、ADR 0012。
 
-当前 `packages/desktop/src/process/ki-buddy/` 中没有这些 ledger、`uploadRef` 或 `deliveryRef` 的业务实现。因此它们应标为“计划中”：
+当前 `packages/desktop/src/process/ki-buddy/` 中没有 `uploadRef` 或 `deliveryRef` 的业务实现。因此它们应标为“计划中”：
 
-- ledger 将是 Agents 账号相关的持久数据，不能在普通 logout 时删除；
-- `uploadRef`、`deliveryRef` 和 active invocation 属于账号绑定的临时状态，切换时必须失效；
+- `uploadRef` 和 `deliveryRef` 属于账号绑定的临时客户端状态，切换时必须失效；
+- 这些引用不能被用于恢复、重试或取消远端执行，相关能力只能来自 MCP contract；
 - 现有 Core `ChatFileRef::Upload` 与计划中的 Agents Adapter `uploadRef` 不是同一个对象，不能混为一类。
 
 ## 8. AionUi v2.1.54 生产 OAuth 账号切换对照
@@ -373,7 +373,7 @@ Core user bridge 的 auth listener 在退出时以 `void handleSignedOut(...)` �
 - Agents credential、Core session/defaultSession auth Cookie、旧请求 AbortController 与验证循环；
 - conversation/Team/task/cron/assistant/project 的运行中请求、响应和订阅；
 - SWR 账号数据及所有模块级账号内存 store；
-- 未来 idempotency ledger 的可见性与 active invocation/ref 失效。
+- 旧 Agents 请求的 abort，以及未来 `uploadRef`、`deliveryRef` 等客户端临时引用失效；Ki-Buddy 不维护 idempotency ledger 或 active invocation lifecycle。
 
 ### 必须保持不变
 

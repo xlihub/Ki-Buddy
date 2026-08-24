@@ -158,31 +158,27 @@ _Avoid_：参数猜测、invoke 失败、新 execution task
 用户在 standalone conversation 中要求远端执行，或 Lead 根据用户目标分配的 execution task。
 _Avoid_：inventory 请求、候选咨询、永久授权
 
-## 执行一致性
+## Agents 执行生命周期
+
+**Agents 执行生命周期**：
+Agents 平台拥有的远端 task identity、服务端幂等、status、cancel、resume、retry 和审计语义，通过正式 MCP contract 提供给客户端。
+_Avoid_：Ki-Buddy 执行状态、本地恢复状态机、客户端幂等登记
 
 **远端 taskId**：
-在一个 Agents 部署和平台账户范围内唯一标识一次远端执行请求的稳定 ID，用于识别重复调用和关联结果。
+Agents MCP contract 在一个 Agents 部署和平台账户范围内提供、用于标识远端执行请求的稳定 ID。
 _Avoid_：进程内计数器、conversationId、requestId
 
 **active invocation**：
-一个 Assistant session 中已经开始但尚未取得终态的 direct invoke。
-_Avoid_：pending task、catalog 请求、账户级全局调用
+Agents MCP contract 明确报告为已经开始但尚未取得终态的远端调用；Ki-Buddy 不根据本地等待或进程状态推断该状态。
+_Avoid_：本地请求等待、pending task、catalog 请求
 
 **停止等待**：
 用户要求 Ki-Buddy 结束对一次 direct invoke 的本地等待；它不表示 Agents 远端执行已经取消。
 _Avoid_：远端取消、执行失败、确认已停止
 
-**本地 invocation ledger**：
-Ki-Buddy 以 Agents 部署、平台账户和远端 taskId 标识本地执行资格及恢复状态的持久登记；它不是审计记录。
-_Avoid_：Agents 审计记录、完整输入存档、进程内 taskId 集合
-
-**结果未知**：
-远端请求可能已被 Agents 接收，但 Ki-Buddy 没有取得可证明成功或失败的终态；原远端 taskId 不能再次执行。
-_Avoid_：执行失败、未执行、可自动重试
-
 **Agents 审计记录**：
 Agents 平台持有的中心化服务端执行证据，记录平台身份、获权 agent、远端执行和终态。
-_Avoid_：本地 invocation ledger、客户端结果文件、Adapter 日志
+_Avoid_：客户端 conversation 历史、客户端结果文件、Adapter 日志
 
 ## 文件与 workspace
 
@@ -199,7 +195,7 @@ _Avoid_：项目 workspace、全局临时目录、外部导出目录
 _Avoid_：Adapter 目录、全局结果目录、任意本地路径
 
 **本地文件授权**：
-Ki-Buddy 根据当前请求的明确附件选择，或用户对某个 workspace 文件的逐文件确认生成的 task-scoped file grant。
+Ki-Buddy 根据当前请求的明确附件选择，或用户对某个 workspace 文件的逐文件确认生成的一次性 file grant；它不表示远端 task identity 或执行状态。
 _Avoid_：项目目录授权、模型提供的路径、文件系统读取权限
 
 **上传引用**：
@@ -207,11 +203,11 @@ Adapter 为当前 session 中已经上传的远端文件输入生成的一次性
 _Avoid_：fileUrl、本地路径、Agents 文件 ID
 
 **结果文件交付**：
-Adapter 将 Bridge 的结构化远端文件输出安全写入 effective workspace，并向助手返回本地文件引用和脱敏摘要。
+Adapter 将正式 MCP result-file contract 返回的结构化远端文件安全写入 effective workspace，并向助手返回本地文件引用和脱敏摘要。
 _Avoid_：Assistant 下载、远端 URI 消息、主进程 Agents 输出解析
 
 **部分结果交付**：
-Agents 远端执行已经完成，但一个或多个结构化结果文件未能写入 effective workspace 的本地交付状态。
+MCP contract 已明确返回成功结果，但一个或多个结构化结果文件未能写入 effective workspace 的本地交付状态。
 _Avoid_：invoke 失败、全部成功、自动重新执行
 
 **结果交付引用**：
