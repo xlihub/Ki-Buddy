@@ -202,14 +202,6 @@ _Avoid_：项目目录授权、模型提供的路径、文件系统读取权限
 Adapter 为当前 session 中已经上传的远端文件输入生成的一次性不透明 `uploadRef`；它不暴露真实 `fileUrl`。
 _Avoid_：fileUrl、本地路径、Agents 文件 ID
 
-**结果文件交付**：
-Adapter 将正式 MCP result-file contract 返回的结构化远端文件安全写入 effective workspace，并向助手返回本地文件引用和脱敏摘要。
-_Avoid_：Assistant 下载、远端 URI 消息、主进程 Agents 输出解析
-
-**部分结果交付**：
-MCP contract 已明确返回成功结果，但一个或多个结构化结果文件未能写入 effective workspace 的本地交付状态。
-_Avoid_：invoke 失败、全部成功、自动重新执行
-
-**结果交付引用**：
-Adapter 为当前 session 中尚未解决的结果文件交付保存的一次性不透明 `deliveryRef`，用于只重试未交付文件。
-_Avoid_：远端 URI、持久下载记录、invoke 重试
+**远端执行文件产物**：
+Agents 平台通过正式 execution artifact contract 与一次远端执行关联并提供获取语义的文件结果；Ki-Buddy 不根据 invoke JSON、URL 或字段名称推断这种关联。
+_Avoid_：客户端结果文件、任意输出 URL、本地 `deliveryRef`
