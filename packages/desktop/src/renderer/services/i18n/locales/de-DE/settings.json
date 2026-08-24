@@ -775,7 +775,8 @@
   "kiBuddy": {
     "agentsDescribeDescription": "Zeigt das genaue Ein- und Ausgabeschema eines Agent im aktuellen Katalog an.",
     "agentsInvokeDescription": "Ruft den beschriebenen Agent nach Aktualisierung von Berechtigung und Schema einmal mit vollständigen Skalarwerten auf.",
-    "agentsListDescription": "Listet den vollständigen Agents-Katalog auf, der für das aktuell angemeldete Konto verfügbar ist."
+    "agentsListDescription": "Listet den vollständigen Agents-Katalog auf, der für das aktuell angemeldete Konto verfügbar ist.",
+    "agentsUploadDescription": "Lädt eine lokale Datei für ein bestimmtes Datei-Eingabefeld hoch und gibt deren Agents-Datei-URL zurück."
   },
   "mcpAuthRequired": "Authentifizierung erforderlich",
   "mcpOAuthLoginSuccess": "OAuth-Anmeldung erfolgreich",

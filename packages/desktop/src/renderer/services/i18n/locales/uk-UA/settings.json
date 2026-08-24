@@ -769,7 +769,8 @@
   "kiBuddy": {
     "agentsDescribeDescription": "Показує точну схему вхідних і вихідних даних одного Agent з поточного каталогу.",
     "agentsInvokeDescription": "Одноразово викликає описаний Agent із повним набором скалярних вхідних даних після оновлення прав і схеми.",
-    "agentsListDescription": "Показує повний каталог Agents, доступний поточному обліковому запису."
+    "agentsListDescription": "Показує повний каталог Agents, доступний поточному обліковому запису.",
+    "agentsUploadDescription": "Завантажує один локальний файл для вказаного файлового поля вводу та повертає URL файлу в Agents."
   },
   "mcpAuthRequired": "Потрібна автентифікація",
   "mcpOAuthLoginSuccess": "OAuth-вхід успішний",

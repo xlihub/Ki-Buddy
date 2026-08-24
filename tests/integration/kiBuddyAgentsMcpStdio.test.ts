@@ -1,25 +1,29 @@
 import { execFileSync, spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startAgentsMcpRuntimeBridge } from '@/process/ki-buddy/agents';
 import { startAgentsMcpBridge, type AgentsMcpBridgeHandle } from '@/process/ki-buddy/agents/bridge';
 import { createAgentsClient, type AgentsClient } from '@/process/ki-buddy/agents/client';
 import { AgentsMcpError } from '@/process/ki-buddy/agents/errors';
 
 const projectRoot = path.resolve(__dirname, '../..');
-const adapterScript = path.join(projectRoot, 'out/main/builtin-mcp-agents.js');
+let adapterBundleDirectory: string | undefined;
+let adapterScript = '';
 const bridges: AgentsMcpBridgeHandle[] = [];
 const clients: Client[] = [];
 const childProcesses: ChildProcess[] = [];
 const externalProcessIds = new Set<number>();
-const fakeGateways: Array<Readonly<{ close: () => Promise<void> }>> = [];
+const fakeServers: Array<Readonly<{ close: () => Promise<void> }>> = [];
+const tempDirectories = new Set<string>();
 const adapterEnvironment = {
   KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL: 'http://127.0.0.1:43123',
   KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN: 'process-exit-secret',
@@ -47,6 +51,28 @@ const fakeCatalog = {
       agentType: 'workflow',
       defaultInputModes: [{ name: 'query', description: 'Feedback text', type: 'text', required: true }],
       defaultOutputModes: [{ name: 'summary', description: 'Summary', type: 'text', required: true }],
+    },
+  ],
+};
+
+const fileAgentCatalog = {
+  status: 'ok',
+  total: 1,
+  agents: [
+    {
+      agentId: 'agent-file',
+      agentTitle: 'File agent',
+      agentType: 'workflow',
+      defaultInputModes: [
+        {
+          name: 'source',
+          description: 'Source file',
+          type: 'file',
+          required: true,
+          allowed_file_types: ['txt'],
+        },
+      ],
+      defaultOutputModes: [],
     },
   ],
 };
@@ -137,8 +163,14 @@ async function startFakeCatalogGateway(initialCatalog: unknown = fakeCatalog): P
         server.close((error) => (error ? reject(error) : resolve()));
       }),
   };
-  fakeGateways.push(gateway);
+  fakeServers.push(gateway);
   return gateway;
+}
+
+async function createTrackedTempDirectory(prefix: string): Promise<string> {
+  const directory = await mkdtemp(path.join(os.tmpdir(), prefix));
+  tempDirectories.add(directory);
+  return directory;
 }
 
 async function startGatewayBackedBridge(binding: MutableSessionBinding): Promise<AgentsMcpBridgeHandle> {
@@ -166,7 +198,8 @@ async function createGatewayBackedClient(binding: MutableSessionBinding): Promis
 
 async function connectStdioAdapter(
   name: string,
-  bridge: AgentsMcpBridgeHandle
+  bridge: AgentsMcpBridgeHandle,
+  env: Readonly<Record<string, string>> = {}
 ): Promise<Readonly<{ client: Client; processId: number | null }>> {
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -174,6 +207,7 @@ async function connectStdioAdapter(
     env: {
       KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN: bridge.token,
       KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL: bridge.url,
+      ...env,
     },
     stderr: 'pipe',
   });
@@ -271,17 +305,32 @@ async function waitForProcessIdExit(processId: number): Promise<void> {
   throw new Error(`Agents MCP Adapter process ${processId} did not exit after its parent ended`);
 }
 
-beforeAll(() => {
-  execFileSync(process.execPath, [path.join(projectRoot, 'scripts/build-mcp-servers.js')], {
-    cwd: projectRoot,
-    stdio: 'pipe',
-  });
+beforeAll(async () => {
+  adapterBundleDirectory = await mkdtemp(path.join(os.tmpdir(), 'ki-buddy-agents-mcp-bundle-'));
+  adapterScript = path.join(adapterBundleDirectory, 'builtin-mcp-agents.js');
+  execFileSync(
+    process.execPath,
+    [path.join(projectRoot, 'scripts/build-mcp-servers.js'), '--out-dir', adapterBundleDirectory],
+    {
+      cwd: projectRoot,
+      stdio: 'pipe',
+    }
+  );
+});
+
+afterAll(async () => {
+  if (!adapterBundleDirectory) return;
+  await rm(adapterBundleDirectory, { recursive: true, force: true });
+  adapterBundleDirectory = undefined;
+  adapterScript = '';
 });
 
 afterEach(async () => {
   await Promise.allSettled(clients.splice(0).map((client) => client.close()));
   await Promise.allSettled(bridges.splice(0).map((bridge) => bridge.close()));
-  await Promise.allSettled(fakeGateways.splice(0).map((gateway) => gateway.close()));
+  await Promise.allSettled(fakeServers.splice(0).map((server) => server.close()));
+  await Promise.allSettled([...tempDirectories].map((directory) => rm(directory, { recursive: true, force: true })));
+  tempDirectories.clear();
   await Promise.all(
     childProcesses.splice(0).map(async (child) => {
       if (child.exitCode !== null || child.signalCode !== null) return;
@@ -307,6 +356,125 @@ afterEach(async () => {
 });
 
 describe('packaged Agents MCP Adapter stdio process', () => {
+  it('uploads a local file path and invokes with the remote file URL', async () => {
+    const directory = await createTrackedTempDirectory('ki-buddy-agents-stdio-upload-');
+    const filePath = path.join(directory, 'feedback.txt');
+    await writeFile(filePath, 'stdio upload canary');
+    const invokeAgent = vi.fn().mockResolvedValue(Response.json({ state: 'completed' }));
+    const bridge = await startAgentsMcpBridge({
+      fetchCatalog: vi.fn().mockImplementation(async () => ({
+        response: Response.json(fileAgentCatalog),
+        sessionEpoch: 1,
+      })),
+      uploadFile: vi.fn().mockImplementation(async (body) => {
+        const chunks: Buffer[] = [];
+        for await (const chunk of body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        expect(Buffer.concat(chunks).toString('utf8')).toContain('stdio upload canary');
+        return {
+          fileUrl: 'https://agents.example.test/files/remote-stdio',
+          sessionEpoch: 1,
+        };
+      }),
+      invokeAgent,
+      token: 'bridge-secret-stdio-upload',
+    });
+    bridges.push(bridge);
+
+    const { client } = await connectStdioAdapter('ki-buddy-agents-file-upload', bridge);
+    const uploadResult = await client.callTool({
+      name: 'agents_upload_file',
+      arguments: { agentId: 'agent-file', fieldName: 'source', filePath },
+    });
+    expect(uploadResult.isError).not.toBe(true);
+    const uploadText = (uploadResult.content[0] as { text: string }).text;
+    const { fileUrl } = JSON.parse(uploadText) as { fileUrl: string };
+
+    const invokeResult = await client.callTool({
+      name: 'agents_invoke',
+      arguments: { agentId: 'agent-file', inputs: { source: fileUrl } },
+    });
+
+    expect(invokeResult.isError).not.toBe(true);
+    expect(invokeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputs: { source: 'https://agents.example.test/files/remote-stdio' },
+      }),
+      1,
+      expect.any(String),
+      expect.any(AbortSignal)
+    );
+  });
+
+  it.each([
+    ['remote upload failure', 'server'],
+    ['expired upload authentication', 'auth'],
+  ] as const)('stops before invoke after %s', async (_scenario, expectedCode) => {
+    const directory = await createTrackedTempDirectory('ki-buddy-agents-stdio-upload-failure-');
+    const filePath = path.join(directory, 'feedback.txt');
+    await writeFile(filePath, 'stdio upload failure canary');
+    const invokeAgent = vi.fn();
+    const uploadFile = vi.fn(async (body: IncomingMessage) => {
+      for await (const _chunk of body) {
+        // Consume the multipart stream before returning the simulated remote response.
+      }
+      throw new AgentsMcpError(expectedCode, 'sensitive upstream detail');
+    });
+    const bridge = await startAgentsMcpBridge({
+      fetchCatalog: vi.fn().mockResolvedValue({ response: Response.json(fileAgentCatalog), sessionEpoch: 1 }),
+      uploadFile,
+      invokeAgent,
+      token: `bridge-secret-stdio-upload-${expectedCode}`,
+    });
+    bridges.push(bridge);
+    const { client } = await connectStdioAdapter(`ki-buddy-agents-file-upload-${expectedCode}`, bridge);
+
+    const result = await client.callTool({
+      name: 'agents_upload_file',
+      arguments: { agentId: 'agent-file', fieldName: 'source', filePath },
+    });
+    const payload = JSON.parse((result.content[0] as { text: string }).text) as { error?: { code?: string } };
+
+    expect({
+      errorCode: payload.error?.code,
+      invokeCalls: invokeAgent.mock.calls.length,
+      isError: result.isError,
+      uploadCalls: uploadFile.mock.calls.length,
+    }).toEqual({ errorCode: expectedCode, invokeCalls: 0, isError: true, uploadCalls: 1 });
+  });
+
+  it('does not dispatch an upload after the authenticated session changes following catalog validation', async () => {
+    const directory = await createTrackedTempDirectory('ki-buddy-agents-stdio-session-change-');
+    const filePath = path.join(directory, 'feedback.txt');
+    await writeFile(filePath, 'stdio session change canary');
+    let epochReads = 0;
+    const fetchAuthenticated = vi.fn(async (requestPath: string) => {
+      if (requestPath !== '/bridge/agents/catalog') throw new Error('Upload must not be dispatched');
+      return Response.json(fileAgentCatalog);
+    });
+    const authService: RuntimeAuthService = {
+      fetchAuthenticated,
+      getSessionEpoch: () => {
+        epochReads += 1;
+        return epochReads <= 2 ? 1 : 2;
+      },
+    };
+    const bridge = await startAgentsMcpRuntimeBridge(authService, {});
+    bridges.push(bridge);
+    const { client } = await connectStdioAdapter('ki-buddy-agents-file-upload-session-change', bridge);
+
+    const result = await client.callTool({
+      name: 'agents_upload_file',
+      arguments: { agentId: 'agent-file', fieldName: 'source', filePath },
+    });
+    const payload = JSON.parse((result.content[0] as { text: string }).text) as { error?: { code?: string } };
+
+    expect({
+      errorCode: payload.error?.code,
+      isError: result.isError,
+      remoteCalls: fetchAuthenticated.mock.calls.length,
+    }).toEqual({ errorCode: 'auth', isError: true, remoteCalls: 1 });
+  });
+
   it('keeps distinct direct Adapter clients isolated while one invoke is pending', async () => {
     let finishInvoke: ((response: Response) => void) | undefined;
     let invokeClientId = '';
@@ -676,7 +844,12 @@ describe('packaged Agents MCP Adapter stdio process', () => {
     });
 
     expect(existsSync(adapterScript)).toBe(true);
-    expect(tools.tools.map(({ name }) => name)).toEqual(['agents_list', 'agents_describe', 'agents_invoke']);
+    expect(tools.tools.map(({ name }) => name)).toEqual([
+      'agents_list',
+      'agents_describe',
+      'agents_upload_file',
+      'agents_invoke',
+    ]);
     expect(result.content).toEqual([
       {
         type: 'text',

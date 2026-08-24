@@ -773,7 +773,8 @@
   "kiBuddy": {
     "agentsDescribeDescription": "Muestra el esquema exacto de entrada y salida de un Agent del catálogo actual.",
     "agentsInvokeDescription": "Invoca una vez el Agent descrito con entradas escalares completas después de actualizar sus permisos y esquema.",
-    "agentsListDescription": "Muestra el catálogo completo de Agents disponible para la cuenta que ha iniciado sesión."
+    "agentsListDescription": "Muestra el catálogo completo de Agents disponible para la cuenta que ha iniciado sesión.",
+    "agentsUploadDescription": "Sube un archivo local para un campo de entrada de archivo específico y devuelve su URL de archivo en Agents."
   },
   "mcpAuthRequired": "Autenticación requerida",
   "mcpOAuthLoginSuccess": "Inicio de sesión OAuth exitoso",

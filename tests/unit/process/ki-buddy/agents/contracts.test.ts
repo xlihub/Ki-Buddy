@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeAgentsCatalog,
   normalizeAgentsCatalogSelection,
-  validateAgentsScalarInputs,
+  validateAgentsFileField,
+  validateAgentsInvokeInputs,
 } from '@/process/ki-buddy/agents/contracts';
 import catalogFixture from '../../../../fixtures/ki-buddy/agents/catalog.json';
 
@@ -38,7 +39,7 @@ describe('safe Agents catalog projection', () => {
           description: '脱敏后的反馈文件',
           type: 'file',
           required: true,
-          allowed_file_types: ['text/plain'],
+          allowed_file_types: ['txt'],
         },
       ],
       outputSchema: [{ name: 'summary', description: '分析摘要', type: 'text', required: true }],
@@ -146,7 +147,7 @@ describe('scalar invoke input enforcement', () => {
       outputSchema: [],
     };
 
-    expect(validateAgentsScalarInputs(description, { query: 'Summary', limit: 3, includeArchived: false })).toEqual({
+    expect(validateAgentsInvokeInputs(description, { query: 'Summary', limit: 3, includeArchived: false })).toEqual({
       query: 'Summary',
       limit: 3,
       includeArchived: false,
@@ -165,7 +166,7 @@ describe('scalar invoke input enforcement', () => {
         outputSchema: [],
       };
 
-      expect(() => validateAgentsScalarInputs(description, { [fieldName]: 'secret' })).toThrow('forbidden field');
+      expect(() => validateAgentsInvokeInputs(description, { [fieldName]: 'secret' })).toThrow('forbidden field');
     }
   );
 
@@ -181,7 +182,7 @@ describe('scalar invoke input enforcement', () => {
         outputSchema: [],
       };
 
-      expect(validateAgentsScalarInputs(description, { [fieldName]: 12 })).toEqual({ [fieldName]: 12 });
+      expect(validateAgentsInvokeInputs(description, { [fieldName]: 12 })).toEqual({ [fieldName]: 12 });
     }
   );
 
@@ -195,6 +196,68 @@ describe('scalar invoke input enforcement', () => {
       outputSchema: [],
     };
 
-    expect(() => validateAgentsScalarInputs(description, { query: ['not', 'scalar'] })).toThrow('scalar schema');
+    expect(() => validateAgentsInvokeInputs(description, { query: ['not', 'scalar'] })).toThrow('scalar schema');
+  });
+});
+
+describe('file invoke input enforcement', () => {
+  const description = {
+    agentId: 'agent-file',
+    title: 'File agent',
+    description: '',
+    agentType: 'workflow',
+    inputSchema: [
+      {
+        name: 'source',
+        description: '',
+        type: 'file',
+        required: true,
+        allowed_file_types: ['txt'],
+      },
+      { name: 'query', description: '', type: 'text', required: false },
+    ],
+    outputSchema: [],
+  };
+
+  it('accepts the remote file URL returned by the upload tool', () => {
+    expect(
+      validateAgentsInvokeInputs(description, {
+        source: 'https://agents.example.test/files/remote-1',
+        query: 'Summarize',
+      })
+    ).toEqual({ source: 'https://agents.example.test/files/remote-1', query: 'Summarize' });
+  });
+
+  it.each([[''], [{ fileUrl: 'https://agents.example.test/files/remote-1' }]])(
+    'rejects a non-string or empty file input: %j',
+    (source) => {
+      expect(() => validateAgentsInvokeInputs(description, { source })).toThrow('uploaded file URL');
+    }
+  );
+
+  it.each([
+    ['report.xlsx', 'xlsx'],
+    ['photo.png', '.png'],
+  ])('accepts an extension declared by the Agent: %s / %s', (fileName, allowedType) => {
+    expect(() =>
+      validateAgentsFileField(
+        {
+          ...description,
+          inputSchema: [{ ...description.inputSchema[0], allowed_file_types: [allowedType] }],
+        },
+        'source',
+        fileName
+      )
+    ).not.toThrow();
+  });
+
+  it('does not inspect file format when allowed_file_types is absent', () => {
+    expect(() =>
+      validateAgentsFileField(
+        { ...description, inputSchema: [{ ...description.inputSchema[0], allowed_file_types: undefined }] },
+        'source',
+        'unknown-format.proprietary'
+      )
+    ).not.toThrow();
   });
 });

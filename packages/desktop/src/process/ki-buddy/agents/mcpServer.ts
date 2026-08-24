@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { AgentsClient } from './client';
+import type { AgentsInvokeInputs } from './contracts';
 import { getAgentsMcpErrorPresentation, AgentsMcpError } from './errors';
 
 /** Stable model-facing MCP metadata; the renderer resolves localized product presentation separately. */
@@ -9,7 +10,9 @@ const AGENTS_LIST_PROTOCOL_DESCRIPTION =
 const AGENTS_DESCRIBE_PROTOCOL_DESCRIPTION =
   'Describe the exact input and output schema for one agentId from the current safe catalog. Use agents_list first and do not infer an agentId.';
 const AGENTS_INVOKE_PROTOCOL_DESCRIPTION =
-  'Direct invoke one current agentId with complete scalar inputs. The Adapter refreshes the current catalog and exact schema before dispatch.';
+  'Direct invoke one current agentId with complete inputs. File fields must use fileUrl values returned by agents_upload_file. The Adapter refreshes the current catalog and exact schema before dispatch.';
+const AGENTS_UPLOAD_PROTOCOL_DESCRIPTION =
+  'Upload one local regular file by absolute path for one exact type=file input field and return the remote Agents fileUrl.';
 
 const textResult = (value: unknown, isError = false) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value) }],
@@ -34,7 +37,7 @@ async function executeAgentsTool<T>(operation: () => Promise<T>) {
 
 /** Creates the catalog discovery and one-agent direct invoke surface for the Agents Adapter. */
 export function createAgentsMcpServer(client: AgentsClient): McpServer {
-  const server = new McpServer({ name: 'ki-buddy-agents-mcp-adapter', version: '0.3.0' });
+  const server = new McpServer({ name: 'ki-buddy-agents-mcp-adapter', version: '0.4.0' });
   server.registerTool(
     'agents_list',
     {
@@ -64,6 +67,24 @@ export function createAgentsMcpServer(client: AgentsClient): McpServer {
     ({ agentId }) => executeAgentsTool(() => client.describe(agentId))
   );
   server.registerTool(
+    'agents_upload_file',
+    {
+      description: AGENTS_UPLOAD_PROTOCOL_DESCRIPTION,
+      inputSchema: {
+        agentId: z.string().trim().min(1).max(200),
+        fieldName: z.string().trim().min(1).max(200),
+        filePath: z.string().min(1).max(32_768),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    ({ agentId, fieldName, filePath }) => executeAgentsTool(() => client.upload(agentId, fieldName, filePath))
+  );
+  server.registerTool(
     'agents_invoke',
     {
       description: AGENTS_INVOKE_PROTOCOL_DESCRIPTION,
@@ -80,7 +101,7 @@ export function createAgentsMcpServer(client: AgentsClient): McpServer {
         openWorldHint: true,
       },
     },
-    ({ agentId, inputs }) => executeAgentsTool(() => client.invoke(agentId, inputs))
+    ({ agentId, inputs }) => executeAgentsTool(() => client.invoke(agentId, inputs as AgentsInvokeInputs))
   );
   return server;
 }

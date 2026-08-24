@@ -1,11 +1,16 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import {
+  AGENTS_MCP_AGENT_ID_HEADER,
   AGENTS_MCP_CLIENT_ID_HEADER,
+  AGENTS_MCP_FIELD_NAME_HEADER,
+  AGENTS_MCP_FILE_NAME_HEADER,
+  AGENTS_MCP_FILE_SIZE_HEADER,
   isAgentsMcpClientId,
   normalizeAgentsCatalogSelection,
-  validateAgentsScalarInputs,
-  type AgentsScalarInputs,
+  validateAgentsFileField,
+  validateAgentsInvokeInputs,
+  type AgentsInvokeRequest,
 } from './contracts';
 import { AgentsMcpError, getAgentsMcpErrorPresentation, type AgentsMcpErrorCode } from './errors';
 import { readBoundedJsonRequest, readBoundedJsonResponse } from './json';
@@ -15,12 +20,7 @@ const MAX_CATALOG_RESPONSE_BYTES = 5 * 1024 * 1024;
 const MAX_INVOKE_REQUEST_BYTES = 1024 * 1024;
 const MAX_INVOKE_RESPONSE_BYTES = 5 * 1024 * 1024;
 
-export type AgentsInvokeRequest = Readonly<{
-  agentId: string;
-  agentType: string;
-  conversationId: string;
-  inputs: AgentsScalarInputs;
-}>;
+export type { AgentsInvokeRequest } from './contracts';
 
 type StartAgentsMcpBridgeOptions = Readonly<{
   fetchCatalog: (
@@ -33,6 +33,13 @@ type StartAgentsMcpBridgeOptions = Readonly<{
     clientId: string,
     signal: AbortSignal
   ) => Promise<Response>;
+  uploadFile?: (
+    body: IncomingMessage,
+    contentType: string,
+    sessionEpoch: number,
+    clientId: string,
+    signal: AbortSignal
+  ) => Promise<Readonly<{ fileUrl: string; sessionEpoch: number }>>;
   token?: string;
 }>;
 
@@ -55,6 +62,29 @@ function requireClientId(request: IncomingMessage): string {
     throw new AgentsMcpError('invalid_input', 'Agents Adapter client identity is invalid');
   }
   return clientId;
+}
+
+function requireEncodedHeader(request: IncomingMessage, name: string, label: string, maxLength: number): string {
+  const value = request.headers[name];
+  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength * 9) {
+    throw new AgentsMcpError('invalid_input', `${label} is invalid`);
+  }
+  try {
+    const decoded = decodeURIComponent(value).trim();
+    if (!decoded || decoded.length > maxLength) throw new Error('invalid length');
+    return decoded;
+  } catch {
+    throw new AgentsMcpError('invalid_input', `${label} is invalid`);
+  }
+}
+
+function requireFileSize(request: IncomingMessage): number {
+  const value = request.headers[AGENTS_MCP_FILE_SIZE_HEADER];
+  const size = typeof value === 'string' ? Number(value) : Number.NaN;
+  if (!Number.isSafeInteger(size) || size < 0) {
+    throw new AgentsMcpError('invalid_input', 'Agents upload file size is invalid');
+  }
+  return size;
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
@@ -139,7 +169,7 @@ async function handleInvokeRequest(
     const catalog = await readBoundedJsonResponse(catalogResponse, MAX_CATALOG_RESPONSE_BYTES);
     const { description } = normalizeAgentsCatalogSelection(catalog, agentId);
     const bodyInputs = (body as { inputs?: unknown }).inputs;
-    const inputs = validateAgentsScalarInputs(description, bodyInputs === undefined ? {} : bodyInputs);
+    const inputs = validateAgentsInvokeInputs(description, bodyInputs === undefined ? {} : bodyInputs);
     if (!options.invokeAgent) throw new AgentsMcpError('configuration', 'Agents invoke is unavailable');
 
     dispatchedAgentId = agentId;
@@ -184,6 +214,53 @@ async function handleInvokeRequest(
   }
 }
 
+async function handleUploadRequest(
+  options: StartAgentsMcpBridgeOptions,
+  request: IncomingMessage,
+  response: ServerResponse,
+  clientId: string,
+  signal: AbortSignal
+): Promise<void> {
+  try {
+    const contentType = request.headers['content-type'];
+    if (typeof contentType !== 'string' || !contentType.toLowerCase().startsWith('multipart/form-data; boundary=')) {
+      throw new AgentsMcpError('invalid_input', 'Agents upload requires multipart form data');
+    }
+    const agentId = requireEncodedHeader(request, AGENTS_MCP_AGENT_ID_HEADER, 'Agents upload agentId', 200);
+    const fieldName = requireEncodedHeader(request, AGENTS_MCP_FIELD_NAME_HEADER, 'Agents upload field name', 200);
+    const fileName = requireEncodedHeader(request, AGENTS_MCP_FILE_NAME_HEADER, 'Agents upload file name', 1024);
+    const size = requireFileSize(request);
+    const { response: catalogResponse, sessionEpoch: catalogSessionEpoch } = await options.fetchCatalog(
+      clientId,
+      signal
+    );
+    if (catalogResponse.status === 401 || catalogResponse.status === 403) {
+      throw new AgentsMcpError('auth', 'Agents login is required');
+    }
+    if (!catalogResponse.ok) throw new AgentsMcpError('server', 'Agents catalog service is unavailable');
+    const catalog = await readBoundedJsonResponse(catalogResponse, MAX_CATALOG_RESPONSE_BYTES);
+    const { description } = normalizeAgentsCatalogSelection(catalog, agentId);
+    validateAgentsFileField(description, fieldName, fileName);
+    if (!options.uploadFile) throw new AgentsMcpError('configuration', 'Agents file upload is unavailable');
+
+    const { fileUrl, sessionEpoch } = await options.uploadFile(
+      request,
+      contentType,
+      catalogSessionEpoch,
+      clientId,
+      signal
+    );
+    if (catalogSessionEpoch !== sessionEpoch) {
+      throw new AgentsMcpError('auth', 'Agents session changed during file upload');
+    }
+    sendJson(response, 200, { fileUrl, fileName, size });
+  } catch (error) {
+    if (signal.aborted) return;
+    const safe = bridgeError(error instanceof AgentsMcpError ? error.code : 'network');
+    sendJson(response, safe.status, safe.body);
+  }
+}
+
 /** Starts the per-app loopback bridge that keeps Agents credentials inside Electron main. */
 export async function startAgentsMcpBridge(options: StartAgentsMcpBridgeOptions): Promise<AgentsMcpBridgeHandle> {
   const token = options.token?.trim() || randomBytes(32).toString('base64url');
@@ -204,6 +281,12 @@ export async function startAgentsMcpBridge(options: StartAgentsMcpBridgeOptions)
     if (request.method === 'POST' && request.url === '/invoke') {
       runActiveRequest(request, response, activeRequests, (signal) =>
         handleInvokeRequest(options, request, response, clientId, signal)
+      );
+      return;
+    }
+    if (request.method === 'POST' && request.url === '/upload') {
+      runActiveRequest(request, response, activeRequests, (signal) =>
+        handleUploadRequest(options, request, response, clientId, signal)
       );
       return;
     }

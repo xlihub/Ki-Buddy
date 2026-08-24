@@ -783,7 +783,8 @@
   "kiBuddy": {
     "agentsDescribeDescription": "طرح‌وارهٔ دقیق ورودی و خروجی یک Agent در فهرست فعلی را نمایش می‌دهد.",
     "agentsInvokeDescription": "پس از به‌روزرسانی مجوز و طرح‌واره، Agent توضیح‌داده‌شده را یک‌بار با ورودی‌های اسکالر کامل فراخوانی می‌کند.",
-    "agentsListDescription": "فهرست کامل Agents در دسترس حساب واردشده فعلی را نمایش می‌دهد."
+    "agentsListDescription": "فهرست کامل Agents در دسترس حساب واردشده فعلی را نمایش می‌دهد.",
+    "agentsUploadDescription": "یک فایل محلی را برای فیلد ورودی فایل مشخص بارگذاری می‌کند و نشانی URL فایل آن را در Agents برمی‌گرداند."
   },
   "mcpAuthRequired": "احراز هویت لازم است",
   "mcpOAuthLoginSuccess": "ورود OAuth موفق بود",

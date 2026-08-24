@@ -13,7 +13,7 @@
           "description": "脱敏后的反馈文件",
           "type": "file",
           "required": true,
-          "allowed_file_types": ["text/plain"]
+          "allowed_file_types": ["txt"]
         }
       ],
       "defaultOutputModes": [

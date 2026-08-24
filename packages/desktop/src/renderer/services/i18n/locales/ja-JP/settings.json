@@ -771,7 +771,8 @@
   "kiBuddy": {
     "agentsDescribeDescription": "現在のカタログ内の1つの Agent について、正確な入力と出力のスキーマを表示します。",
     "agentsInvokeDescription": "権限と入力スキーマを更新した後、完全なスカラー入力で説明済みの Agent を1回呼び出します。",
-    "agentsListDescription": "現在サインインしているアカウントで利用可能な完全な Agents カタログを一覧表示します。"
+    "agentsListDescription": "現在サインインしているアカウントで利用可能な完全な Agents カタログを一覧表示します。",
+    "agentsUploadDescription": "指定したファイル入力フィールド用にローカルファイルを1つアップロードし、その Agents ファイル URL を返します。"
   },
   "mcpAuthRequired": "認証が必要です",
   "mcpOAuthLoginSuccess": "OAuth ログイン成功",

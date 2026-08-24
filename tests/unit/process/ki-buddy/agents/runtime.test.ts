@@ -1,3 +1,5 @@
+import type { IncomingMessage } from 'node:http';
+import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startAgentsMcpRuntimeBridge } from '@/process/ki-buddy/agents';
 import type { AgentsInvokeRequest, startAgentsMcpBridge } from '@/process/ki-buddy/agents/bridge';
@@ -112,6 +114,41 @@ describe('startAgentsMcpRuntimeBridge', () => {
       body: JSON.stringify(request),
       signal,
     });
+    await handle.close();
+  });
+
+  it('streams multipart file content through the authenticated upload boundary', async () => {
+    const response = Response.json({
+      errorCode: 0,
+      responseBody: { fileUrl: 'https://agents.example.test/files/remote-1' },
+    });
+    const fetchAuthenticated = vi.fn().mockResolvedValue(response);
+    const bridge = createStartBridgeCapture();
+    const handle = await startAgentsMcpRuntimeBridge(
+      createAuthService(fetchAuthenticated),
+      process.env,
+      bridge.startBridge
+    );
+    const body = Readable.from(['multipart-body']) as IncomingMessage;
+    const signal = new AbortController().signal;
+
+    await expect(
+      bridge.options().uploadFile?.(body, 'multipart/form-data; boundary=boundary-1', 1, clientId, signal)
+    ).resolves.toEqual({ fileUrl: 'https://agents.example.test/files/remote-1', sessionEpoch: 1 });
+    expect(fetchAuthenticated).toHaveBeenCalledWith(
+      '/kagent/sys/file/upload',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'content-type': 'multipart/form-data; boundary=boundary-1',
+          'x-ki-buddy-agents-client-id': clientId,
+        },
+        body: expect.any(ReadableStream),
+        duplex: 'half',
+        signal,
+      })
+    );
     await handle.close();
   });
 

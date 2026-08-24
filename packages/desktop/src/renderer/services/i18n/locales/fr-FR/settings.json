@@ -783,7 +783,8 @@
   "kiBuddy": {
     "agentsDescribeDescription": "Affiche le schéma exact des entrées et sorties d’un Agent du catalogue actuel.",
     "agentsInvokeDescription": "Appelle une fois l’Agent décrit avec des entrées scalaires complètes après actualisation de ses droits et de son schéma.",
-    "agentsListDescription": "Répertorie le catalogue Agents complet disponible pour le compte actuellement connecté."
+    "agentsListDescription": "Répertorie le catalogue Agents complet disponible pour le compte actuellement connecté.",
+    "agentsUploadDescription": "Téléverse un fichier local pour un champ d’entrée de fichier précis et renvoie son URL de fichier Agents."
   },
   "mcpAuthRequired": "Authentification requise",
   "mcpOAuthLoginSuccess": "Connexion OAuth réussie",

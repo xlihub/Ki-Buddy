@@ -25,22 +25,29 @@ const SHARED_OPTIONS = {
   loader: { '.wasm': 'empty' },
 };
 
+function resolveOutputDirectory(args) {
+  if (args.length === 0) return path.join(ROOT, 'out/main');
+  if (args.length === 2 && args[0] === '--out-dir' && args[1]) return path.resolve(args[1]);
+  throw new Error('Usage: node scripts/build-mcp-servers.js [--out-dir <path>]');
+}
+
 async function main() {
+  const outputDirectory = resolveOutputDirectory(process.argv.slice(2));
   await Promise.all([
     esbuild.build({
       ...SHARED_OPTIONS,
       entryPoints: [path.join(ROOT, 'packages/desktop/src/process/resources/builtinMcp/imageGenServer.ts')],
-      outfile: path.join(ROOT, 'out/main/builtin-mcp-image-gen.js'),
+      outfile: path.join(outputDirectory, 'builtin-mcp-image-gen.js'),
     }),
     esbuild.build({
       ...SHARED_OPTIONS,
       entryPoints: [path.join(ROOT, 'packages/desktop/src/process/resources/builtinMcp/browserServer.ts')],
-      outfile: path.join(ROOT, 'out/main/builtin-mcp-browser.js'),
+      outfile: path.join(outputDirectory, 'builtin-mcp-browser.js'),
     }),
     esbuild.build({
       ...SHARED_OPTIONS,
       entryPoints: [path.join(ROOT, 'packages/desktop/src/process/ki-buddy/agents/server.ts')],
-      outfile: path.join(ROOT, 'out/main/builtin-mcp-agents.js'),
+      outfile: path.join(outputDirectory, 'builtin-mcp-agents.js'),
     }),
   ]);
 }

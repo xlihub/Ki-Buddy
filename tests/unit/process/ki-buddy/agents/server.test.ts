@@ -19,6 +19,10 @@ function createAdapterHarness() {
     env: {
       KI_BUDDY_AGENTS_ADAPTER_BRIDGE_URL: 'http://127.0.0.1:43123',
       KI_BUDDY_AGENTS_ADAPTER_BRIDGE_TOKEN: 'bridge-secret',
+      AIONUI_BASE_URL: 'http://127.0.0.1:19000',
+      AIONUI_CONVERSATION_ID: 'conversation-1',
+      AIONUI_RUNTIME_TOKEN: 'runtime-secret',
+      AIONUI_USER_ID: 'user-1',
     },
     exitCode: undefined as number | undefined,
     get ppid() {
