@@ -274,12 +274,12 @@ conversation、Team、task、mailbox 已由 Core user scope 隔离，但 rendere
 
 ADR 0006 的产品 SQLite ledger 方案已被 ADR 0012 取代。Ki-Buddy 不生成远端 taskId，不维护 invocation ledger 或 active invocation lifecycle，也不在 logout、账号切换、App 重启或异常恢复时推断 Agents 执行状态。status、cancel、resume、retry 与服务端幂等必须由 Agents 通过正式 MCP contract 提供。证据：`/Users/xli/AionUi/docs/adr/agents-execution/0006-guard-remote-invocations-with-local-ledger.md`、`/Users/xli/AionUi/docs/adr/agents-execution/0012-integrate-agents-execution-lifecycle-through-mcp.md`。
 
-ADR 0007 的 `uploadRef` 与 ADR 0008 的 `deliveryRef` 仍属于计划中的客户端临时引用。它们只承担本地文件授权或交付职责，不表示远端 task identity、执行状态、恢复或取消。证据：`/Users/xli/AionUi/docs/adr/agents-execution/0007-upload-authorized-local-files-inside-adapter.md`、`/Users/xli/AionUi/docs/adr/agents-execution/0008-deliver-remote-result-files-inside-adapter.md`、ADR 0012。
+ADR 0007 的 `uploadRef` 属于计划中的客户端临时引用，只承担本地文件授权职责，不表示远端 task identity、执行状态、恢复或取消。ADR 0013 已取代 ADR 0008；Agents 尚未提供正式 execution artifact contract，因此 Ki-Buddy 不设计或保存 `deliveryRef`。证据：`/Users/xli/AionUi/docs/adr/agents-execution/0007-upload-authorized-local-files-inside-adapter.md`、`/Users/xli/AionUi/docs/adr/agents-execution/0012-integrate-agents-execution-lifecycle-through-mcp.md`、`/Users/xli/AionUi/docs/adr/agents-execution/0013-defer-result-file-delivery-until-agents-contract.md`。
 
-当前 `packages/desktop/src/process/ki-buddy/` 中没有 `uploadRef` 或 `deliveryRef` 的业务实现。因此它们应标为“计划中”：
+当前 `packages/desktop/src/process/ki-buddy/` 中没有 `uploadRef` 的业务实现，因此它应标为“计划中”：
 
-- `uploadRef` 和 `deliveryRef` 属于账号绑定的临时客户端状态，切换时必须失效；
-- 这些引用不能被用于恢复、重试或取消远端执行，相关能力只能来自 MCP contract；
+- `uploadRef` 属于账号绑定的临时客户端状态，切换时必须失效；
+- `uploadRef` 不能被用于恢复、重试或取消远端执行，相关能力只能来自 MCP contract；
 - 现有 Core `ChatFileRef::Upload` 与计划中的 Agents Adapter `uploadRef` 不是同一个对象，不能混为一类。
 
 ## 8. AionUi v2.1.54 生产 OAuth 账号切换对照
@@ -373,7 +373,7 @@ Core user bridge 的 auth listener 在退出时以 `void handleSignedOut(...)` �
 - Agents credential、Core session/defaultSession auth Cookie、旧请求 AbortController 与验证循环；
 - conversation/Team/task/cron/assistant/project 的运行中请求、响应和订阅；
 - SWR 账号数据及所有模块级账号内存 store；
-- 旧 Agents 请求的 abort，以及未来 `uploadRef`、`deliveryRef` 等客户端临时引用失效；Ki-Buddy 不维护 idempotency ledger 或 active invocation lifecycle。
+- 旧 Agents 请求的 abort，以及未来 `uploadRef` 等客户端临时引用失效；Ki-Buddy 不维护 idempotency ledger、active invocation lifecycle 或远端执行文件产物引用。
 
 ### 必须保持不变
 
