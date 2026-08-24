@@ -49,6 +49,19 @@ describe('Ki-Core workflow source policies', () => {
     }
   });
 
+  it('installs stable release validator dependencies before reading the mapped identity', () => {
+    const stable = workflow('build-and-release.yml');
+    const validateJob = stable.slice(stable.indexOf('  validate-release:'), stable.indexOf('\n  code-quality:'));
+    const setupBun = validateJob.indexOf('- name: Setup bun');
+    const installDependencies = validateJob.indexOf('- name: Install dependencies');
+    const fetchMappedTag = validateJob.indexOf('- name: Fetch mapped AionUi tag');
+
+    expect(setupBun).toBeGreaterThan(-1);
+    expect(installDependencies).toBeGreaterThan(setupBun);
+    expect(fetchMappedTag).toBeGreaterThan(installDependencies);
+    expect(validateJob.slice(installDependencies, fetchMappedTag)).toContain('bun install --frozen-lockfile');
+  });
+
   it('creates only an approved Ki-Buddy Draft Release from a product tag', () => {
     const stable = workflow('build-and-release.yml');
     expect(stable).toContain("- 'ki-buddy-v*'");
