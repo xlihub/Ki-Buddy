@@ -79,7 +79,7 @@ AionCore 有两种认证身份模式：普通 `UserSession` 与 `AionPro`。普�
 - `/Users/xli/AionCore/crates/aionui-auth/src/routes.rs:410-435 @ f0f4fbd1`
 - `/Users/xli/AionCore/crates/aionui-app/src/router/routes.rs:200-240 @ f0f4fbd1`
 
-这套机制适合承担“某个 AionUi/Core 用户已退出或被撤销后，停止其 Adapter session 与 active invocation”的本地控制面。它不能撤销 Agents 平台 token，除非 Agents 平台另行提供服务端 revoke contract。
+这套机制适合承担“某个 AionUi/Core 用户已退出或被撤销后，停止其 Adapter session 与本地等待”的客户端控制面。它不能据此取消远端 active invocation，也不能撤销 Agents 平台 token；cancel、status 与 credential revoke 都需要 Agents 提供正式 contract。
 
 ## MCP 用户隔离
 
@@ -132,11 +132,11 @@ AionCore 其他模块已经使用 `derive_encryption_key` 与 AES-256-GCM helper
 
 ## 对 Agents MCP Adapter 的设计约束
 
-1. 使用 AionCore `CurrentUser.id` 作为本地 inventory、credential、catalog cache、task 与结果文件元数据的第一层隔离键；这个 ID 已由官网桌面账号投影产生。
+1. 使用 AionCore `CurrentUser.id` 作为本地 inventory、credential、catalog cache 与本地文件引用的第一层隔离键；这个 ID 已由官网桌面账号投影产生。远端 task identity 与执行状态不由客户端保存。
 2. 单独定义 `AgentsIdentityBinding`：AionUi cloud user、Core user 与 Agents stable subject、tenant/org 的绑定不能从 username 或任一 JWT `sub` 推导。
 3. AionUi cloud refresh token 继续只由桌面主进程和系统钥匙串持有；renderer、AionCore 与 stdio Adapter 都不能取得它。Agents 调用凭证应由主进程或受信任 backend 按需提供。
 4. 不在 Core SQLite MCP OAuth repository 保存 AionUi cloud refresh token；该路径当前没有真实加密。若 Agents 采用独立 OAuth，也必须先补齐加密或改用系统凭据存储。
-5. AionUi logout 触发的 cloud revoke 与 Core external-session revoke 必须停止该用户的 Adapter process、active invocation 与缓存；是否同时撤销 Agents token 取决于 Agents 平台 contract。
+5. AionUi logout 触发的 cloud revoke 与 Core external-session revoke 必须停止该用户的 Adapter process、本地等待与缓存；它不表示远端 active invocation 已取消。远端 cancel、status 与 Agents token revoke 取决于 Agents MCP 和认证 contract。
 6. 不把 AionCore `/api/auth/refresh` 描述为 Agents refresh 或 OAuth refresh；两个 token 生命周期必须分别建模。
 7. AionCore MCP OAuth client 只有在 Agents 发布 discovery、PKCE、refresh、revocation 与稳定 identity claims 后，才可成为首选登录实现。
 

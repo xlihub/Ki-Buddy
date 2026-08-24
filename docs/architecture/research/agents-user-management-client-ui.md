@@ -144,12 +144,12 @@ AionCore v0.1.62 与刷新后的 upstream `main@f0f4fbd1` 都包含对应 extern
 
 ## 对 Agents MCP Adapter 的直接约束
 
-1. **复用产品当前账户作为本地身份入口。** Core `CurrentUser.id` 已由 cloud user 投影产生，可作为 inventory、catalog cache、task、结果文件与审计记录的第一层隔离键。
+1. **复用产品当前账户作为本地身份入口。** Core `CurrentUser.id` 已由 cloud user 投影产生，可作为 inventory、catalog cache 与本地文件引用的第一层隔离键。远端 task 与审计记录由 Agents 平台拥有。
 2. **不新增第二套本地用户系统。** 仍需定义 `AgentsIdentityBinding`，把 AionUi cloud user、Core user、Agents stable subject 与 tenant/org 显式绑定。
 3. **Adapter 不接触 AionUi refresh token。** refresh token 继续只由 Electron 主进程和系统钥匙串持有；renderer、AionCore 与 stdio Adapter 都不能读取它。
 4. **不能把 AionUi 私有 auth endpoint 称为稳定 OAuth/OIDC contract。** 产品已实现 PKCE、refresh rotation 与 cloud logout，但公开 discovery、claims、audience、revocation 语义仍是 Unknown。
 5. **不能直接把 AionUi access token 发送给 Agents。** 只有在 issuer/audience 与 Agents 验证 contract 被双方明确发布后才可复用；优先考虑由受信任后端执行 token exchange，向客户端签发短时、Agents-audience 的调用凭证。
-6. **统一退出链路。** AionUi logout、Core external-session revoke、Adapter 停止、active invocation 取消、按用户缓存清除与 Agents credential 失效必须形成显式状态机；各远端步骤失败时保留可审计的待处理状态。
+6. **统一退出链路。** AionUi logout、Core external-session revoke、Adapter 停止本地等待、按用户缓存清除与 Agents credential 失效必须形成显式状态机。客户端退出不表示远端 active invocation 已取消；cancel 与后续状态只能通过正式 MCP contract 获得。
 7. **MCP server OAuth 与产品账户是不同身份域。** AionCore 现有 MCP OAuth 不能代替 Agents 平台用户认证；其 SQLite token 路径当前也未证明真实加密，不适合保存 AionUi cloud refresh token。
 
 ## 仍需平台 contract 回答的问题
