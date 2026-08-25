@@ -21,6 +21,16 @@ function yamlBlock(content: string, key: string): string {
   return nextTopLevelKey === -1 ? rest : rest.slice(0, nextTopLevelKey);
 }
 
+function workflowStep(content: string, name: string): string {
+  const marker = `      - name: ${name}`;
+  const start = content.indexOf(marker);
+  if (start === -1) return '';
+
+  const rest = content.slice(start + marker.length);
+  const nextStep = rest.indexOf('\n      - name: ');
+  return nextStep === -1 ? rest : rest.slice(0, nextStep);
+}
+
 describe('release packaging configuration', () => {
   it('keeps mac zip artifacts enabled', () => {
     const config = readProjectFile('packages/desktop/electron-builder.yml');
@@ -37,6 +47,43 @@ describe('release packaging configuration', () => {
     expect(winBlock).toContain('    - nsis');
     expect(winBlock).not.toContain('    - zip');
   });
+
+  it('validates the packaged executable from the product identity at every installation phase', () => {
+    const productConfig = JSON.parse(readProjectFile('ki-buddy-product.json')) as {
+      electronBuilder: { executableName: string };
+    };
+    const installerChecks = [
+      readProjectFile('resources/windows/installer-observability.nsh'),
+      readProjectFile('resources/windows/installer-update-verify.nsh'),
+    ];
+
+    expect(productConfig.electronBuilder.executableName).toBe('Ki-Buddy');
+    for (const installerCheck of installerChecks) {
+      expect(installerCheck).toContain('"$INSTDIR\\${AIONUI_APP_EXECUTABLE_FILENAME}"');
+      expect(installerCheck).not.toContain('$INSTDIR\\AionUi.exe');
+    }
+  });
+
+  it('passes branded executable names to external Windows locker diagnostics', () => {
+    const processControl = readProjectFile('resources/windows/installer-process-control.nsh');
+    const queryLockers = readProjectFile('resources/windows/support/query-lockers.ps1');
+
+    expect(processControl).toContain('-AppExecutableFilename "${AIONUI_APP_EXECUTABLE_FILENAME}"');
+    expect(processControl).toContain('-UninstallFilename "${UNINSTALL_FILENAME}"');
+    expect(queryLockers).not.toMatch(/['"](?:Uninstall )?AionUi\.exe['"]/);
+  });
+
+  it.each(['_build-reusable.yml', 'pr-checks.yml'])(
+    'fails %s Windows installation smoke tests on a non-zero installer exit code',
+    (workflowName) => {
+      const workflow = readProjectFile(`.github/workflows/${workflowName}`);
+      const smokeStep = workflowStep(workflow, 'Silent install smoke test (Windows x64)');
+
+      expect(smokeStep).toContain('-PassThru');
+      expect(smokeStep).toContain('$process.ExitCode -ne 0');
+      expect(smokeStep).toContain('throw "Windows installer exited with code $($process.ExitCode)"');
+    }
+  );
 
   it('includes and unpacks the native keytar credential module', () => {
     const config = readProjectFile('packages/desktop/electron-builder.yml');
