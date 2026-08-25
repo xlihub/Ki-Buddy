@@ -511,7 +511,10 @@ jobs:
           }
 
           Write-Host "Using installer: $($installer.FullName)"
-          Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -NoNewWindow
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -NoNewWindow -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Windows installer exited with code $($process.ExitCode)"
+          }
 
           $candidates = @(
             "$env:LOCALAPPDATA\\Programs\\Ki-Buddy\\Ki-Buddy.exe",

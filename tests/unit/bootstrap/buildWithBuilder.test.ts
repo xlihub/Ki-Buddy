@@ -51,8 +51,8 @@ function resolveAppBuilderInstallUtil(): string {
 describe('build-with-builder', () => {
   it('rejects skip-vite when renderer output is only a source html shell', () => {
     const outDir = resolve(repoRoot, 'out');
-    const backupOutDir = resolve(repoRoot, `.tmp-out-backup-${process.pid}-${Date.now()}`);
     const tempDir = mkdtempSync(join(tmpdir(), 'aionui-build-skip-vite-test-'));
+    const backupOutDir = join(tempDir, 'out-backup');
     const hookPath = join(tempDir, 'hook.cjs');
 
     writeFileSync(
@@ -273,7 +273,7 @@ childProcess.execSync = function mockedExecSync(command) {
     const hookPath = join(tempDir, 'hook.cjs');
     const callsPath = join(tempDir, 'prepare-calls.json');
     const outDir = resolve(repoRoot, 'out');
-    const backupOutDir = resolve(repoRoot, `.tmp-out-backup-${process.pid}-${Date.now()}-${expectedArch}`);
+    const backupOutDir = join(tempDir, 'out-backup');
 
     writeFileSync(
       hookPath,

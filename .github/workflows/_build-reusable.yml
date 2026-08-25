@@ -641,6 +641,20 @@ jobs:
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+      - name: Silent install smoke test (Windows x64)
+        if: matrix.platform == 'windows-x64'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path out -Filter "Ki-Buddy-*-win-*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $installer) {
+            throw "No Windows installer found in out/"
+          }
+
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -NoNewWindow -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Windows installer exited with code $($process.ExitCode)"
+          }
+
       - name: List build artifacts
         if: success() || failure()
         shell: bash
