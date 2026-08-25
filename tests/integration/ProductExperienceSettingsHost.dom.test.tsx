@@ -34,9 +34,13 @@ vi.mock('@/renderer/hooks/context/ThemeContext', () => ({
   useThemeContext: () => ({
     activeId: 'light',
     activeTheme: null,
-    fontSizes: { chat: 14, markdown: 14, code: 13 },
+    fontFamilies: { app: '', chat: '', markdown: '', code: '' },
+    fontSizes: { app: 14, chat: 14, markdown: 14, code: 13 },
+    fontWeights: { app: '', chat: '', markdown: '', code: '' },
     selectTheme: vi.fn(),
+    setFontFamily: vi.fn(),
     setFontSize: vi.fn(),
+    setFontWeight: vi.fn(),
     setTheme: vi.fn(),
     theme: 'light',
   }),
@@ -150,8 +154,14 @@ vi.mock('@renderer/pages/settings/AppearanceSettings/CssThemeSettings', async (i
     },
   };
 });
-vi.mock('@/renderer/components/settings/FontSizeStepper', () => ({
+vi.mock('@/renderer/components/settings/SettingsModal/contents/AppearanceModalContent/FontFamilySelect', () => ({
+  default: () => <div data-testid='font-family-setting' />,
+}));
+vi.mock('@/renderer/components/settings/SettingsModal/contents/AppearanceModalContent/FontSizeStepper', () => ({
   default: () => <div data-testid='font-size-setting' />,
+}));
+vi.mock('@/renderer/components/settings/SettingsModal/contents/AppearanceModalContent/FontWeightSelect', () => ({
+  default: () => <div data-testid='font-weight-setting' />,
 }));
 vi.mock('@/renderer/components/settings/ScaleControl', () => ({
   default: () => <div data-testid='scale-setting' />,
@@ -225,7 +235,7 @@ describe('Product experience settings navigation', () => {
     const ids = Array.from(container.querySelectorAll('[data-settings-id]')).map((item) =>
       item.getAttribute('data-settings-id')
     );
-    expect(ids).toEqual(['account', 'agent', 'model', 'skills', 'tools', 'appearance', 'system', 'about']);
+    expect(ids).toEqual(['account', 'agent', 'model', 'skills', 'tools', 'appearance', 'system', 'archived', 'about']);
     expect(mocks.extensionTabs).not.toHaveBeenCalled();
     expect(mocks.extensionTranslations).not.toHaveBeenCalled();
   });
@@ -242,7 +252,18 @@ describe('Product experience settings navigation', () => {
     const ids = Array.from(container.querySelectorAll('[data-settings-id]')).map((item) =>
       item.getAttribute('data-settings-id')
     );
-    expect(ids).toEqual(['agent', 'model', 'skills', 'tools', 'appearance', 'webui', 'pet', 'system', 'about']);
+    expect(ids).toEqual([
+      'agent',
+      'model',
+      'skills',
+      'tools',
+      'appearance',
+      'webui',
+      'pet',
+      'system',
+      'archived',
+      'about',
+    ]);
     expect(mocks.extensionTabs).toHaveBeenCalledOnce();
   });
 });
@@ -402,7 +423,9 @@ describe('Product experience Appearance projection', () => {
 
     render(<AppearanceModalContent />);
 
-    expect(screen.getAllByTestId('font-size-setting')).toHaveLength(3);
+    expect(screen.getAllByTestId('font-family-setting')).toHaveLength(4);
+    expect(screen.getAllByTestId('font-size-setting')).toHaveLength(4);
+    expect(screen.getAllByTestId('font-weight-setting')).toHaveLength(4);
     expect(screen.getByTestId('scale-setting')).toBeInTheDocument();
     expect(screen.queryByText('theme-settings')).not.toBeInTheDocument();
     expect(mocks.themeSettingsRender).not.toHaveBeenCalled();

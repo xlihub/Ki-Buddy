@@ -22,8 +22,6 @@
   "continueEdit": "Weiter bearbeiten",
   "closeTabTitle": "Tab schließen",
   "closeTabMessage": "Der aktuelle Inhalt wurde nicht gespeichert. Vor dem Schließen speichern?",
-  "closeTabsTitle": "Tabs schließen",
-  "closeTabsMessage": "{{count}} Tabs haben ungespeicherte Änderungen. Vor dem Schließen speichern?",
   "saveAndClose": "Speichern und schließen",
   "closeWithoutSave": "Nicht speichern",
   "pptTitle": "PowerPoint-Präsentation",
@@ -48,16 +46,6 @@
   "noTabs": "Keine Tabs geöffnet",
   "openInPanelTooltip": "Im Vorschau-Panel anzeigen",
   "mermaidTitle": "Mermaid-Diagramm",
-  "oversized": {
-    "title": "Datei zu groß für die Vorschau",
-    "detail": "Die Dateigröße {{size}} überschreitet das Limit von {{threshold}}. Bitte in einem Systemeditor öffnen.",
-    "downloadUnavailable": "Diese Datei ist zu groß für den Download hier. Verwenden Sie stattdessen „Im System öffnen“."
-  },
-  "unsupported": {
-    "title": "Vorschau für dieses Format nicht unterstützt",
-    "detail": "{{format}}-Dateien können hier nicht angezeigt werden. Öffnen Sie sie in einer Systemanwendung.",
-    "downloadUnavailable": "Diese Datei kann hier nicht heruntergeladen werden. Verwenden Sie „Im System öffnen“."
-  },
   "aiWriting": "KI schreibt…",
   "errors": {
     "missingFilePath": "Dateipfad fehlt",
@@ -135,6 +123,18 @@
     "startFailed": "PPT-Vorschau konnte nicht gestartet werden",
     "installHint": "Installiere OfficeCLI über die offizielle iOfficeAI/OfficeCLI releases-Seite"
   },
+  "closeTabsTitle": "Tabs schließen",
+  "closeTabsMessage": "{{count}} Tabs haben ungespeicherte Änderungen. Vor dem Schließen speichern?",
+  "oversized": {
+    "title": "Datei zu groß für die Vorschau",
+    "detail": "Die Dateigröße {{size}} überschreitet das Limit von {{threshold}}. Bitte in einem Systemeditor öffnen.",
+    "downloadUnavailable": "Diese Datei ist zu groß für den Download hier. Verwenden Sie stattdessen „Im System öffnen“."
+  },
+  "unsupported": {
+    "title": "Vorschau für dieses Format nicht unterstützt",
+    "detail": "{{format}}-Dateien können hier nicht angezeigt werden. Öffnen Sie sie in einer Systemanwendung.",
+    "downloadUnavailable": "Diese Datei kann hier nicht heruntergeladen werden. Verwenden Sie „Im System öffnen“."
+  },
   "browser": {
     "newTab": "Neuer Tab",
     "addressPlaceholder": "URL eingeben oder suchen",
@@ -157,5 +157,24 @@
     "confirmMessage": "Dieser Tab hat ungespeicherte Änderungen. Neuladen ersetzt sie durch den Inhalt der Festplatte.",
     "discardAndRefresh": "Änderungen verwerfen und aktualisieren",
     "officeNotWired": "Das Neuladen von Office-Dokumenten ist noch nicht verfügbar — schließen Sie die Datei und öffnen Sie sie erneut."
-  }
+  },
+  "maximizePanel": "Maximieren",
+  "restorePanel": "Wiederherstellen",
+  "closeTabsMessage_one": "{{count}} Tab hat ungespeicherte Änderungen. Vor dem Schließen speichern?",
+  "closeTabsMessage_other": "{{count}} Tabs haben ungespeicherte Änderungen. Vor dem Schließen speichern?",
+  "close": "Schließen",
+  "closeUnmodified": "Unveränderte schließen",
+  "copyPath": "Pfad kopieren",
+  "copyRelativePath": "Relativen Pfad kopieren",
+  "openLocation": "Im Ordner anzeigen",
+  "openLocationFailed": "Enthaltenden Ordner öffnen fehlgeschlagen",
+  "wavedromTitle": "WaveDrom-Diagramm",
+  "save": {
+    "tooltip": "Änderungen speichern (Strg/Cmd+S)",
+    "clean": "Keine ungespeicherten Änderungen"
+  },
+  "zoomIn": "Vergrößern",
+  "zoomOut": "Verkleinern",
+  "zoomReset": "Ansicht zurücksetzen",
+  "diagramZoomHint": "Scrollen zum Zoomen • Ziehen zum Verschieben • ESC zum Schließen"
 }

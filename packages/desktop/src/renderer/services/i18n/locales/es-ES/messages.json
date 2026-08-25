@@ -87,5 +87,15 @@
   "askDeclined": "Omitido",
   "askOther": "Otro",
   "askOtherPlaceholder": "Escribe tu respuesta",
-  "requestDetails": "Detalles de la solicitud:"
+  "requestDetails": "Detalles de la solicitud:",
+  "fileChangesCount_one": "{{count}} cambio en archivos",
+  "fileChangesCount_other": "{{count}} cambios en archivos",
+  "availableCommands_one": "{{count}} comando disponible",
+  "availableCommands_other": "{{count}} comandos disponibles",
+  "atSession.hint": "Escribe para buscar tus conversaciones",
+  "atSession.empty": "No se encontraron conversaciones",
+  "atSession.menuLabel": "Menciones de conversación",
+  "delivery": {
+    "pending": "No leído"
+  }
 }

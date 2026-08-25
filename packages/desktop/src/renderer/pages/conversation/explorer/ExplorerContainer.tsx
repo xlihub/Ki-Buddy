@@ -34,6 +34,7 @@ import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/pr
 // PATCH(ELECTRON-3SZ): used only by the preview payload patch below — remove with it.
 import type { PreviewContentType } from '@/common/types/office/preview';
 
+import { copyText } from '@/renderer/utils/ui/clipboard';
 import { emitter } from '@/renderer/utils/emitter';
 import { projectFileRef } from '@/common/types/chatFile';
 import type { ChatFileRef } from '@/common/types/chatFile';
@@ -41,13 +42,26 @@ import type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
 import { resolvePreviewPayload } from '@/renderer/utils/file/previewPayload';
 
 import { ExplorerPanel } from './ExplorerPanel';
-import { buildRemoveRequest, buildRenameRequest, parentRel, peKey, type RenameRequest } from './explorerModel';
+import {
+  buildCreateFileRequest,
+  buildMkdirRequest,
+  buildRemoveRequest,
+  buildRenameRequest,
+  buildTransferRequest,
+  joinRel,
+  parentRel,
+  peKey,
+  type DragPeRef,
+  type RenameRequest,
+  type TransferOp,
+} from './explorerModel';
 import { initExplorerRuntime } from './monitorTransport';
 import { toRootRefs } from './projectRoots';
-import { reveal, select } from './explorerStore';
+import { refreshRoot, reveal, select } from './explorerStore';
 import { useCurrentConversation } from './currentConversationStore';
 import { SearchPanel } from './search/SearchPanel';
 import type { SearchHit } from './search/searchModel';
+import { ScmPanel } from '../SourceControl/ScmPanel';
 
 export type ExplorerContainerProps = {
   /** Owning project id — scopes the store's fact cache + localStorage UI state. */
@@ -60,6 +74,34 @@ const pathToFileUri = (p: string): string => {
   const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
   return `file://${encodeURI(withLeadingSlash)}`;
 };
+
+/**
+ * The name-entry dialog's current operation. All three collect a single name in
+ * one `<Input>`; `rename` additionally carries the original path (to detect a
+ * no-op edit), the two create modes carry only the directory to create inside
+ * (`''` = pe root). One dialog serves all three so the modal + submit path have
+ * a single implementation.
+ */
+type NameDialogState =
+  | ({ mode: 'rename' } & RenameRequest)
+  | { mode: 'newFile'; peId: string; targetDir: string }
+  | { mode: 'newDir'; peId: string; targetDir: string };
+
+/** i18n key for a name-dialog operation's title (reuses the context-menu labels). */
+const nameDialogTitleKey = (mode: NameDialogState['mode']): string =>
+  mode === 'rename'
+    ? 'conversation.explorer.contextMenu.rename'
+    : mode === 'newFile'
+      ? 'conversation.explorer.contextMenu.newFile'
+      : 'conversation.explorer.contextMenu.newDir';
+
+/** i18n key for the failure toast when a name-dialog operation's WS request fails. */
+const nameDialogErrorKey = (mode: NameDialogState['mode']): string =>
+  mode === 'rename'
+    ? 'conversation.explorer.renameFailed'
+    : mode === 'newFile'
+      ? 'conversation.explorer.newFileFailed'
+      : 'conversation.explorer.newDirFailed';
 
 /** Args passed to `openPreview` for an Explorer-opened file. */
 export type ExplorerPreviewPayload = {
@@ -134,18 +176,27 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   const { t } = useTranslation();
   const { openPreview } = usePreviewContext();
   const activeConversationId = useCurrentConversation();
-  const { data, isLoading, mutate } = useSWR(projectId ? `explorer-project/${projectId}` : null, () =>
-    ipcBridge.project.get.invoke({ project_id: projectId })
-  );
+  const { data, isLoading, mutate } = useSWR(projectId ? `explorer-project/${projectId}` : null, (key: string) => {
+    // Derive the project id from the SWR key, not the captured `projectId`
+    // closure, so a fetch's result can never be filed under a different key.
+    const id = key.slice('explorer-project/'.length);
+    return ipcBridge.project.get.invoke({ project_id: id });
+  });
+  // Apply-time guard: only feed the store roots whose detail actually belongs to
+  // the current project. Combined with the per-project remount (this component is
+  // keyed by `projectId` in ProjectPanelHost), a stale/other-project detail can
+  // never reach the tree — a mismatch yields no roots rather than another
+  // project's (宁空勿画错).
+  const detail = data && data.project_id === projectId ? data : undefined;
 
   // Let the workspace-collapse hook (keyed per-project via workspacePreferenceKey)
   // read + restore this project's panel open/closed preference. The hook starts
   // collapsed and expands on this signal (pref takes priority); without it the
   // panel would stay collapsed on every conversation switch.
   useEffect(() => {
-    if (!projectId || !data) return;
-    dispatchWorkspaceHasFilesEvent(data.explorer.entries.length > 0, undefined, false);
-  }, [projectId, data]);
+    if (!projectId || !detail) return;
+    dispatchWorkspaceHasFilesEvent(detail.explorer.entries.length > 0, undefined, false);
+  }, [projectId, detail]);
 
   // Open a file in the preview panel. The tree only knows `{pe_id, relative_path}`,
   // mapped to a Project ChatFileRef — content is read over `/api/fs/content` (text/
@@ -191,36 +242,81 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
     }
   };
 
-  // ── File operations (A): rename + delete (parity with the legacy tree) ────
-  // Both operate on the tree's `{pe_id, relative_path}` identity over WS fs/*
+  // Manually refresh one pe root (context-menu action on a root node). Two
+  // independent staleness sources are refreshed: `mutate()` re-fetches the
+  // project detail so a root's `runtime_status` (the greyed/caution indicator,
+  // HTTP-sourced) reflects a folder that has become reachable again; `refreshRoot`
+  // asks the backend to remount the root's watched subtree over WS (re-arm the
+  // watch, re-read the baseline) so the freshest directory listings replace the
+  // cache — recovering a stale mount a plain re-subscribe could not. No toast — the
+  // tree/indicator updating in place is the feedback, and reporting success before
+  // the async snapshot lands would lie.
+  const handleRefreshRoot = (peId: string): void => {
+    void mutate();
+    refreshRoot(peId);
+  };
+
+  // ── File operations (A): rename + delete + create-file / create-dir ───────
+  // All operate on the tree's `{pe_id, relative_path}` identity over WS fs/*
   // commands; the change is pushed back as a delta on the parent dir's
   // subscription, so the tree updates itself (single source, no manual refetch).
   // Component switcher tab (host component switcher, this round in-container):
-  // 'files' = the Explorer, 'changes' = source-control placeholder (that lane is
-  // not built yet — the tab exists but shows an empty state).
+  // 'files' = the Explorer, 'changes' = the Source Control panel. Switching tabs
+  // unmounts the inactive one for `changes`, which is safe because the SCM
+  // subscription is owned by its store per project, not by the component's mount
+  // (see ScmPanel's lifecycle note) — a tab switch never drops the backend watch.
   const [activeTab, setActiveTab] = useState<'files' | 'changes'>('files');
-  const [renameDialog, setRenameDialog] = useState<RenameRequest | null>(null);
+  // One dialog for rename / new-file / new-folder (see NameDialogState); the
+  // `mode` discriminant drives the title, ok label, request builder, and the
+  // post-create reveal below.
+  const [nameDialog, setNameDialog] = useState<NameDialogState | null>(null);
   const [nameValue, setNameValue] = useState('');
   const [nameSubmitting, setNameSubmitting] = useState(false);
 
   const handleRename = (peId: string, rel: string, name: string): void => {
-    setRenameDialog({ peId, targetDir: parentRel(rel), origRel: rel });
+    setNameDialog({ mode: 'rename', peId, targetDir: parentRel(rel), origRel: rel });
     setNameValue(name);
   };
 
-  const submitRenameDialog = async (): Promise<void> => {
-    if (!renameDialog) return;
-    const request = buildRenameRequest(renameDialog, nameValue);
+  // New-file / new-folder open the shared dialog with an empty name; `dirRel` is
+  // the directory to create inside (the right-clicked dir/root's own rel).
+  const handleNewFile = (peId: string, dirRel: string): void => {
+    setNameDialog({ mode: 'newFile', peId, targetDir: dirRel });
+    setNameValue('');
+  };
+
+  const handleNewDir = (peId: string, dirRel: string): void => {
+    setNameDialog({ mode: 'newDir', peId, targetDir: dirRel });
+    setNameValue('');
+  };
+
+  const submitNameDialog = async (): Promise<void> => {
+    if (!nameDialog) return;
+    const request =
+      nameDialog.mode === 'rename'
+        ? buildRenameRequest(nameDialog, nameValue)
+        : nameDialog.mode === 'newFile'
+          ? buildCreateFileRequest(nameDialog.peId, nameDialog.targetDir, nameValue)
+          : buildMkdirRequest(nameDialog.peId, nameDialog.targetDir, nameValue);
     if (!request) {
-      setRenameDialog(null); // empty name or no-op rename
+      setNameDialog(null); // empty name (or a no-op rename to the same name)
       return;
     }
     setNameSubmitting(true);
     try {
       await initExplorerRuntime().request(request.method, request.params);
-      setRenameDialog(null);
+      // On a create, reveal the parent dir + select the new node so the user sees
+      // where it landed. Reveal subscribes the parent (its fresh snapshot, or the
+      // watcher's `added` delta if already subscribed, materializes the node); a
+      // rename stays in place, so nothing to reveal.
+      if (nameDialog.mode !== 'rename') {
+        const newRel = joinRel(nameDialog.targetDir, nameValue.trim());
+        reveal({ pe_id: nameDialog.peId, relative_path: nameDialog.targetDir });
+        select(peKey(nameDialog.peId, newRel));
+      }
+      setNameDialog(null);
     } catch {
-      Message.error(t('conversation.explorer.renameFailed'));
+      Message.error(t(nameDialogErrorKey(nameDialog.mode)));
     } finally {
       setNameSubmitting(false);
     }
@@ -256,6 +352,13 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
     emitter.emit('acp.selected.file.append', payload, activeConversationId);
     emitter.emit('codex.selected.file.append', payload, activeConversationId);
     emitter.emit('aionrs.selected.file.append', payload, activeConversationId);
+    // Optimistic success: the emitter is fire-and-forget with no landing ack, so
+    // this reports "dispatched", not "rendered a chip". It is accurate whenever a
+    // send box for this conversation is mounted (the type-matching box consumes
+    // the event synchronously). The chip-drop bugs that made this toast lie for a
+    // folder / pe-root ref (empty-path identity + the folder render filter) are
+    // fixed in SendBox; a genuine no-op only remains in the edge case where no
+    // send box is mounted for the active conversation.
     Message.success(t('conversation.explorer.addedToChat', { name }));
   };
 
@@ -267,6 +370,32 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
     void ipcBridge.fs.reveal.invoke({ pe_id: peId, relative_path: rel }).catch(() => {
       Message.error(t('conversation.workspace.contextMenu.revealFailed'));
     });
+  };
+
+  // Copy the node's path relative to its owning pe root — the tree's native
+  // identity (`relative_path`, always `/`-separated, cross-platform). A pe-root
+  // node's relative_path is '' (it IS the root); copy '.' (its own literal
+  // relative path) rather than the display `name`, which may be a custom label or
+  // even the internal pe_id — never a real path. Pure clipboard (no OS shell / no
+  // absolute path), so it works for files and folders on both Electron and WebUI.
+  const handleCopyRelativePath = (_peId: string, rel: string): void => {
+    void copyText(rel === '' ? '.' : rel)
+      .then(() => Message.success(t('conversation.explorer.pathCopied')))
+      .catch(() => Message.error(t('conversation.explorer.copyFailed')));
+  };
+
+  // Copy the node's ABSOLUTE device path. The front end never holds it (project
+  // refs are pe_id + relative_path only) and never receives it: the backend
+  // resolves the path AND writes the clipboard itself (mirrors reveal), returning
+  // void — we only toast on success/failure. Desktop-only: the menu item is
+  // Electron-gated in ExplorerPanel, so this handler only runs there (a remote
+  // WebUI must not surface it). A pe-root node (rel '') resolves to the root
+  // folder's own absolute path server-side.
+  const handleCopyAbsolutePath = (peId: string, rel: string): void => {
+    void ipcBridge.fs.copyAbsolutePath
+      .invoke({ pe_id: peId, relative_path: rel })
+      .then(() => Message.success(t('conversation.explorer.pathCopied')))
+      .catch(() => Message.error(t('conversation.explorer.copyFailed')));
   };
 
   // Search result default action: locate the hit in the tree — switch to the
@@ -309,19 +438,52 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
     }
   };
 
-  if (!projectId) return null;
-  if (isLoading && !data) return <Spin loading />;
+  // Drag transfer (B/C): copy/move a tree node into a directory node via the WS
+  // fs/copy / fs/move command. The panel resolved the op + guarded the drop; here
+  // we dispatch and, on success, reveal + select the landed (possibly
+  // auto-renamed) entry so the user sees where it went. The destination's own WS
+  // subscription delivers the delta that materializes the node in the tree.
+  const handleTransfer = async (
+    source: DragPeRef,
+    targetPeId: string,
+    targetRel: string,
+    op: TransferOp
+  ): Promise<void> => {
+    const request = buildTransferRequest(
+      op,
+      { pe_id: source.pe_id, relative_path: source.relative_path },
+      { pe_id: targetPeId, relative_path: targetRel }
+    );
+    try {
+      const result = (await initExplorerRuntime().request(request.method, request.params)) as {
+        to?: { pe_id?: string; relative_path?: string };
+      };
+      const to = result?.to;
+      if (to?.pe_id && typeof to.relative_path === 'string') {
+        reveal({ pe_id: to.pe_id, relative_path: parentRel(to.relative_path) });
+        select(peKey(to.pe_id, to.relative_path));
+      }
+    } catch {
+      Message.error(t(op === 'copy' ? 'conversation.explorer.copyNodeFailed' : 'conversation.explorer.moveNodeFailed'));
+    }
+  };
 
-  const roots = data ? toRootRefs(data) : [];
+  if (!projectId) return null;
+  // Spin only while the CURRENT project's detail is still loading. A stale value
+  // for a different project (detail undefined) falls through to empty roots, not
+  // another project's tree.
+  if (!detail && isLoading) return <Spin loading />;
+
+  const roots = detail ? toRootRefs(detail) : [];
   // Search roots = the project's pe roots (each folder root, rel=''). fs/search
   // spans all bound folders; the front-end ranks the merged hit stream.
   const searchRoots = roots.map((root) => ({ pe_id: root.pe_id, relative_path: '' }));
   // pe_id → folder name for the search result's `PE · REL` secondary label.
   const searchPeNames = Object.fromEntries(roots.map((root) => [root.pe_id, root.title]));
-  const workspacePeId = data?.explorer.workspace_pe_id;
+  const workspacePeId = detail?.explorer.workspace_pe_id;
   // Absolute path of the workspace root (derived display_path) for the
   // open-externally button.
-  const workspacePath = data?.explorer.entries.find((e) => e.pe_id === workspacePeId)?.display_path;
+  const workspacePath = detail?.explorer.entries.find((e) => e.pe_id === workspacePeId)?.display_path;
 
   const tabButton = (key: 'files' | 'changes', label: string) => (
     <Button
@@ -336,8 +498,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
 
   return (
     <div className='h-full flex flex-col min-h-0'>
-      {/* Host component-switcher tab bar: 文件 = explorer, 变更 = source-control
-          placeholder (that lane isn't built — tab present, empty state only).
+      {/* Host component-switcher tab bar: 文件 = explorer, 变更 = source control.
           Tabs are left-aligned and scroll horizontally when they overflow; the
           attach + open-externally cluster is pinned right (flex-shrink-0) with
           container padding, so it never scrolls with the tabs nor clips at narrow
@@ -354,7 +515,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
           text / search icon / tree arrow) starts at 20px. 12px is not arbitrary —
           the sider's resize handle covers the leftmost 12px and sits above this
           content, so anything placed to its left cannot be clicked. */}
-      <div className='flex items-center gap-4px pl-12px pr-8px py-4px flex-shrink-0 border-b border-[var(--bg-3)]'>
+      <div className='flex items-center gap-4px ps-12px pe-8px py-4px flex-shrink-0 border-b border-[var(--bg-3)]'>
         <div className='flex items-center gap-2px overflow-x-auto flex-1 min-w-0'>
           {tabButton('files', t('conversation.explorer.tabs.files'))}
           {tabButton('changes', t('conversation.explorer.tabs.changes'))}
@@ -406,26 +567,32 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
             roots={roots}
             workspacePeId={workspacePeId}
             onRemoveRoot={handleRemoveFolder}
+            onRefreshRoot={handleRefreshRoot}
             onOpenFile={handleOpenFile}
             onRename={handleRename}
             onDelete={handleDelete}
+            onNewFile={handleNewFile}
+            onNewDir={handleNewDir}
             onAddToChat={activeConversationId ? handleAddToChat : undefined}
             onRevealInFolder={handleRevealInFolder}
+            onCopyRelativePath={handleCopyRelativePath}
+            onCopyAbsolutePath={handleCopyAbsolutePath}
             onImportFiles={handleImportFiles}
+            onTransfer={handleTransfer}
           />
         </SearchPanel>
       </div>
       {activeTab === 'changes' && (
-        <div className='flex-1 min-h-0 flex items-center justify-center px-16px text-center text-t-secondary text-13px'>
-          {t('conversation.explorer.changesPlaceholder')}
+        <div className='flex-1 min-h-0'>
+          <ScmPanel projectId={projectId} />
         </div>
       )}
       <Modal
-        title={t('conversation.explorer.contextMenu.rename')}
-        visible={renameDialog !== null}
-        onCancel={() => setRenameDialog(null)}
-        onOk={submitRenameDialog}
-        okText={t('common.save')}
+        title={nameDialog ? t(nameDialogTitleKey(nameDialog.mode)) : ''}
+        visible={nameDialog !== null}
+        onCancel={() => setNameDialog(null)}
+        onOk={submitNameDialog}
+        okText={t(nameDialog?.mode === 'rename' ? 'common.save' : 'common.create')}
         cancelText={t('common.cancel')}
         confirmLoading={nameSubmitting}
         autoFocus
@@ -435,7 +602,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
           autoFocus
           value={nameValue}
           onChange={setNameValue}
-          onPressEnter={submitRenameDialog}
+          onPressEnter={submitNameDialog}
           placeholder={t('conversation.explorer.namePlaceholder')}
         />
       </Modal>

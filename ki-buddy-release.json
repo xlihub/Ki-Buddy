@@ -3,22 +3,22 @@
   "product": "Ki-Buddy",
   "repository": "xlihub/Ki-Buddy",
   "release": {
-    "version": "0.1.5",
-    "tag": "ki-buddy-v0.1.5",
+    "version": "0.1.6",
+    "tag": "ki-buddy-v0.1.6",
     "aionUi": {
       "repository": "iOfficeAI/AionUi",
-      "tag": "v2.1.49",
-      "commit": "28a2a9f57f1bf4f9111b9c33e0cfc1eb918effc8"
+      "tag": "v2.1.61",
+      "commit": "1afdf95c187f24198ab502a3c86cb2ef40bc3c6f"
     },
     "kiCore": {
       "repository": "xlihub/Ki-Core",
-      "version": "0.1.2",
-      "tag": "ki-core-v0.1.2",
-      "commit": "59c32d9284dd33b344e286404a6292d39df323a0",
+      "version": "0.1.3",
+      "tag": "ki-core-v0.1.3",
+      "commit": "5cab817d47e0ecc45b979367222a0672fee62099",
       "aionCore": {
         "repository": "iOfficeAI/AionCore",
-        "tag": "v0.1.59",
-        "commit": "815e61ed9bbe942339347dc1e69ddce176cded76"
+        "tag": "v0.1.72",
+        "commit": "57a34cc1b1a3b17bcc023de06b9e6768fceac36f"
       }
     }
   }

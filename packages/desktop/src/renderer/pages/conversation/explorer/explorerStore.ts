@@ -39,6 +39,13 @@ export type SubscribeResult = {
 /** The subscription transport the store drives (bound to MonitorClient in prod). */
 export type MonitorPort = {
   subscribe: (refs: DirRef[]) => Promise<SubscribeResult>;
+  /**
+   * Force the backend to re-mount the given (already-watched) directories —
+   * re-arm their watch and re-read their baseline — and return the fresh
+   * snapshots. Unlike `subscribe`, which the backend answers from its cached
+   * listing for a live node, this rebuilds a mount that may have gone stale.
+   */
+  remount: (refs: DirRef[]) => Promise<SubscribeResult>;
   unsubscribe: (refs: DirRef[]) => void;
 };
 
@@ -95,11 +102,36 @@ const loadUi = (id: string): PersistedUi => {
   }
 };
 
-const persistUi = (): void => {
+/**
+ * Persist this project's UI state (expanded set + selection) to localStorage.
+ *
+ * `guardEmptyOverwrite` scopes the ③ anti-clobber to the ONE unsafe caller —
+ * openProject's leave-persist. There, under a project-switch race, the in-memory
+ * `expanded` can be transiently empty while `projectId` still points at a project
+ * whose saved state is populated; writing that empty set would permanently
+ * destroy the stored expansion (observed LS 4 → 0, a collapse the user never
+ * asked for), so it keeps the richer stored expansion (selection still updates).
+ * Every user-driven caller (setExpanded / setExpandedKeys / reveal / select)
+ * omits the flag, so a genuine collapse-all persists empty normally — and because
+ * that user path writes the empty first, a later leave-persist reads an already
+ * empty record and has nothing to guard, leaving no stale-expansion residue.
+ */
+const persistUi = (opts?: { guardEmptyOverwrite?: boolean }): void => {
   const ls = getLocalStorage();
   if (!ls || !projectId) return;
   const data: PersistedUi = { expanded: [...expanded] };
   if (selected) data.selected = selected;
+  if (opts?.guardEmptyOverwrite && data.expanded.length === 0) {
+    try {
+      const raw = ls.getItem(uiStorageKey(projectId));
+      const prev = raw ? (JSON.parse(raw) as Partial<PersistedUi>) : null;
+      if (prev && Array.isArray(prev.expanded) && prev.expanded.length > 0) {
+        data.expanded = prev.expanded;
+      }
+    } catch {
+      /* corrupt/absent record — fall through and write what we have */
+    }
+  }
   try {
     ls.setItem(uiStorageKey(projectId), JSON.stringify(data));
   } catch {
@@ -109,12 +141,72 @@ const persistUi = (): void => {
 
 // ── snapshot + notify ────────────────────────────────────────────────────────
 
-const rebuildSnapshot = (): void => {
-  snapshot = { projectId, treeData: buildTreeData(cache, expanded, roots), selected, expanded: [...expanded] };
+/**
+ * Structural equality of two projected trees. Compares only the fields the arco
+ * `Tree` renders from (key / title / isLeaf / excluded, plus the root-only role /
+ * runtimeStatus) and recurses into children, distinguishing an ABSENT `children`
+ * (lazy, listing not yet arrived) from an EMPTY one (arrived, no entries). This
+ * lets `commit` bail out when a server push left the visible tree unchanged.
+ */
+const treeNodesEqual = (a: readonly TreeNode[], b: readonly TreeNode[]): boolean => {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.key !== y.key ||
+      x.title !== y.title ||
+      x.isLeaf !== y.isLeaf ||
+      x.excluded !== y.excluded ||
+      x.role !== y.role ||
+      x.runtimeStatus !== y.runtimeStatus
+    ) {
+      return false;
+    }
+    if (x.children === undefined || y.children === undefined) {
+      if (x.children !== y.children) return false; // one lazy, one loaded → differs
+    } else if (!treeNodesEqual(x.children, y.children)) {
+      return false;
+    }
+  }
+  return true;
 };
 
+/** Positional equality of two key lists (the expanded-key array). */
+const keyListEqual = (a: readonly PeKey[], b: readonly PeKey[]): boolean => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
+
+/** Whether two projected views are indistinguishable to a React consumer. */
+const viewsEqual = (a: ExplorerView, b: ExplorerView): boolean =>
+  a.projectId === b.projectId &&
+  a.selected === b.selected &&
+  keyListEqual(a.expanded, b.expanded) &&
+  treeNodesEqual(a.treeData, b.treeData);
+
+/**
+ * Rebuild the projected view and notify React — but only when the projection
+ * actually changed. A server push that leaves the visible tree identical (a burst
+ * of `modified` deltas, a re-added entry already in the listing, an overflow
+ * rescan with the same contents) keeps the previous snapshot reference and skips
+ * the notify, so it costs no re-render. This bounds the render load under
+ * high-frequency runtime deltas and keeps `getExplorerSnapshot`'s reference stable
+ * across no-op commits (a `useSyncExternalStore` requirement). User actions still
+ * commit synchronously — a real change always yields a new snapshot in the same
+ * tick, so nothing observes stale state.
+ */
 const commit = (): void => {
-  rebuildSnapshot();
+  const next: ExplorerView = {
+    projectId,
+    treeData: buildTreeData(cache, expanded, roots),
+    selected,
+    expanded: [...expanded],
+  };
+  if (viewsEqual(snapshot, next)) return;
+  snapshot = next;
   for (const listener of listeners) listener();
 };
 
@@ -145,8 +237,18 @@ const runReconcile = (): void => {
         if (changed) commit();
       })
       .catch(() => {
-        // Offline / reconnect: current already advanced; the reconnect path
-        // resets current and re-declares, so no gap is left behind.
+        // Subscribe failed (offline, or the socket not yet ready right after a
+        // reconnect). Roll the just-declared keys back out of `current`: leaving
+        // them there would strand them as permanently-but-falsely declared, so
+        // reconcileDiff would see them as already-current and never re-add them —
+        // the directory would keep its stale cache and receive no more updates,
+        // an invisible failure (it looks identically "expanded with contents").
+        // Rolled back, they re-enter `toAdd` on the next reconcile — the reconnect
+        // re-declare, or any user expand/collapse — which retries the subscribe.
+        // We deliberately do NOT reschedule here: retrying immediately against a
+        // still-dead socket would hammer it every round-trip; the next reconcile
+        // trigger is the retry.
+        for (const key of toAdd) current.delete(key);
       });
   }
 };
@@ -260,7 +362,10 @@ export const openProject = (id: string, projectRoots: RootRef[]): void => {
     commit();
     return;
   }
-  if (projectId) persistUi();
+  // Leave-persist for the outgoing project. This is the ONLY empty-write source
+  // from a switch race, so it is the only caller that guards against clobbering a
+  // populated record with a transiently-empty expanded set (see persistUi).
+  if (projectId) persistUi({ guardEmptyOverwrite: true });
   projectId = id;
   roots = projectRoots;
   cache = new Map();
@@ -325,6 +430,55 @@ export const select = (key: PeKey | null): void => {
 export const onReconnect = (): void => {
   current = new Set();
   scheduleReconcile();
+};
+
+/**
+ * Manually refresh one project_explorer root — the recovery path for when the
+ * BACKEND mount for that root went stale: its filesystem watcher died, or its
+ * path was unreachable and has since recovered, so the backend is serving a
+ * listing that no longer matches disk and delivering no more changes.
+ *
+ * A plain re-subscribe cannot fix this: the backend answers a subscribe of a
+ * still-live directory from its cached node (its mount is idempotent), rebuilding
+ * neither the watch nor the listing. So this asks the backend to REMOUNT instead
+ * — re-arm the watch and re-read the baseline — for every directory of this pe
+ * that is currently watched (the reported `current` set, which is exactly the
+ * backend's watched set for this pe). The returned fresh snapshots replace the
+ * cached listings, guarded against keys that stopped being wanted mid-flight.
+ *
+ * `current` is left intact: remount does not change *what* we subscribe to, only
+ * forces the backend to rebuild it, so subscriptions and pe identities are
+ * preserved. A no-op when the root has no live subscriptions (e.g. collapsed):
+ * nothing is watched, so there is no backend mount to refresh. The runtime-status
+ * indicator (an HTTP-sourced stat, decoupled from the watcher) is recovered
+ * separately by the container's `mutate()`.
+ */
+export const refreshRoot = (peId: string): void => {
+  if (!port) return;
+  const refs = [...current].filter((key) => keyToRef(key).pe_id === peId).map(keyToRef);
+  if (refs.length === 0) return; // collapsed / nothing watched → no backend mount to refresh
+  port
+    .remount(refs)
+    .then((result) => {
+      // Apply each fresh snapshot, guarding against keys no longer wanted (the
+      // tree may have collapsed while the request was in flight). Mirrors the
+      // subscribe-reply application in runReconcile.
+      const stillWant = deriveWant(expanded);
+      let changed = false;
+      for (const snap of result.snapshots) {
+        const key = refToKey(snap.target);
+        if (!stillWant.has(key)) continue; // guard: dropped
+        cache = applySnapshot(cache, key, snap.entries);
+        changed = true;
+      }
+      if (changed) commit();
+    })
+    .catch(() => {
+      // Remount failed (offline, or the path is still gone). The existing
+      // subscriptions are untouched and still valid, so there is nothing to roll
+      // back; the stale cache is kept until a future event or another refresh
+      // recovers it. Deliberately no reschedule — a manual refresh does not retry.
+    });
 };
 
 export const subscribeExplorer = (listener: () => void): (() => void) => {

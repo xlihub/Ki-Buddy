@@ -9,6 +9,7 @@ import {
   Communication,
   Computer,
   Earth,
+  Inbox,
   Info,
   Lightning,
   LinkCloud,
@@ -118,6 +119,14 @@ export const SETTINGS_REGISTRY = [
     routePaths: ['/settings/system'],
   },
   {
+    id: 'archived',
+    path: 'archived',
+    featureId: 'conversation',
+    productOnly: false,
+    desktopOnly: false,
+    routePaths: ['/settings/archived'],
+  },
+  {
     id: 'about',
     path: 'about',
     featureId: 'system',
@@ -156,6 +165,7 @@ export const LEGACY_ANCHOR_REMAP: Record<string, string> = {
 const GROUP_HEADER_BEFORE: Record<string, string> = {
   agent: 'settings.groupAiCore',
   appearance: 'settings.groupApp',
+  archived: 'settings.archived.title',
   about: 'settings.groupAbout',
 };
 
@@ -239,6 +249,12 @@ export function getSettingsNavigationProjection(isDesktop: boolean, t: Translate
     },
     pet: { id: 'pet', label: t('pet.desktopPet'), icon: <Cat />, path: 'pet' },
     system: { id: 'system', label: t('settings.system'), icon: <System />, path: 'system' },
+    archived: {
+      id: 'archived',
+      label: t('settings.archived.navLabel'),
+      icon: <Inbox />,
+      path: 'archived',
+    },
     about: { id: 'about', label: t('settings.about'), icon: <Info />, path: 'about' },
   };
   const { entries, extensionSettingsEnabled } = getSettingsExperienceProjection({

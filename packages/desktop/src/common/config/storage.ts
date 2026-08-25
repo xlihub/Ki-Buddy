@@ -16,14 +16,23 @@ export const EnvStorage = buildStorage<IEnvStorageRefer>('agent.env');
 
 export interface IConfigStorageRefer {
   language: string;
-  theme: string; // @deprecated migrated to theme.activeId/theme.userThemes
-  colorScheme: string; // @deprecated migrated to theme.activeId/theme.userThemes
   /** Persisted app-wide UI zoom factor for Display settings */
   'ui.zoomFactor'?: number;
   /** Per-region configurable font sizes (px), set in Appearance settings */
+  'ui.fontSize.app'?: number;
   'ui.fontSize.chat'?: number;
   'ui.fontSize.markdown'?: number;
   'ui.fontSize.code'?: number;
+  /** Per-region configurable font families, set in Appearance settings */
+  'ui.fontFamily.app'?: string;
+  'ui.fontFamily.chat'?: string;
+  'ui.fontFamily.markdown'?: string;
+  'ui.fontFamily.code'?: string;
+  /** Per-region configurable font weights (standard tiers), set in Appearance settings */
+  'ui.fontWeight.app'?: string;
+  'ui.fontWeight.chat'?: string;
+  'ui.fontWeight.markdown'?: string;
+  'ui.fontWeight.code'?: string;
   /** Last-known main window size and position, restored on next launch */
   'window.bounds'?: { x?: number; y?: number; width: number; height: number };
   /** 桌面模式下是否自动启用 WebUI / Auto-enable WebUI in desktop mode */
@@ -32,9 +41,6 @@ export interface IConfigStorageRefer {
   'webui.desktop.allowRemote'?: boolean;
   /** 桌面模式下 WebUI 端口 / WebUI port in desktop mode */
   'webui.desktop.port'?: number;
-  customCss: string; // 自定义 CSS 样式 // @deprecated migrated to theme.activeId/theme.userThemes
-  'css.themes': ICssTheme[]; // 自定义 CSS 主题列表 / Custom CSS themes list // @deprecated migrated to theme.activeId/theme.userThemes
-  'css.activeThemeId': string; // 当前激活的主题 ID / Currently active theme ID // @deprecated migrated to theme.activeId/theme.userThemes
   /** Active unified theme ID */
   'theme.activeId': string;
   /** User-created themes */
@@ -122,7 +128,13 @@ export interface IEnvStorageRefer {
 export type ConversationSource = 'aionui' | 'telegram' | 'lark' | 'dingtalk' | 'weixin' | 'wecom' | (string & {});
 
 export type TChatConversationStatus = 'pending' | 'running' | 'finished';
-export type TConversationRuntimeStateKind = 'idle' | 'starting' | 'running' | 'cancelling' | 'waiting_confirmation';
+export type TConversationRuntimeStateKind =
+  | 'idle'
+  | 'starting'
+  | 'running'
+  | 'cancelling'
+  | 'restarting'
+  | 'waiting_confirmation';
 
 export type TConversationRuntimeSummary = {
   state: TConversationRuntimeStateKind;
@@ -132,6 +144,11 @@ export type TConversationRuntimeSummary = {
   is_processing: boolean;
   pending_confirmations: number;
   turn_id: string | null;
+  /** Whether a message sent right now reaches the agent without waiting for
+   * the current turn to end. The ONLY capability bit the frontend may gate
+   * mid-turn UI on. Optional/undefined is treated as false for older
+   * backends/responses that don't send it yet. */
+  supports_midturn_delivery?: boolean;
 };
 
 export type TConversationAssistantIdentity = {

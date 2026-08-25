@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { DirRef, Entry, PeKey, TreeNode } from '@/renderer/pages/conversation/explorer/explorerModel';
 import { peKey, refToKey } from '@/renderer/pages/conversation/explorer/explorerModel';
-import type { MonitorPort } from '@/renderer/pages/conversation/explorer/explorerStore';
+import type { MonitorPort, SubscribeResult } from '@/renderer/pages/conversation/explorer/explorerStore';
 import {
   applyMonitorNotification,
   configureExplorerStore,
@@ -10,11 +10,13 @@ import {
   getExplorerSnapshot,
   onReconnect,
   openProject,
+  refreshRoot,
   resetExplorerStoreForTest,
   reveal,
   select,
   setExpanded,
   setExpandedKeys,
+  subscribeExplorer,
 } from '@/renderer/pages/conversation/explorer/explorerStore';
 
 const flush = async (): Promise<void> => {
@@ -27,18 +29,25 @@ const file = (name: string): Entry => ({ name, kind: 'file' });
 type PortHarness = {
   port: MonitorPort;
   subscribed: DirRef[][];
+  remounted: DirRef[][];
   unsubscribed: DirRef[][];
 };
 
 function makePort(snapshots: Record<PeKey, Entry[]> = {}): PortHarness {
   const subscribed: DirRef[][] = [];
+  const remounted: DirRef[][] = [];
   const unsubscribed: DirRef[][] = [];
   return {
     subscribed,
+    remounted,
     unsubscribed,
     port: {
       subscribe: async (refs) => {
         subscribed.push(refs);
+        return { snapshots: refs.map((r) => ({ target: r, entries: snapshots[refToKey(r)] ?? [] })) };
+      },
+      remount: async (refs) => {
+        remounted.push(refs);
         return { snapshots: refs.map((r) => ({ target: r, entries: snapshots[refToKey(r)] ?? [] })) };
       },
       unsubscribe: (refs) => {
@@ -51,39 +60,50 @@ function makePort(snapshots: Record<PeKey, Entry[]> = {}): PortHarness {
 type DeferredPortHarness = {
   port: MonitorPort;
   subscribed: DirRef[][];
+  remounted: DirRef[][];
   unsubscribed: DirRef[][];
-  /** Resolve the oldest still-pending subscribe() call (FIFO). */
+  /** Resolve the oldest still-pending subscribe()/remount() call (FIFO). */
   resolveNext: () => void;
   pendingCount: () => number;
 };
 
 /**
- * Like makePort but subscribe() returns a promise that only settles when the
- * test calls resolveNext() — lets a test interleave state changes (e.g. a
- * collapse) *between* a subscribe going out and its snapshot coming back, to
- * exercise the in-flight `stillWant` guard in runReconcile's `.then`.
+ * Like makePort but subscribe()/remount() return a promise that only settles
+ * when the test calls resolveNext() — lets a test interleave state changes
+ * (e.g. a collapse) *between* a request going out and its snapshot coming back,
+ * to exercise the in-flight `stillWant` guard in runReconcile / refreshRoot.
+ * Both requests share one FIFO resolver queue.
  */
 function makeDeferredPort(snapshots: Record<PeKey, Entry[]> = {}): DeferredPortHarness {
   const subscribed: DirRef[][] = [];
+  const remounted: DirRef[][] = [];
   const unsubscribed: DirRef[][] = [];
   const resolvers: Array<() => void> = [];
+  const deferredSnapshots = (refs: DirRef[]) =>
+    new Promise<SubscribeResult>((resolve) => {
+      resolvers.push(() =>
+        resolve({ snapshots: refs.map((r) => ({ target: r, entries: snapshots[refToKey(r)] ?? [] })) })
+      );
+    });
   return {
     subscribed,
+    remounted,
     unsubscribed,
     resolveNext: () => {
       const r = resolvers.shift();
-      if (!r) throw new Error('resolveNext: no pending subscribe');
+      if (!r) throw new Error('resolveNext: no pending request');
       r();
     },
     pendingCount: () => resolvers.length,
     port: {
-      subscribe: (refs) =>
-        new Promise((resolve) => {
-          subscribed.push(refs);
-          resolvers.push(() =>
-            resolve({ snapshots: refs.map((r) => ({ target: r, entries: snapshots[refToKey(r)] ?? [] })) })
-          );
-        }),
+      subscribe: (refs) => {
+        subscribed.push(refs);
+        return deferredSnapshots(refs);
+      },
+      remount: (refs) => {
+        remounted.push(refs);
+        return deferredSnapshots(refs);
+      },
       unsubscribe: (refs) => {
         unsubscribed.push(refs);
       },
@@ -328,6 +348,103 @@ describe('reconnect re-declares', () => {
   });
 });
 
+describe('refreshRoot (manual per-root backend remount)', () => {
+  const twoRoots = [
+    { pe_id: 'pe1', title: 'app' },
+    { pe_id: 'pe2', title: 'lib' },
+  ];
+
+  it('remounts only the target root’s watched subtree, leaving other roots and subscriptions untouched', async () => {
+    const h = makePort({
+      [peKey('pe1', '')]: [dir('a')],
+      [peKey('pe1', 'a')]: [file('y.ts')],
+      [peKey('pe2', '')]: [dir('x')],
+    });
+    configureExplorerStore(h.port);
+    openProject('proj-multi', twoRoots);
+    await flush();
+    setExpanded(peKey('pe1', 'a'), true);
+    await flush();
+    h.subscribed.length = 0; // ignore the initial subscribes
+    const currentBefore = getExplorerInternalsForTest().current.toSorted();
+
+    refreshRoot('pe1');
+    await flush();
+
+    const remounted = h.remounted.flat().map(refToKey).toSorted();
+    // Both of pe1's watched dirs are remounted; nothing under pe2 is touched.
+    expect(remounted).toEqual([peKey('pe1', ''), peKey('pe1', 'a')].toSorted());
+    expect(remounted).not.toContain(peKey('pe2', ''));
+    // Remount does not re-declare subscriptions: no new subscribe, `current` intact.
+    expect(h.subscribed).toEqual([]);
+    expect(getExplorerInternalsForTest().current.toSorted()).toEqual(currentBefore);
+  });
+
+  it('replaces the target root’s cached listing with the fresh remount snapshot', async () => {
+    // The port reads `snapshots` live, so mutating it before the remount models a
+    // change on disk the (stale) backend mount missed until the manual refresh
+    // forces a re-read.
+    const snapshots: Record<PeKey, Entry[]> = { [peKey('pe1', '')]: [file('old.ts')] };
+    const h = makePort(snapshots);
+    configureExplorerStore(h.port);
+    openProject('proj1', roots);
+    await flush();
+    expect(childNames(getExplorerSnapshot().treeData, peKey('pe1', ''))).toEqual(['old.ts']);
+
+    snapshots[peKey('pe1', '')] = [file('new.ts'), dir('added')];
+    refreshRoot('pe1');
+    await flush();
+
+    // Fresh remount snapshot replaced the stale listing (dirs sort ahead of files).
+    expect(childNames(getExplorerSnapshot().treeData, peKey('pe1', ''))).toEqual(['added', 'new.ts']);
+  });
+
+  it('is a no-op for a collapsed root — nothing is watched, so remount is never called', async () => {
+    const h = makePort({ [peKey('pe1', '')]: [dir('a')] });
+    configureExplorerStore(h.port);
+    openProject('proj1', roots);
+    await flush();
+    setExpanded(peKey('pe1', ''), false); // collapse the root → drops its subscription
+    await flush();
+    h.remounted.length = 0;
+
+    refreshRoot('pe1');
+    await flush();
+
+    expect(h.remounted).toEqual([]);
+  });
+
+  it('keeps the stale cached listing while the remount is in flight — no flicker to empty (deferred port)', async () => {
+    // Guards the "stale cache kept until the fresh snapshot lands" invariant: a
+    // regression that dropped the pe's *cache* keys on refresh would empty the
+    // tree during the remount round-trip. The deferred port holds the remount in
+    // flight so we can observe that window.
+    const snapshots: Record<PeKey, Entry[]> = { [peKey('pe1', '')]: [file('old.ts')] };
+    const h = makeDeferredPort(snapshots);
+    configureExplorerStore(h.port);
+    openProject('proj1', roots);
+    await flush();
+    h.resolveNext(); // settle the initial root subscribe → cache holds ['old.ts']
+    await flush();
+    expect(getExplorerInternalsForTest().cacheKeys).toContain(peKey('pe1', ''));
+
+    snapshots[peKey('pe1', '')] = [file('new.ts')]; // the change the stale mount missed
+    refreshRoot('pe1');
+    await flush();
+
+    // Remount is in flight (not yet resolved): the cached listing must survive so
+    // the tree still shows 'old.ts' instead of flickering to empty. A cache-clear
+    // regression makes both of these fail (cacheKeys loses the root; tree → undefined).
+    expect(h.pendingCount()).toBe(1);
+    expect(getExplorerInternalsForTest().cacheKeys).toContain(peKey('pe1', ''));
+    expect(childNames(getExplorerSnapshot().treeData, peKey('pe1', ''))).toEqual(['old.ts']);
+
+    h.resolveNext(); // fresh remount snapshot lands → now the listing swaps
+    await flush();
+    expect(childNames(getExplorerSnapshot().treeData, peKey('pe1', ''))).toEqual(['new.ts']);
+  });
+});
+
 describe('per-project persistence', () => {
   it('restores expanded state from localStorage on reopen', async () => {
     const h = makePort({ [peKey('pe1', '')]: [dir('a')], [peKey('pe1', 'a')]: [] });
@@ -445,9 +562,12 @@ describe('collapse while subscribe is in flight (runReconcile .then guard)', () 
 });
 
 describe('subscribe rejection (offline) path', () => {
-  it('advances current despite a rejected subscribe, then reconnect re-declares with no gap', async () => {
+  it('rolls a rejected subscribe back out of current so it is not stranded as falsely-declared', async () => {
     const rejecting: MonitorPort = {
       subscribe: async () => {
+        throw new Error('offline');
+      },
+      remount: async () => {
         throw new Error('offline');
       },
       unsubscribe: () => {},
@@ -456,10 +576,56 @@ describe('subscribe rejection (offline) path', () => {
     openProject('proj1', roots);
     await flush();
 
-    // current advanced to want even though the subscribe rejected (no retry gap);
-    // the cache is empty because no snapshot came back.
-    expect(getExplorerInternalsForTest().current).toContain(peKey('pe1', ''));
+    // The rejected root subscribe must NOT leave the root sitting in `current`.
+    // If it did, reconcileDiff would treat the root as already-declared and never
+    // re-add it — the dir would go silently stale. Rolled back, it is eligible to
+    // retry. (The cache is empty because no snapshot came back.)
+    expect(getExplorerInternalsForTest().current).not.toContain(peKey('pe1', ''));
     expect(getExplorerInternalsForTest().cacheKeys).toEqual([]);
+  });
+
+  it('retries a rejected subscribe on the very next reconcile — no reconnect needed', async () => {
+    const rejecting: MonitorPort = {
+      subscribe: async () => {
+        throw new Error('offline');
+      },
+      remount: async () => {
+        throw new Error('offline');
+      },
+      unsubscribe: () => {},
+    };
+    configureExplorerStore(rejecting);
+    openProject('proj1', roots);
+    await flush();
+    expect(getExplorerInternalsForTest().current).not.toContain(peKey('pe1', ''));
+
+    // Socket healthy again, but NO reconnect event fires. A plain user action
+    // (expanding a dir) triggers a reconcile; because the root was rolled back out
+    // of `current`, it re-enters `toAdd` and is re-subscribed. This is the whole
+    // point of the fix: recovery no longer depends solely on the reconnect path.
+    const good = makePort({ [peKey('pe1', '')]: [dir('a')] });
+    configureExplorerStore(good.port);
+    setExpanded(peKey('pe1', ''), true); // root already expanded → benign, just reconciles
+    await flush();
+
+    expect(good.subscribed.flat().map(refToKey)).toContain(peKey('pe1', ''));
+    expect(getExplorerInternalsForTest().current).toContain(peKey('pe1', ''));
+    expect(childNames(getExplorerSnapshot().treeData, peKey('pe1', ''))).toEqual(['a']);
+  });
+
+  it('reconnect still re-declares the whole want set after an offline gap', async () => {
+    const rejecting: MonitorPort = {
+      subscribe: async () => {
+        throw new Error('offline');
+      },
+      remount: async () => {
+        throw new Error('offline');
+      },
+      unsubscribe: () => {},
+    };
+    configureExplorerStore(rejecting);
+    openProject('proj1', roots);
+    await flush();
 
     // Reconnect: current resets to ∅ and the whole want set is re-declared. This
     // time the port answers, filling the gap left by the earlier rejection.
@@ -767,5 +933,79 @@ describe('selection + misc edge paths', () => {
     applyMonitorNotification('fs/bogus', { target: { pe_id: 'pe1', relative_path: '' }, whatever: true });
 
     expect(getExplorerInternalsForTest()).toEqual(before);
+  });
+});
+
+describe('commit coalescing (render-storm bound)', () => {
+  it('a burst of no-op deltas (modified + duplicate add) triggers zero notifications and keeps the snapshot reference stable', async () => {
+    const h = makePort({ [peKey('pe1', '')]: [file('a.ts')] });
+    configureExplorerStore(h.port);
+    openProject('proj1', roots);
+    await flush();
+
+    let notifications = 0;
+    const unsub = subscribeExplorer(() => {
+      notifications++;
+    });
+    const snapBefore = getExplorerSnapshot();
+
+    // `modified` changes contents, not the listing → the projected tree is
+    // identical, so none of these should reach React.
+    for (let i = 0; i < 50; i++) {
+      applyMonitorNotification('fs/delta', {
+        target: { pe_id: 'pe1', relative_path: '' },
+        changes: [{ op: 'modified', name: 'a.ts' }],
+      });
+    }
+    // Re-adding an entry already in the listing is likewise a no-op for the tree.
+    for (let i = 0; i < 50; i++) {
+      applyMonitorNotification('fs/delta', {
+        target: { pe_id: 'pe1', relative_path: '' },
+        changes: [{ op: 'added', name: 'a.ts', kind: 'file' }],
+      });
+    }
+    await flush();
+
+    expect(notifications).toBe(0); // no visible change → no re-render
+    expect(getExplorerSnapshot()).toBe(snapBefore); // stable reference kept
+    unsub();
+  });
+
+  it('bounds notifications to the number of genuinely-changing deltas in a burst, not the notification volume', async () => {
+    const h = makePort({ [peKey('pe1', '')]: [file('a.ts')] });
+    configureExplorerStore(h.port);
+    openProject('proj1', roots);
+    await flush();
+
+    let notifications = 0;
+    const unsub = subscribeExplorer(() => {
+      notifications++;
+    });
+
+    // Three distinct adds, each padded with five no-op `modified` deltas. Only the
+    // three adds change the listing, so the render count follows the real changes
+    // (3), not the 18 delta notifications.
+    for (const name of ['b.ts', 'c.ts', 'd.ts']) {
+      for (let k = 0; k < 5; k++) {
+        applyMonitorNotification('fs/delta', {
+          target: { pe_id: 'pe1', relative_path: '' },
+          changes: [{ op: 'modified', name: 'a.ts' }],
+        });
+      }
+      applyMonitorNotification('fs/delta', {
+        target: { pe_id: 'pe1', relative_path: '' },
+        changes: [{ op: 'added', name, kind: 'file' }],
+      });
+    }
+    await flush();
+
+    expect(notifications).toBe(3);
+    expect(childNames(getExplorerSnapshot().treeData, peKey('pe1', ''))?.toSorted()).toEqual([
+      'a.ts',
+      'b.ts',
+      'c.ts',
+      'd.ts',
+    ]);
+    unsub();
   });
 });

@@ -22,8 +22,6 @@
   "continueEdit": "继续编辑",
   "closeTabTitle": "关闭标签页",
   "closeTabMessage": "当前内容还未保存，是否保存后再关闭？",
-  "closeTabsTitle": "关闭标签页",
-  "closeTabsMessage": "有 {{count}} 个标签页未保存，是否保存后再关闭？",
   "saveAndClose": "保存并关闭",
   "closeWithoutSave": "不保存",
   "pptTitle": "PowerPoint 演示文稿",
@@ -48,16 +46,6 @@
   "noTabs": "暂无标签页",
   "openInPanelTooltip": "在预览面板中查看",
   "mermaidTitle": "Mermaid 图表",
-  "oversized": {
-    "title": "文件过大，无法预览",
-    "detail": "文件尺寸 {{size}} 超过 {{threshold}}，请用系统编辑器打开。",
-    "downloadUnavailable": "文件过大，无法在此下载。请改用「在系统中打开」。"
-  },
-  "unsupported": {
-    "title": "暂不支持预览此格式",
-    "detail": "{{format}} 文件无法在此预览，请用系统应用打开。",
-    "downloadUnavailable": "该文件无法在此下载。请改用「在系统中打开」。"
-  },
   "aiWriting": "AI 正在写入…",
   "errors": {
     "missingFilePath": "未提供文件路径",
@@ -135,6 +123,18 @@
     "startFailed": "启动 PPT 预览失败",
     "installHint": "请从官方 iOfficeAI/OfficeCLI releases 页面安装 OfficeCLI"
   },
+  "closeTabsTitle": "关闭标签页",
+  "closeTabsMessage": "有 {{count}} 个标签页未保存，是否保存后再关闭？",
+  "oversized": {
+    "title": "文件过大，无法预览",
+    "detail": "文件尺寸 {{size}} 超过 {{threshold}}，请用系统编辑器打开。",
+    "downloadUnavailable": "文件过大，无法在此下载。请改用「在系统中打开」。"
+  },
+  "unsupported": {
+    "title": "暂不支持预览此格式",
+    "detail": "{{format}} 文件无法在此预览，请用系统应用打开。",
+    "downloadUnavailable": "该文件无法在此下载。请改用「在系统中打开」。"
+  },
   "browser": {
     "newTab": "新建标签页",
     "addressPlaceholder": "输入网址或搜索内容",
@@ -157,5 +157,24 @@
     "confirmMessage": "该标签页有未保存的修改，重新加载会用磁盘上的内容覆盖它们。",
     "discardAndRefresh": "放弃修改并刷新",
     "officeNotWired": "Office 文档的刷新尚未接入——请关闭后重新打开文件以查看改动。"
-  }
+  },
+  "maximizePanel": "最大化",
+  "restorePanel": "还原",
+  "closeTabsMessage_one": "有 {{count}} 个标签页未保存，是否保存后再关闭？",
+  "closeTabsMessage_other": "有 {{count}} 个标签页未保存，是否保存后再关闭？",
+  "close": "关闭",
+  "closeUnmodified": "关闭未修改",
+  "copyPath": "复制路径",
+  "copyRelativePath": "复制相对路径",
+  "openLocation": "打开文件所在目录",
+  "openLocationFailed": "无法打开所在目录",
+  "wavedromTitle": "WaveDrom 波形图",
+  "save": {
+    "tooltip": "保存修改（Ctrl/Cmd+S）",
+    "clean": "没有未保存的修改"
+  },
+  "zoomIn": "放大",
+  "zoomOut": "缩小",
+  "zoomReset": "重置视图",
+  "diagramZoomHint": "滚轮缩放 • 拖拽平移 • ESC 关闭"
 }

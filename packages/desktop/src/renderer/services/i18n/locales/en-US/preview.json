@@ -22,8 +22,6 @@
   "continueEdit": "Continue Editing",
   "closeTabTitle": "Close Tab",
   "closeTabMessage": "The current content has not been saved. Do you want to save before closing?",
-  "closeTabsTitle": "Close Tabs",
-  "closeTabsMessage": "{{count}} tabs have unsaved changes. Save them before closing?",
   "saveAndClose": "Save and Close",
   "closeWithoutSave": "Don't Save",
   "pptTitle": "PowerPoint Presentation",
@@ -48,16 +46,6 @@
   "noTabs": "No tabs open",
   "openInPanelTooltip": "View in preview panel",
   "mermaidTitle": "Mermaid Diagram",
-  "oversized": {
-    "title": "File too large to preview",
-    "detail": "File size {{size}} exceeds the {{threshold}} limit. Please open it in a system editor.",
-    "downloadUnavailable": "This file is too large to download here. Use “Open in system” instead."
-  },
-  "unsupported": {
-    "title": "Preview not supported for this format",
-    "detail": "{{format}} files cannot be previewed here. Open it in a system application instead.",
-    "downloadUnavailable": "This file cannot be downloaded here. Use “Open in system” instead."
-  },
   "aiWriting": "AI is writing…",
   "errors": {
     "missingFilePath": "File path is missing",
@@ -135,6 +123,18 @@
     "startFailed": "Failed to start PPT preview",
     "installHint": "Install OfficeCLI from the official iOfficeAI/OfficeCLI releases page"
   },
+  "closeTabsTitle": "Close Tabs",
+  "closeTabsMessage": "{{count}} tabs have unsaved changes. Save them before closing?",
+  "oversized": {
+    "title": "File too large to preview",
+    "detail": "File size {{size}} exceeds the {{threshold}} limit. Please open it in a system editor.",
+    "downloadUnavailable": "This file is too large to download here. Use “Open in system” instead."
+  },
+  "unsupported": {
+    "title": "Preview not supported for this format",
+    "detail": "{{format}} files cannot be previewed here. Open it in a system application instead.",
+    "downloadUnavailable": "This file cannot be downloaded here. Use “Open in system” instead."
+  },
   "browser": {
     "newTab": "New tab",
     "addressPlaceholder": "Enter a URL or search",
@@ -157,5 +157,24 @@
     "confirmMessage": "This tab has unsaved changes. Reloading replaces them with what is on disk.",
     "discardAndRefresh": "Discard changes and reload",
     "officeNotWired": "Refreshing Office documents is not available yet — close and reopen the file to see changes."
-  }
+  },
+  "maximizePanel": "Maximize",
+  "restorePanel": "Restore",
+  "closeTabsMessage_one": "{{count}} tab has unsaved changes. Save it before closing?",
+  "closeTabsMessage_other": "{{count}} tabs have unsaved changes. Save them before closing?",
+  "close": "Close",
+  "closeUnmodified": "Close Unmodified",
+  "copyPath": "Copy Path",
+  "copyRelativePath": "Copy Relative Path",
+  "openLocation": "Show in folder",
+  "openLocationFailed": "Failed to open containing folder",
+  "wavedromTitle": "WaveDrom Diagram",
+  "save": {
+    "tooltip": "Save changes (Ctrl/Cmd+S)",
+    "clean": "No unsaved changes"
+  },
+  "zoomIn": "Zoom in",
+  "zoomOut": "Zoom out",
+  "zoomReset": "Reset view",
+  "diagramZoomHint": "Scroll to zoom • Drag to pan • ESC to close"
 }

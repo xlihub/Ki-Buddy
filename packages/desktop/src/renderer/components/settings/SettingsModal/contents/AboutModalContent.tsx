@@ -114,27 +114,27 @@ const AboutModalContent: React.FC = () => {
     {
       title: t('settings.helpDocumentation'),
       url: brand.links.support,
-      icon: <Right theme='outline' size='16' />,
+      icon: <Right theme='outline' size='16' className='rtl-mirror' />,
     },
     {
       title: t('settings.updateLog'),
       url: brand.links.releases,
-      icon: <Right theme='outline' size='16' />,
+      icon: <Right theme='outline' size='16' className='rtl-mirror' />,
     },
     {
       title: t('settings.bugReport'),
       onClick: () => setShowFeedbackModal(true),
-      icon: <Right theme='outline' size='16' />,
+      icon: <Right theme='outline' size='16' className='rtl-mirror' />,
     },
     {
       title: t('settings.contactMe'),
       url: getProductContactUrl(),
-      icon: <Right theme='outline' size='16' />,
+      icon: <Right theme='outline' size='16' className='rtl-mirror' />,
     },
     {
       title: t('settings.officialWebsite'),
       url: brand.links.homepage,
-      icon: <Right theme='outline' size='16' />,
+      icon: <Right theme='outline' size='16' className='rtl-mirror' />,
     },
   ];
 

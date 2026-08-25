@@ -161,6 +161,20 @@ export function initExplorerRuntime(): MonitorClient {
       const result = (await monitor.request('fs/subscribe', { targets: refs })) as MonitorRequestResult;
       return { snapshots: result.snapshots };
     },
+    remount: async (refs: DirRef[]): Promise<SubscribeResult> => {
+      const result = (await monitor.request('fs/remount', { targets: refs })) as MonitorRequestResult;
+      return { snapshots: result.snapshots };
+    },
+    unsubscribe: (refs: DirRef[]): void => {
+      monitor.notify('fs/unsubscribe', { targets: refs });
+    },
+  });
+
+  // The preview panel subscribes on its own behalf over this same client. It needs
+  // its own subscriptions because the explorer's track what is expanded on screen
+  // and drop on collapse, while a preview tab stays open regardless.
+  configurePreviewWatch({
+    subscribe: (refs: DirRef[]) => monitor.request('fs/subscribe', { targets: refs }),
     unsubscribe: (refs: DirRef[]): void => {
       monitor.notify('fs/unsubscribe', { targets: refs });
     },

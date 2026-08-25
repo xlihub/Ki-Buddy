@@ -10,6 +10,7 @@ import { Robot } from '@icon-park/react';
 import { assistantRuntimeKey, type Assistant } from '@/common/types/agent/assistantTypes';
 import { resolveAgentLogo, useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import { adaptProductAgentLogo } from '@/renderer/services/runtime/productBrandRuntime';
+import ThemedLogo from '@/renderer/components/agent/ThemedLogo';
 
 /**
  * Shows which runtime engine (CLI) drives an assistant. Frameless by default
@@ -41,7 +42,7 @@ const RuntimeBadge: React.FC<{
         <span className='text-t-quaternary'>{t('settings.assistantRuntimeLabel', { defaultValue: 'runtime:' })}</span>
       ) : null}
       {logo ? (
-        <img src={logo} alt='' className='h-15px w-15px object-contain' />
+        <ThemedLogo src={logo} alt='' className='h-15px w-15px object-contain' />
       ) : (
         <Robot theme='outline' size={13} fill='currentColor' />
       )}

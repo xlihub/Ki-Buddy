@@ -87,5 +87,15 @@
   "askDeclined": "Dismissed",
   "askOther": "Other",
   "askOtherPlaceholder": "Type your answer",
-  "requestDetails": "Request details:"
+  "requestDetails": "Request details:",
+  "fileChangesCount_one": "{{count}} File Change",
+  "fileChangesCount_other": "{{count}} File Changes",
+  "availableCommands_one": "{{count}} Available Command",
+  "availableCommands_other": "{{count}} Available Commands",
+  "atSession.hint": "Type to search your conversations",
+  "atSession.empty": "No conversations found",
+  "atSession.menuLabel": "Conversation mentions",
+  "delivery": {
+    "pending": "Unread"
+  }
 }

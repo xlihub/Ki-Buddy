@@ -87,5 +87,15 @@
   "askDeclined": "Übersprungen",
   "askOther": "Andere",
   "askOtherPlaceholder": "Antwort eingeben",
-  "requestDetails": "Anfragedetails:"
+  "requestDetails": "Anfragedetails:",
+  "fileChangesCount_one": "{{count}} Dateiänderung",
+  "fileChangesCount_other": "{{count}} Dateiänderungen",
+  "availableCommands_one": "{{count}} verfügbarer Befehl",
+  "availableCommands_other": "{{count}} verfügbare Befehle",
+  "atSession.hint": "Tippen, um Unterhaltungen zu suchen",
+  "atSession.empty": "Keine Unterhaltungen gefunden",
+  "atSession.menuLabel": "Unterhaltungs-Erwähnungen",
+  "delivery": {
+    "pending": "Ungelesen"
+  }
 }

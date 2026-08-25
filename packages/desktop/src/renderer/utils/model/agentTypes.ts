@@ -179,6 +179,27 @@ export async function fetchManagedAgents(): Promise<ManagedAgent[]> {
   }
 }
 
+/**
+ * Lowercased haystack for agent search inputs. Every agent-picking surface
+ * (Agent settings page, home-page assistant dropdown) must match on the same
+ * fields, so a query like "ag" finds Antigravity via its `agy` command on all
+ * of them.
+ */
+export function managedAgentSearchText(agent: ManagedAgent, language: string): string {
+  return [
+    agent.name,
+    agent.name_i18n?.[language],
+    agent.description,
+    agent.description_i18n?.[language],
+    agent.backend,
+    agent.command,
+    agent.agent_source_info?.binary_name,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
 const getAgentManagementErrorDetails = (details: unknown): AgentManagementErrorDetails => {
   if (!details || typeof details !== 'object' || Array.isArray(details)) {
     return {};
