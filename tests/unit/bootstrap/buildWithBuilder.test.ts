@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
@@ -20,6 +22,11 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(__dirname, '../../..');
+const require = createRequire(import.meta.url);
+
+const { createBuildOptions } = require(resolve(repoRoot, 'scripts/build-mcp-servers.js')) as {
+  createBuildOptions: (outputDirectory: string) => Array<{ outfile: string }>;
+};
 
 function readInstallerErrorDefinitions(): Array<{ defineName: string; code: string }> {
   const source = readFileSync(resolve(repoRoot, 'resources/windows/installer-errors-sentry.nsh'), 'utf8');
@@ -49,10 +56,20 @@ function resolveAppBuilderInstallUtil(): string {
 }
 
 describe('build-with-builder', () => {
+  it('routes every MCP server bundle to the requested output directory', () => {
+    const outputDirectory = resolve(repoRoot, '.tmp-mcp-output-test');
+
+    expect(createBuildOptions(outputDirectory).map(({ outfile }) => outfile)).toEqual([
+      resolve(outputDirectory, 'builtin-mcp-image-gen.js'),
+      resolve(outputDirectory, 'builtin-mcp-browser.js'),
+      resolve(outputDirectory, 'builtin-mcp-agents.js'),
+    ]);
+  });
+
   it('rejects skip-vite when renderer output is only a source html shell', () => {
     const outDir = resolve(repoRoot, 'out');
     const tempDir = mkdtempSync(join(tmpdir(), 'aionui-build-skip-vite-test-'));
-    const backupOutDir = join(tempDir, 'out-backup');
+    const backupOutDir = resolve(repoRoot, `.tmp-out-backup-${process.pid}-${randomUUID()}`);
     const hookPath = join(tempDir, 'hook.cjs');
 
     writeFileSync(
@@ -273,7 +290,7 @@ childProcess.execSync = function mockedExecSync(command) {
     const hookPath = join(tempDir, 'hook.cjs');
     const callsPath = join(tempDir, 'prepare-calls.json');
     const outDir = resolve(repoRoot, 'out');
-    const backupOutDir = join(tempDir, 'out-backup');
+    const backupOutDir = resolve(repoRoot, `.tmp-out-backup-${process.pid}-${randomUUID()}`);
 
     writeFileSync(
       hookPath,

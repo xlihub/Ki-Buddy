@@ -566,7 +566,7 @@ const ToolsModalContent: React.FC = () => {
                 tooltip={
                   <div className='space-y-4px'>
                     <div>{t('settings.imageGenSupportedTooltipTitle')}</div>
-                    <ul className='list-disc pl-16px m-0'>
+                    <ul className='list-disc ps-16px m-0'>
                       <li>{t('settings.imageGenSupportedTooltipGemini')}</li>
                       <li>{t('settings.imageGenSupportedTooltipOpenRouter')}</li>
                       <li>{t('settings.imageGenSupportedTooltipAntigravity')}</li>
@@ -624,7 +624,7 @@ const ToolsModalContent: React.FC = () => {
                             href={imageGenerationGuideUrl}
                             target='_blank'
                             rel='noopener noreferrer'
-                            className='text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] underline ml-4px'
+                            className='text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] underline ms-4px'
                             onClick={(e) => e.stopPropagation()}
                           >
                             {t('settings.configGuide')}
@@ -636,7 +636,7 @@ const ToolsModalContent: React.FC = () => {
                         href={imageGenerationGuideUrl}
                         target='_blank'
                         rel='noopener noreferrer'
-                        className='ml-8px text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] cursor-pointer'
+                        className='ms-8px text-[rgb(var(--primary-6))] hover:text-[rgb(var(--primary-5))] cursor-pointer'
                         onClick={(e) => e.stopPropagation()}
                       >
                         <Help theme='outline' size='14' />

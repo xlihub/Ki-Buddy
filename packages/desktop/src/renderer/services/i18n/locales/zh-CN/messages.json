@@ -87,5 +87,15 @@
   "askDeclined": "已跳过",
   "askOther": "其它",
   "askOtherPlaceholder": "输入你的回答",
-  "requestDetails": "请求内容："
+  "requestDetails": "请求内容：",
+  "fileChangesCount_one": "{{count}} 个文件变更",
+  "fileChangesCount_other": "{{count}} 个文件变更",
+  "availableCommands_one": "{{count}} 个可用命令",
+  "availableCommands_other": "{{count}} 个可用命令",
+  "atSession.hint": "输入以搜索会话",
+  "atSession.empty": "未找到会话",
+  "atSession.menuLabel": "会话提及",
+  "delivery": {
+    "pending": "未读"
+  }
 }

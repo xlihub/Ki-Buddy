@@ -87,5 +87,15 @@
   "askDeclined": "رد شد",
   "askOther": "سایر",
   "askOtherPlaceholder": "پاسخ خود را بنویسید",
-  "requestDetails": "جزئیات درخواست:"
+  "requestDetails": "جزئیات درخواست:",
+  "fileChangesCount_one": "{{count}} تغییر فایل",
+  "fileChangesCount_other": "{{count}} تغییر فایل",
+  "availableCommands_one": "{{count}} دستور موجود",
+  "availableCommands_other": "{{count}} دستور موجود",
+  "atSession.hint": "برای جست‌وجوی گفتگوها تایپ کنید",
+  "atSession.empty": "گفتگویی یافت نشد",
+  "atSession.menuLabel": "اشاره به گفتگو",
+  "delivery": {
+    "pending": "خوانده‌نشده"
+  }
 }

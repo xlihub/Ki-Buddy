@@ -56,7 +56,7 @@ const SiderAssistantEntry: React.FC<SiderAssistantEntryProps> = ({
       <div
         data-sider-nav-selected={isActive ? 'true' : 'false'}
         className={classNames(
-          'box-border group h-34px w-full flex items-center justify-start gap-8px pl-10px pr-8px rd-0.5rem cursor-pointer shrink-0 transition-all text-t-primary',
+          'box-border group h-34px w-full flex items-center justify-start gap-8px ps-10px pe-8px rd-0.5rem cursor-pointer shrink-0 transition-all text-t-primary',
           isMobile && 'sider-action-btn-mobile',
           isActive ? 'bg-fill-3' : 'hover:bg-fill-3 active:bg-fill-4'
         )}

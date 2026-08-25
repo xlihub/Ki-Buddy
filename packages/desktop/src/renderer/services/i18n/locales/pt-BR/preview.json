@@ -22,8 +22,6 @@
   "continueEdit": "Continuar Editando",
   "closeTabTitle": "Fechar Guia",
   "closeTabMessage": "O conteúdo atual não foi salvo. Deseja salvar antes de fechar?",
-  "closeTabsTitle": "Fechar abas",
-  "closeTabsMessage": "{{count}} abas têm alterações não salvas. Salvar antes de fechar?",
   "saveAndClose": "Salvar e Fechar",
   "closeWithoutSave": "Não Salvar",
   "pptTitle": "Apresentação do PowerPoint",
@@ -48,16 +46,6 @@
   "noTabs": "Nenhuma guia aberta",
   "openInPanelTooltip": "Ver no painel de visualização",
   "mermaidTitle": "Diagrama Mermaid",
-  "oversized": {
-    "title": "Arquivo muito grande para pré-visualizar",
-    "detail": "O tamanho do arquivo {{size}} excede o limite de {{threshold}}. Abra-o em um editor do sistema.",
-    "downloadUnavailable": "Este arquivo é muito grande para baixar aqui. Use “Abrir no sistema”."
-  },
-  "unsupported": {
-    "title": "Pré-visualização não suportada para este formato",
-    "detail": "Arquivos {{format}} não podem ser pré-visualizados aqui. Abra em um aplicativo do sistema.",
-    "downloadUnavailable": "Este arquivo não pode ser baixado aqui. Use “Abrir no sistema”."
-  },
   "aiWriting": "A IA está escrevendo…",
   "errors": {
     "missingFilePath": "O caminho do arquivo está ausente",
@@ -135,6 +123,18 @@
     "startFailed": "Falha ao iniciar a visualização do PPT",
     "installHint": "Instale o OfficeCLI pela página oficial de releases iOfficeAI/OfficeCLI"
   },
+  "closeTabsTitle": "Fechar abas",
+  "closeTabsMessage": "{{count}} abas têm alterações não salvas. Salvar antes de fechar?",
+  "oversized": {
+    "title": "Arquivo muito grande para pré-visualizar",
+    "detail": "O tamanho do arquivo {{size}} excede o limite de {{threshold}}. Abra-o em um editor do sistema.",
+    "downloadUnavailable": "Este arquivo é muito grande para baixar aqui. Use “Abrir no sistema”."
+  },
+  "unsupported": {
+    "title": "Pré-visualização não suportada para este formato",
+    "detail": "Arquivos {{format}} não podem ser pré-visualizados aqui. Abra em um aplicativo do sistema.",
+    "downloadUnavailable": "Este arquivo não pode ser baixado aqui. Use “Abrir no sistema”."
+  },
   "browser": {
     "newTab": "Nova aba",
     "addressPlaceholder": "Digite uma URL ou pesquise",
@@ -157,5 +157,24 @@
     "confirmMessage": "Esta aba tem alterações não salvas. Recarregar as substitui pelo conteúdo do disco.",
     "discardAndRefresh": "Descartar alterações e recarregar",
     "officeNotWired": "A atualização de documentos do Office ainda não está disponível — feche e reabra o arquivo para ver as alterações."
-  }
+  },
+  "maximizePanel": "Maximizar",
+  "restorePanel": "Restaurar",
+  "closeTabsMessage_one": "{{count}} aba tem alterações não salvas. Salvar antes de fechar?",
+  "closeTabsMessage_other": "{{count}} abas têm alterações não salvas. Salvar antes de fechar?",
+  "close": "Fechar",
+  "closeUnmodified": "Fechar Não Modificadas",
+  "copyPath": "Copiar Caminho",
+  "copyRelativePath": "Copiar Caminho Relativo",
+  "openLocation": "Mostrar na pasta",
+  "openLocationFailed": "Falha ao abrir a pasta que contém o arquivo",
+  "wavedromTitle": "Diagrama WaveDrom",
+  "save": {
+    "tooltip": "Salvar alterações (Ctrl/Cmd+S)",
+    "clean": "Nenhuma alteração não salva"
+  },
+  "zoomIn": "Ampliar",
+  "zoomOut": "Reduzir",
+  "zoomReset": "Redefinir visualização",
+  "diagramZoomHint": "Role para ampliar • Arraste para mover • ESC para fechar"
 }

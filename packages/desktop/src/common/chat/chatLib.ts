@@ -197,6 +197,9 @@ export type IMessageTips = IMessage<
     code?: string;
     params?: Record<string, unknown>;
     error?: AgentStreamErrorInfo;
+    /** Stable identity for a tip that supersedes its predecessor — see the
+     *  `supersedes_key` handling in `transformMessage`. */
+    supersedes_key?: string;
   }
 >;
 
@@ -384,6 +387,12 @@ export type IMessagePlan = IMessage<
   {
     session_id: string;
     entries: PlanUpdate['update']['entries'];
+    /**
+     * The turn this snapshot belongs to. The plan bar only renders while that
+     * turn is still running, so a finished turn's checklist cannot linger over
+     * the next one. Absent on rows written before this field existed.
+     */
+    turn_id?: string;
   }
 >;
 
@@ -708,16 +717,25 @@ const transformMessageInner = (message: IResponseMessage): TMessage | undefined 
         code?: unknown;
         params?: unknown;
         error?: unknown;
+        supersedes_key?: unknown;
       };
       const tipType = data.type ?? 'warning';
       const tipCode = typeof data.code === 'string' ? data.code : undefined;
       const tipParams = isObject(data.params) ? data.params : undefined;
+      // A progress-style tip restates the same fact with a new number (codex
+      // retries: "Reconnecting... 1/5", then 2/5 …). Deriving the message id
+      // from the key makes each update REPLACE its predecessor in the list
+      // instead of appending, so the user watches one card count up rather
+      // than collecting ten near-identical ones. Tips without a key keep a
+      // fresh uuid and are appended as before.
+      const supersedesKey =
+        typeof data.supersedes_key === 'string' && data.supersedes_key ? data.supersedes_key : undefined;
       const structuredError =
         tipType === 'error'
           ? (normalizeAgentStreamError(data.error) ?? normalizeAgentStreamError({ ...data, message: data.content }))
           : undefined;
       return {
-        id: uuid(),
+        id: supersedesKey ? `tip:${supersedesKey}` : uuid(),
         type: 'tips',
         msg_id: message.msg_id,
         position: 'center',
@@ -729,6 +747,7 @@ const transformMessageInner = (message: IResponseMessage): TMessage | undefined 
           ...(tipCode ? { code: tipCode } : {}),
           ...(tipParams ? { params: tipParams } : {}),
           ...(structuredError ? { error: structuredError } : {}),
+          ...(supersedesKey ? { supersedes_key: supersedesKey } : {}),
         },
       };
     }
@@ -849,13 +868,23 @@ const transformMessageInner = (message: IResponseMessage): TMessage | undefined 
     }
     case 'plan': {
       return {
-        id: uuid(),
+        // Deterministic and matching the persisted row's primary key
+        // (`plan:{msg_id}`): a uuid per frame remounted the card on every
+        // update, and made the live frame impossible to dedupe against the
+        // history row on reload.
+        id: `plan:${message.msg_id}`,
         type: 'plan',
         msg_id: message.msg_id,
         position: 'left',
         conversation_id: message.conversation_id,
         created_at,
-        content: message.data as any,
+        content: {
+          ...(message.data as Record<string, unknown>),
+          // The envelope carries the turn id; the persisted row carries it inside
+          // content. Copying it here makes the live frame and the DB row agree,
+          // so the plan bar can gate on the running turn either way.
+          ...(message.turn_id ? { turn_id: message.turn_id } : {}),
+        } as IMessagePlan['content'],
       };
     }
     case 'thinking': {
@@ -937,6 +966,18 @@ export const composeMessage = (
     return list.slice();
   };
 
+  // A superseding tip replaces its predecessor wherever it already sits in the
+  // list, rather than being appended: codex reports a stalled turn as a series
+  // of attempts ("Reconnecting... 1/5", then 2/5 …), and appending each one
+  // buried the conversation under near-identical cards. Matching on the key —
+  // not on list position — keeps working when other messages arrive in between.
+  if (message.type === 'tips' && message.content?.supersedes_key) {
+    const key = message.content.supersedes_key;
+    const existing = list.findIndex((item) => item.type === 'tips' && item.content?.supersedes_key === key);
+    if (existing >= 0) return updateMessage(existing, message);
+    return pushMessage(message);
+  }
+
   if (message.type === 'tool_group') {
     const remainingToolsMap = new Map(message.content.map((t) => [t.call_id, t] as const));
     if (remainingToolsMap.size === 0) return list;
@@ -1006,19 +1047,6 @@ export const composeMessage = (
     }
     // If no existing tool call found, add new one
     return pushMessage(normalizedMessage);
-  }
-
-  if (message.type === 'plan') {
-    for (let i = 0, len = list.length; i < len; i++) {
-      const msg = list[i];
-      if (msg.type === 'plan' && msg.content.session_id === message.content.session_id) {
-        // Create new object instead of mutating original
-        const merged = { ...msg.content, ...message.content };
-        return updateMessage(i, { ...msg, content: merged });
-      }
-    }
-    return pushMessage(message);
-    // If no existing plan found, add new one
   }
 
   // Handle thinking message merging — only merge contiguous streaming chunks

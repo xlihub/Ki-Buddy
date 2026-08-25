@@ -87,5 +87,19 @@
   "askDeclined": "Пропущено",
   "askOther": "Другое",
   "askOtherPlaceholder": "Введите свой ответ",
-  "requestDetails": "Детали запроса:"
+  "requestDetails": "Детали запроса:",
+  "fileChangesCount_one": "{{count}} изменение файлов",
+  "fileChangesCount_other": "{{count}} изменений файлов",
+  "fileChangesCount_few": "{{count}} изменения файлов",
+  "fileChangesCount_many": "{{count}} изменений файлов",
+  "availableCommands_one": "{{count}} доступная команда",
+  "availableCommands_other": "{{count}} доступных команд",
+  "availableCommands_few": "{{count}} доступные команды",
+  "availableCommands_many": "{{count}} доступных команд",
+  "atSession.hint": "Введите для поиска беседы",
+  "atSession.empty": "Беседы не найдены",
+  "atSession.menuLabel": "Упоминания бесед",
+  "delivery": {
+    "pending": "Непрочитано"
+  }
 }

@@ -3,6 +3,26 @@
 本文件记录 Ki-Buddy 产品变化、AionUi 上游变化，以及每个版本固定的 Ki-Core/AionCore 来源。
 上游 AionUi 的原始变更记录继续保存在 [`CHANGELOG.md`](CHANGELOG.md)。
 
+## [0.1.6] - 2026-08-25
+
+### Ki-Buddy 定制变化
+
+- 将 Ki-Buddy 的账户隔离、品牌、功能开关及 Agent、Skill、MCP 资源策略适配到新的设置页、侧栏和运行时结构，继续隐藏未向产品开放的上游资源。
+- 保留 Ki-Buddy 的独立安装包、更新源和正式发布流程，并兼容 AionUi v2.1.61 的启动恢复、通知和更新检查变化。
+
+### AionUi 上游更新
+
+- 从 [AionUi v2.1.49](https://github.com/iOfficeAI/AionUi/releases/tag/v2.1.49) 累计更新到 [AionUi v2.1.61](https://github.com/iOfficeAI/AionUi/releases/tag/v2.1.61)，目标 commit `1afdf95c187f24198ab502a3c86cb2ef40bc3c6f`；完整差异见 [v2.1.49...v2.1.61](https://github.com/iOfficeAI/AionUi/compare/v2.1.49...v2.1.61)。
+- 增加跨会话提及与投递、置顶计划、归档会话分页、可调侧栏、预览最大化和 SCM 工作区能力。
+- 增加 WaveDrom、Mermaid 缩放、Markdown 数学公式、字体族与字重设置，并完善 RTL、多语言、资源管理器和文件预览体验。
+- 包含启动恢复、更新降级防护、WebUI、通知、Agent 模型选择及路径安全等修复。
+
+### Ki-Core 更新
+
+- 从 [Ki-Core 0.1.2](https://github.com/xlihub/Ki-Core/releases/tag/ki-core-v0.1.2) 更新到 [Ki-Core 0.1.3](https://github.com/xlihub/Ki-Core/releases/tag/ki-core-v0.1.3)，release commit `5cab817d47e0ecc45b979367222a0672fee62099`；完整差异见 [ki-core-v0.1.2...ki-core-v0.1.3](https://github.com/xlihub/Ki-Core/compare/ki-core-v0.1.2...ki-core-v0.1.3)。
+- 修复顶层子命令未进入 capability index 的问题，并缩减自动注入 Skill 描述以符合注入预算。
+- Ki-Core 同步到 [AionCore v0.1.72](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.72)，peeled commit `57a34cc1b1a3b17bcc023de06b9e6768fceac36f`。
+
 ## [0.1.5] - 2026-08-25
 
 ### Ki-Buddy 定制变化

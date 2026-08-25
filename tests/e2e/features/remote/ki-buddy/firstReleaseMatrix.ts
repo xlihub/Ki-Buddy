@@ -75,7 +75,7 @@ export const FIRST_RELEASE_MATRIX = {
     autoInjectedSkillExclusions: ['aionui-config'],
   },
   workspaceEntries: ['newConversation', 'assistants', 'scheduledTasks'],
-  settingsEntries: ['account', 'agent', 'model', 'skills', 'tools', 'appearance', 'system', 'about'],
+  settingsEntries: ['account', 'agent', 'model', 'skills', 'tools', 'appearance', 'system', 'archived', 'about'],
   disabledWorkspaceRoutes: ['/team/e2e-disabled', '/test/components'],
   disabledSettingsRoutes: ['/settings/webui', '/settings/pet', '/settings/ext/e2e-disabled'],
   disabledFeatureEvidence: {

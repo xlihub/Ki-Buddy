@@ -226,8 +226,9 @@ export function buildSpawnArgs(config: SpawnConfig): string[] {
  * ProcessEnv('aionui.dir').
  */
 export function buildSpawnEnv(dirs?: BackendDirConfig, bootstrapSecret?: string): NodeJS.ProcessEnv {
+  const { PREBUILDS_ONLY: _prebuildsOnly, ...parentEnv } = process.env;
   return {
-    ...process.env,
+    ...parentEnv,
     ...(dirs
       ? {
           AIONUI_CACHE_DIR: dirs.cacheDir,

@@ -87,5 +87,15 @@
   "askDeclined": "Atlandı",
   "askOther": "Diğer",
   "askOtherPlaceholder": "Yanıtınızı yazın",
-  "requestDetails": "İstek ayrıntıları:"
+  "requestDetails": "İstek ayrıntıları:",
+  "fileChangesCount_one": "{{count}} Dosya Değişikliği",
+  "fileChangesCount_other": "{{count}} Dosya Değişikliği",
+  "availableCommands_one": "{{count}} Kullanılabilir Komut",
+  "availableCommands_other": "{{count}} Kullanılabilir Komut",
+  "atSession.hint": "Sohbetlerinizde aramak için yazın",
+  "atSession.empty": "Sohbet bulunamadı",
+  "atSession.menuLabel": "Sohbet bahsetmeleri",
+  "delivery": {
+    "pending": "Okunmadı"
+  }
 }

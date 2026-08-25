@@ -306,7 +306,7 @@ test.describe.serial('Ki-Buddy packaged first-release product matrix', () => {
     });
     await expect(productApp.page).toHaveURL(/#\/settings\/appearance$/);
     await expect(productApp.page.getByText(/^(缩放|Scale)$/i)).toBeVisible({ timeout: 20_000 });
-    await expect(productApp.page.getByText(/聊天字号|Chat text size/i)).toBeVisible();
+    await expect(productApp.page.getByText(/^(聊天|Chat)$/i)).toBeVisible();
     await expect(productApp.page.getByText(/^(主题|Theme)$/i)).toHaveCount(0);
 
     for (const route of [
