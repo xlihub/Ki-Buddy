@@ -3,6 +3,22 @@
 本文件记录 Ki-Buddy 产品变化、AionUi 上游变化，以及每个版本固定的 Ki-Core/AionCore 来源。
 上游 AionUi 的原始变更记录继续保存在 [`CHANGELOG.md`](CHANGELOG.md)。
 
+## [0.1.5] - 2026-08-25
+
+### Ki-Buddy 定制变化
+
+- 修复 Windows 安装包在安装校验和文件占用诊断中错误使用 `AionUi.exe` 的问题，改为按 Ki-Buddy 品牌可执行文件名和卸载文件名检查。
+- 增加 Windows x64 静默安装冒烟测试，安装器返回非零退出码时明确使构建失败。
+
+### AionUi 上游更新
+
+- 继续基于 [AionUi v2.1.49](https://github.com/iOfficeAI/AionUi/releases/tag/v2.1.49)，commit `28a2a9f57f1bf4f9111b9c33e0cfc1eb918effc8`；本版本没有引入新的 AionUi 上游变化。
+
+### Ki-Core 更新
+
+- 继续固定 [Ki-Core 0.1.2](https://github.com/xlihub/Ki-Core/releases/tag/ki-core-v0.1.2)，release commit `59c32d9284dd33b344e286404a6292d39df323a0`。
+- Ki-Core 仍对应 [AionCore v0.1.59](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.59)，peeled commit `815e61ed9bbe942339347dc1e69ddce176cded76`。
+
 ## [0.1.4] - 2026-08-25
 
 ### Ki-Buddy 定制变化
