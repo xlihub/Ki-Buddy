@@ -3,8 +3,8 @@
   "product": "Ki-Buddy",
   "repository": "xlihub/Ki-Buddy",
   "release": {
-    "version": "0.1.6",
-    "tag": "ki-buddy-v0.1.6",
+    "version": "0.1.7",
+    "tag": "ki-buddy-v0.1.7",
     "aionUi": {
       "repository": "iOfficeAI/AionUi",
       "tag": "v2.1.61",
