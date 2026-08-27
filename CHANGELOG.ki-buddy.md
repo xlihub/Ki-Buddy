@@ -3,6 +3,23 @@
 本文件记录 Ki-Buddy 产品变化、AionUi 上游变化，以及每个版本固定的 Ki-Core/AionCore 来源。
 上游 AionUi 的原始变更记录继续保存在 [`CHANGELOG.md`](CHANGELOG.md)。
 
+## [0.1.7] - 2026-08-27
+
+### Ki-Buddy 定制变化
+
+- 定时任务在创建和编辑时保存所选 Assistant 的 Skill、禁用内置 Skill、MCP 及自动注入排除项，使定时启动的新会话使用与普通对话一致的能力配置。
+- Agents 执行助手创建定时任务时自动包含内置 `agents-mcp-adapter`；必要的产品 MCP 不可用时阻止保存并提示检查安装完整性。
+
+### AionUi 上游更新
+
+- 继续基于 [AionUi v2.1.61](https://github.com/iOfficeAI/AionUi/releases/tag/v2.1.61)，commit `1afdf95c187f24198ab502a3c86cb2ef40bc3c6f`；本版本没有引入新的 AionUi 上游变化。
+
+### Ki-Core 更新
+
+- 从 [Ki-Core 0.1.3](https://github.com/xlihub/Ki-Core/releases/tag/ki-core-v0.1.3) 更新到 [Ki-Core 0.1.4](https://github.com/xlihub/Ki-Core/releases/tag/ki-core-v0.1.4)，release commit `3c4055eb65b7b9d1f2f80ce6008bdf1dae9469cc`；完整差异见 [ki-core-v0.1.3...ki-core-v0.1.4](https://github.com/xlihub/Ki-Core/compare/ki-core-v0.1.3...ki-core-v0.1.4)。
+- 定时任务执行时使用创建阶段保存的完整能力快照，并将 MCP 选择解析为新会话运行配置；缺失或不完整的快照会返回明确错误。
+- Ki-Core 继续对应 [AionCore v0.1.72](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.72)，peeled commit `57a34cc1b1a3b17bcc023de06b9e6768fceac36f`。
+
 ## [0.1.6] - 2026-08-25
 
 ### Ki-Buddy 定制变化
