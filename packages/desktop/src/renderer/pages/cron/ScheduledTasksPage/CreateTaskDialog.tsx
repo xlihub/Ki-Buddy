@@ -28,7 +28,10 @@ import { resolveAssistantAvatar } from '@renderer/utils/model/assistantAvatar';
 import { resolveAssistantName } from '@renderer/utils/model/assistantDisplay';
 import { resolveCronAgentConfig } from './resolveCronAgentConfig';
 import { assistantRuntimeKey, isAionrsAssistant } from '@/common/types/agent/assistantTypes';
-import { getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { getKiBuddyProductRuntime, getProductExperience } from '@/renderer/services/runtime/kiBuddyRuntime';
+import { resolveGuidAssistantDefaults } from '@/renderer/pages/guid/utils/assistantDefaults';
+import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
+import { resolveKiBuddyAssistantEffectiveMcpSelection } from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
 
 const FormItem = Form.Item;
 const TextArea = Input.TextArea;
@@ -541,6 +544,30 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
         if (!assistantValue) {
           throw new Error(t('cron.page.form.assistantRequired'));
         }
+        const assistantSelection = presetAssistants.find((item) => item.id === assistantValue);
+        if (!assistantSelection) {
+          throw new Error(t('cron.page.form.assistantRequired'));
+        }
+        const productRuntime = getKiBuddyProductRuntime();
+        const [assistantDetail, mcpCatalog] = await Promise.all([
+          ipcBridge.assistants.get.invoke({ id: assistantSelection.id, locale: localeKey }),
+          productRuntime ? ensureBackendMcpCatalog() : undefined,
+        ]);
+        const assistantDefaults = resolveGuidAssistantDefaults(assistantDetail);
+        const effectiveMcpSelection =
+          productRuntime && mcpCatalog
+            ? resolveKiBuddyAssistantEffectiveMcpSelection(
+                productRuntime,
+                assistantSelection,
+                mcpCatalog.allServers,
+                assistantDefaults.mcpIds
+              )
+            : { missingRequiredResourceIds: [], serverIds: [...assistantDefaults.mcpIds] };
+        if (effectiveMcpSelection.missingRequiredResourceIds.length > 0) {
+          throw new Error(t('cron.page.form.requiredMcpUnavailable'));
+        }
+        const excludeAutoInjectSkills = [...getProductExperience().behaviorDefaults().autoInjectedSkillExclusions];
+
         agent_config = resolveCronAgentConfig({
           agentValue: assistantValue,
           presetAssistants,
@@ -553,6 +580,10 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
           model_id,
           config_options,
           workspace,
+          skillIds: assistantDefaults.skillIds,
+          disabledBuiltinSkillIds: assistantDefaults.disabledBuiltinSkillIds,
+          mcpIds: effectiveMcpSelection.serverIds,
+          excludeAutoInjectSkills,
           localeKey,
           getMode: resolveAutoApproveModeFromAgentMetadata,
           aionrsModelRequiredMessage: t('cron.page.form.aionrsModelRequired'),

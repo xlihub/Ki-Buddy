@@ -20,6 +20,10 @@ type ResolveCronAgentConfigInput = {
   model_id?: string;
   config_options?: Record<string, string>;
   workspace?: string;
+  skillIds: string[];
+  disabledBuiltinSkillIds: string[];
+  mcpIds: string[];
+  excludeAutoInjectSkills: string[];
   localeKey?: string;
   getMode: (assistant: Assistant) => string | undefined;
   aionrsModelRequiredMessage: string;
@@ -37,6 +41,10 @@ export function resolveCronAgentConfig(input: ResolveCronAgentConfigInput): Reso
     model_id,
     config_options,
     workspace,
+    skillIds,
+    disabledBuiltinSkillIds,
+    mcpIds,
+    excludeAutoInjectSkills,
     localeKey = 'en-US',
     getMode,
     aionrsModelRequiredMessage,
@@ -54,6 +62,12 @@ export function resolveCronAgentConfig(input: ResolveCronAgentConfigInput): Reso
   const assistant = assistantSelection;
   const assistantName = resolveAssistantName(assistant, localeKey, assistant.name);
   const mode = getMode(assistant);
+  const capabilitySnapshot = {
+    skill_ids: skillIds,
+    disabled_builtin_skill_ids: disabledBuiltinSkillIds,
+    mcp_ids: mcpIds,
+    exclude_auto_inject_skills: excludeAutoInjectSkills,
+  };
 
   if (isAionrsAssistant(assistant)) {
     if (!selectedAionrsProvider?.id || !model_id) {
@@ -70,6 +84,7 @@ export function resolveCronAgentConfig(input: ResolveCronAgentConfigInput): Reso
         use_model: model_id,
       },
       workspace,
+      ...capabilitySnapshot,
     };
   } else {
     agent_config = {
@@ -79,6 +94,7 @@ export function resolveCronAgentConfig(input: ResolveCronAgentConfigInput): Reso
       model_id,
       config_options,
       workspace,
+      ...capabilitySnapshot,
     };
   }
 

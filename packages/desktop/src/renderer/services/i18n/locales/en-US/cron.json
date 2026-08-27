@@ -96,6 +96,7 @@
       "assistant": "Assistant",
       "agentRequired": "Please select an assistant",
       "assistantRequired": "Please select an assistant",
+      "requiredMcpUnavailable": "A required MCP resource for the selected assistant is unavailable. Check the installed resources and try again.",
       "agentPlaceholder": "Select the assistant to execute this task",
       "assistantPlaceholder": "Select the assistant to execute this task",
       "executionMode": "Execution Mode",

@@ -6,11 +6,12 @@
 
 import userEvent from '@testing-library/user-event';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Message } from '@arco-design/web-react';
 import React from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import type { ICronJob } from '@/common/adapter/ipcBridge';
-import type { TChatConversation } from '@/common/config/storage';
+import type { IMcpServer, TChatConversation } from '@/common/config/storage';
 import { KI_BUDDY_PRODUCT_CAPABILITY } from '@/common/platform/ki-buddy';
 
 let currentAssistants: Assistant[] = [];
@@ -43,8 +44,36 @@ vi.mock('@/common', () => ({
     conversation: {
       get: { invoke: vi.fn() },
     },
+    assistants: {
+      get: { invoke: vi.fn() },
+    },
   },
 }));
+
+vi.mock('@/renderer/pages/guid/utils/assistantDefaults', () => ({
+  resolveGuidAssistantDefaults: vi.fn(() => ({
+    modelId: undefined,
+    permissionMode: undefined,
+    thoughtLevel: undefined,
+    skillIds: ['assistant-skill'],
+    disabledBuiltinSkillIds: ['disabled-builtin'],
+    mcpIds: ['assistant-mcp'],
+  })),
+}));
+
+vi.mock('@/renderer/hooks/mcp/catalog', () => ({
+  ensureBackendMcpCatalog: vi.fn(async () => ({ allServers: [] })),
+}));
+
+vi.mock('@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry', async () => {
+  const actual = await vi.importActual<typeof import('@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry')>(
+    '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry'
+  );
+  return {
+    ...actual,
+    resolveKiBuddyAssistantEffectiveMcpServerIds: vi.fn(actual.resolveKiBuddyAssistantEffectiveMcpServerIds),
+  };
+});
 
 vi.mock('@renderer/components/base/AionModal', () => ({
   __esModule: true,
@@ -92,7 +121,7 @@ vi.mock('@renderer/pages/cron/cronUtils', () => ({
 }));
 
 vi.mock('@renderer/pages/conversation/utils/conversationCreateError', () => ({
-  getConversationCreateErrorMessage: () => 'error',
+  getConversationCreateErrorMessage: (error: unknown) => (error instanceof Error ? error.message : 'error'),
 }));
 
 vi.mock('@renderer/utils/model/assistantAvatar', () => ({
@@ -108,19 +137,21 @@ vi.mock('@renderer/utils/model/agentTypeSupportPolicy', () => ({
   resolveSupportedConversationType: () => 'acp',
 }));
 
-vi.mock('@renderer/pages/cron/ScheduledTasksPage/resolveCronAgentConfig', () => ({
-  resolveCronAgentConfig: vi.fn(() => ({
-    agent_config: {
-      assistant_id: 'assistant-1',
-      name: '问好助手',
-      mode: 'default',
-    },
-  })),
-}));
+vi.mock('@renderer/pages/cron/ScheduledTasksPage/resolveCronAgentConfig', async () => {
+  const actual = await vi.importActual<typeof import('@renderer/pages/cron/ScheduledTasksPage/resolveCronAgentConfig')>(
+    '@renderer/pages/cron/ScheduledTasksPage/resolveCronAgentConfig'
+  );
+  return {
+    ...actual,
+    resolveCronAgentConfig: vi.fn(actual.resolveCronAgentConfig),
+  };
+});
 
 import { ipcBridge } from '@/common';
 import CreateTaskDialog from '@/renderer/pages/cron/ScheduledTasksPage/CreateTaskDialog';
 import { resolveCronAgentConfig } from '@/renderer/pages/cron/ScheduledTasksPage/resolveCronAgentConfig';
+import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
+import { KI_BUDDY_PRODUCT_RESOURCE_REGISTRY } from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
 
 describe('CreateTaskDialog', () => {
   beforeAll(() => {
@@ -146,6 +177,7 @@ describe('CreateTaskDialog', () => {
     vi.mocked(ipcBridge.cron.updateJob.invoke).mockResolvedValue(job());
     vi.mocked(ipcBridge.cron.createJob.invoke).mockResolvedValue(job());
     vi.mocked(ipcBridge.conversation.get.invoke).mockRejectedValue(new Error('not found'));
+    vi.mocked(ipcBridge.assistants.get.invoke).mockResolvedValue({} as never);
     window.__kiBuddyProductBootstrapError = null;
     window.__kiBuddyProductPresentation = null;
   });
@@ -183,10 +215,14 @@ describe('CreateTaskDialog', () => {
       kind: 'cron',
       expr: '*/5 * * * *',
     });
-    expect(updates.metadata?.agent_config).toEqual({
+    expect(updates.metadata?.agent_config).toMatchObject({
       assistant_id: 'assistant-1',
       name: '问好助手',
-      mode: 'default',
+      mode: 'yolo',
+      skill_ids: ['assistant-skill'],
+      disabled_builtin_skill_ids: ['disabled-builtin'],
+      mcp_ids: ['assistant-mcp'],
+      exclude_auto_inject_skills: [],
     });
     expect(updates).not.toHaveProperty('team_id');
   });
@@ -392,15 +428,98 @@ describe('CreateTaskDialog', () => {
     await waitFor(() => expect(resolveCronAgentConfig).toHaveBeenCalledTimes(1));
     expect(vi.mocked(resolveCronAgentConfig).mock.calls[0][0]).toMatchObject({
       agentValue: 'assistant-1',
+      skillIds: ['assistant-skill'],
+      disabledBuiltinSkillIds: ['disabled-builtin'],
+      mcpIds: ['assistant-mcp'],
     });
     await waitFor(() => expect(ipcBridge.cron.addJob.invoke).toHaveBeenCalledTimes(1));
     const [params] = vi.mocked(ipcBridge.cron.addJob.invoke).mock.calls[0];
-    expect(params.agent_config).toEqual({
+    expect(params.agent_config).toMatchObject({
       assistant_id: 'assistant-1',
       name: '问好助手',
-      mode: 'default',
+      mode: 'yolo',
+      skill_ids: ['assistant-skill'],
+      disabled_builtin_skill_ids: ['disabled-builtin'],
+      mcp_ids: ['assistant-mcp'],
+      exclude_auto_inject_skills: [],
     });
     expect(params).not.toHaveProperty('team_id');
+  });
+
+  it('adds the required Agents Adapter when the Ki-Buddy capability is present', async () => {
+    const user = userEvent.setup();
+    currentAssistants = [agentsExecutionAssistant()];
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    vi.mocked(ensureBackendMcpCatalog).mockResolvedValue({ allServers: [agentsAdapterServer()] } as never);
+
+    render(<CreateTaskDialog visible onClose={() => {}} />);
+
+    await user.type(await screen.findByPlaceholderText('cron.page.form.namePlaceholder'), 'agents task');
+    await user.type(screen.getByPlaceholderText('cron.page.form.promptPlaceholder'), 'Run the published agent');
+    await user.click(screen.getByTestId('cron-assistant-select'));
+    fireEvent.click(await screen.findByText('Agents 执行助手'));
+    await user.click(screen.getByTestId('modal-ok'));
+
+    await waitFor(() => expect(ipcBridge.cron.addJob.invoke).toHaveBeenCalledTimes(1));
+    const [params] = vi.mocked(ipcBridge.cron.addJob.invoke).mock.calls[0];
+    expect(params.agent_config).toMatchObject({
+      mcp_ids: ['assistant-mcp', 'mcp-current-account'],
+      exclude_auto_inject_skills: ['aionui-config'],
+    });
+  });
+
+  it('rejects creation when the Ki-Buddy capability is present but the required Agents Adapter is unavailable', async () => {
+    const user = userEvent.setup();
+    currentAssistants = [agentsExecutionAssistant()];
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    vi.mocked(ensureBackendMcpCatalog).mockResolvedValue({ allServers: [] } as never);
+
+    render(<CreateTaskDialog visible onClose={() => {}} />);
+
+    await user.type(await screen.findByPlaceholderText('cron.page.form.namePlaceholder'), 'agents task');
+    await user.type(screen.getByPlaceholderText('cron.page.form.promptPlaceholder'), 'Run the published agent');
+    await user.click(screen.getByTestId('cron-assistant-select'));
+    fireEvent.click(await screen.findByText('Agents 执行助手'));
+    await user.click(screen.getByTestId('modal-ok'));
+
+    await waitFor(() => expect(Message.error).toHaveBeenCalledWith('cron.page.form.requiredMcpUnavailable'));
+    expect(ipcBridge.cron.addJob.invoke).not.toHaveBeenCalled();
+  });
+
+  it('rejects updates when the Ki-Buddy capability is present but the required Agents Adapter is unavailable', async () => {
+    const user = userEvent.setup();
+    currentAssistants = [agentsExecutionAssistant()];
+    window.__kiBuddyProductPresentation = KI_BUDDY_PRODUCT_CAPABILITY;
+    vi.mocked(ensureBackendMcpCatalog).mockResolvedValue({ allServers: [] } as never);
+
+    render(<CreateTaskDialog visible onClose={() => {}} editJob={agentsExecutionJob()} />);
+
+    await user.click(await screen.findByTestId('modal-ok'));
+
+    await waitFor(() => expect(Message.error).toHaveBeenCalledWith('cron.page.form.requiredMcpUnavailable'));
+    expect(ipcBridge.cron.updateJob.invoke).not.toHaveBeenCalled();
+  });
+
+  it('creates with the AionUi MCP selection when the Ki-Buddy capability is absent and the catalog is unavailable', async () => {
+    const user = userEvent.setup();
+    currentAssistants = [agentsExecutionAssistant()];
+    vi.mocked(ensureBackendMcpCatalog).mockRejectedValue(new Error('catalog unavailable'));
+
+    render(<CreateTaskDialog visible onClose={() => {}} />);
+
+    await user.type(await screen.findByPlaceholderText('cron.page.form.namePlaceholder'), 'upstream task');
+    await user.type(screen.getByPlaceholderText('cron.page.form.promptPlaceholder'), 'Use upstream defaults');
+    await user.click(screen.getByTestId('cron-assistant-select'));
+    fireEvent.click(await screen.findByText('Agents 执行助手'));
+    await user.click(screen.getByTestId('modal-ok'));
+
+    await waitFor(() => expect(ipcBridge.cron.addJob.invoke).toHaveBeenCalledTimes(1));
+    expect(ensureBackendMcpCatalog).not.toHaveBeenCalled();
+    const [params] = vi.mocked(ipcBridge.cron.addJob.invoke).mock.calls[0];
+    expect(params.agent_config).toMatchObject({
+      mcp_ids: ['assistant-mcp'],
+      exclude_auto_inject_skills: [],
+    });
   });
 });
 
@@ -471,6 +590,21 @@ function ongoingConversationJob(): ICronJob {
   } as ICronJob;
 }
 
+function agentsExecutionJob(): ICronJob {
+  const assistant = agentsExecutionAssistant();
+  return {
+    ...job(),
+    metadata: {
+      ...job().metadata,
+      agent_config: {
+        ...job().metadata.agent_config,
+        assistant_id: assistant.id,
+        name: assistant.name,
+      },
+    },
+  } as ICronJob;
+}
+
 function teamOwnedJob(): ICronJob {
   return {
     ...ongoingConversationJob(),
@@ -529,4 +663,33 @@ function bareAssistant(): Assistant {
     prompts_i18n: {},
     models: [],
   } as Assistant;
+}
+
+function agentsExecutionAssistant(): Assistant {
+  const definition = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant.agentsExecution;
+  return {
+    ...assistants()[0],
+    id: definition.id,
+    source: definition.source,
+    name: 'Agents 执行助手',
+  };
+}
+
+function agentsAdapterServer(): IMcpServer {
+  const definition = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.mcp.agentsAdapter;
+  return {
+    id: 'mcp-current-account',
+    name: definition.backendName,
+    enabled: true,
+    builtin: true,
+    transport: {
+      type: 'stdio',
+      command: 'node',
+      args: [`/app/${definition.scriptName}`],
+      env: {},
+    },
+    created_at: 1,
+    updated_at: 1,
+    original_json: '{}',
+  };
 }

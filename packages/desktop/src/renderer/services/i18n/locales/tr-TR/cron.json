@@ -107,6 +107,7 @@
       "assistant": "Asistan",
       "agentRequired": "Lütfen bir asistan seçin",
       "assistantRequired": "Lütfen bir asistan seçin",
+      "requiredMcpUnavailable": "Seçilen asistan için gerekli bir MCP kaynağı kullanılamıyor. Yüklü kaynakları kontrol edip tekrar deneyin.",
       "agentPlaceholder": "Bu görevi yürütecek asistanı seçin",
       "assistantPlaceholder": "Bu görevi yürütecek asistanı seçin",
       "executionMode": "Çalıştırma Modu",
