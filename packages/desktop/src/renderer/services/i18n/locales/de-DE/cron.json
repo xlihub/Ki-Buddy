@@ -111,6 +111,7 @@
       "teamTaskExecutionModeLockedReason": "Geplante Team-Aufgaben müssen im zugehörigen Team-Gespräch weiterlaufen, deshalb kann der Ausführungsmodus nicht geändert werden.",
       "assistant": "Assistant",
       "assistantRequired": "Please select an assistant",
+      "requiredMcpUnavailable": "Eine erforderliche MCP-Ressource für den ausgewählten Assistenten ist nicht verfügbar. Prüfe die installierten Ressourcen und versuche es erneut.",
       "assistantPlaceholder": "Select the assistant to execute this task"
     },
     "freq": {

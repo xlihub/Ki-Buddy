@@ -7,11 +7,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Assistant, AssistantAgent } from '@/common/types/agent/assistantTypes';
 import { resolveCronAgentConfig } from '@/renderer/pages/cron/ScheduledTasksPage/resolveCronAgentConfig';
+import { KI_BUDDY_PRODUCT_RESOURCE_REGISTRY } from '@/renderer/services/runtime/catalogs/kiBuddyResourceRegistry';
 
 describe('resolveCronAgentConfig', () => {
   it('stores provider id for preset aionrs assistants instead of literal aionrs backend', () => {
     const result = resolveCronAgentConfig({
       agentValue: 'assistant-1',
+      ...emptyCapabilitySnapshot(),
       presetAssistants: [
         assistant({
           id: 'assistant-1',
@@ -32,6 +34,7 @@ describe('resolveCronAgentConfig', () => {
 
     expect(result).toEqual({
       agent_config: {
+        ...emptyCronCapabilitySnapshot(),
         name: '文件规划助手',
         assistant_id: 'assistant-1',
         mode: 'yolo',
@@ -50,6 +53,7 @@ describe('resolveCronAgentConfig', () => {
   it('keeps preset acp assistants on their backend slug', () => {
     const result = resolveCronAgentConfig({
       agentValue: 'assistant-2',
+      ...emptyCapabilitySnapshot(),
       presetAssistants: [
         assistant({
           id: 'assistant-2',
@@ -65,6 +69,7 @@ describe('resolveCronAgentConfig', () => {
 
     expect(result).toEqual({
       agent_config: {
+        ...emptyCronCapabilitySnapshot(),
         name: 'Codex 助手',
         assistant_id: 'assistant-2',
         mode: 'full-access',
@@ -78,6 +83,7 @@ describe('resolveCronAgentConfig', () => {
   it('stores localized assistant names when a locale key is provided', () => {
     const result = resolveCronAgentConfig({
       agentValue: 'assistant-2',
+      ...emptyCapabilitySnapshot(),
       presetAssistants: [
         assistant({
           id: 'assistant-2',
@@ -98,6 +104,7 @@ describe('resolveCronAgentConfig', () => {
   it('omits backend for non-aionrs assistants and lets the backend derive runtime identity', () => {
     const result = resolveCronAgentConfig({
       agentValue: 'assistant-4',
+      ...emptyCapabilitySnapshot(),
       presetAssistants: [
         assistant({
           id: 'assistant-4',
@@ -112,6 +119,7 @@ describe('resolveCronAgentConfig', () => {
 
     expect(result).toEqual({
       agent_config: {
+        ...emptyCronCapabilitySnapshot(),
         name: 'Claude 助手',
         assistant_id: 'assistant-4',
         mode: 'default',
@@ -126,6 +134,7 @@ describe('resolveCronAgentConfig', () => {
   it('does not write legacy custom_agent_id for new preset cron jobs', () => {
     const result = resolveCronAgentConfig({
       agentValue: 'assistant-3',
+      ...emptyCapabilitySnapshot(),
       presetAssistants: [
         assistant({
           id: 'assistant-3',
@@ -144,10 +153,65 @@ describe('resolveCronAgentConfig', () => {
     expect(result.agent_config).not.toHaveProperty('is_preset');
   });
 
+  it('stores the effective capability snapshot for the Ki-Buddy Agents execution assistant', () => {
+    const assistantDefinition = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant.agentsExecution;
+    const result = resolveCronAgentConfig({
+      agentValue: assistantDefinition.id,
+      presetAssistants: [
+        assistant({
+          id: assistantDefinition.id,
+          source: assistantDefinition.source,
+          name: 'Agents 执行助手',
+          agent_id: 'agent-aionrs',
+          agent: agent('agent-aionrs', 'aionrs'),
+        }),
+      ],
+      skillIds: ['ki-buddy-agents-execution'],
+      disabledBuiltinSkillIds: ['legacy-builtin'],
+      mcpIds: ['agents-adapter-current-user'],
+      excludeAutoInjectSkills: ['aionui-config'],
+      selectedAionrsProvider: {
+        id: 'provider-minimax',
+        name: 'MiniMax',
+      },
+      model_id: 'MiniMax-M3',
+      getMode: () => 'yolo',
+      aionrsModelRequiredMessage: 'provider required',
+    });
+
+    expect(result.agent_config).toMatchObject({
+      skill_ids: ['ki-buddy-agents-execution'],
+      disabled_builtin_skill_ids: ['legacy-builtin'],
+      mcp_ids: ['agents-adapter-current-user'],
+      exclude_auto_inject_skills: ['aionui-config'],
+    });
+  });
+
+  it('preserves an explicitly empty capability snapshot', () => {
+    const result = resolveCronAgentConfig({
+      agentValue: 'assistant-1',
+      presetAssistants: [assistant({ id: 'assistant-1', name: 'General Assistant', agent_id: 'agent-1' })],
+      skillIds: [],
+      disabledBuiltinSkillIds: [],
+      mcpIds: [],
+      excludeAutoInjectSkills: [],
+      getMode: () => 'default',
+      aionrsModelRequiredMessage: 'provider required',
+    });
+
+    expect(result.agent_config).toMatchObject({
+      skill_ids: [],
+      disabled_builtin_skill_ids: [],
+      mcp_ids: [],
+      exclude_auto_inject_skills: [],
+    });
+  });
+
   it('throws when the selected assistant cannot be resolved', () => {
     expect(() =>
       resolveCronAgentConfig({
         agentValue: 'missing-assistant',
+        ...emptyCapabilitySnapshot(),
         presetAssistants: [],
         getMode: () => 'default',
         aionrsModelRequiredMessage: 'provider required',
@@ -155,6 +219,24 @@ describe('resolveCronAgentConfig', () => {
     ).toThrowError('assistant_id is required');
   });
 });
+
+function emptyCapabilitySnapshot() {
+  return {
+    skillIds: [],
+    disabledBuiltinSkillIds: [],
+    mcpIds: [],
+    excludeAutoInjectSkills: [],
+  };
+}
+
+function emptyCronCapabilitySnapshot() {
+  return {
+    skill_ids: [],
+    disabled_builtin_skill_ids: [],
+    mcp_ids: [],
+    exclude_auto_inject_skills: [],
+  };
+}
 
 function assistant(overrides: Partial<Assistant> & Pick<Assistant, 'id' | 'name' | 'agent_id'>): Assistant {
   return {

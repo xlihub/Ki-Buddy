@@ -112,6 +112,7 @@
       "aionrsNoProvider": "No hay modelos disponibles",
       "assistant": "Assistant",
       "assistantRequired": "Please select an assistant",
+      "requiredMcpUnavailable": "Un recurso MCP necesario para el asistente seleccionado no está disponible. Comprueba los recursos instalados e inténtalo de nuevo.",
       "assistantPlaceholder": "Select the assistant to execute this task",
       "assistantLockedExistingConversation": "Ongoing conversation tasks must keep their original assistant. Create a new task to use another assistant.",
       "teamTaskExecutionModeLockedReason": "Team scheduled tasks must keep running in the owning team conversation, so the execution mode cannot be changed."

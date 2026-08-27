@@ -151,6 +151,41 @@ export function resolveKiBuddyAssistantRequiredMcpServerIds(
     .map(({ id }) => id);
 }
 
+export type KiBuddyAssistantEffectiveMcpSelection = Readonly<{
+  missingRequiredResourceIds: string[];
+  serverIds: string[];
+}>;
+
+/** Applies product MCP requirements and reports any required resources missing from the backend catalog. */
+export function resolveKiBuddyAssistantEffectiveMcpSelection(
+  productRuntime: Pick<KiBuddyProductRuntime, 'id'> | null,
+  assistantIdentity: Pick<Assistant, 'id' | 'source'> | null | undefined,
+  servers: readonly Pick<IMcpServer, 'builtin' | 'id' | 'name' | 'transport'>[],
+  selectedServerIds: readonly string[]
+): KiBuddyAssistantEffectiveMcpSelection {
+  if (!productRuntime) return { missingRequiredResourceIds: [], serverIds: [...selectedServerIds] };
+
+  const assistant = KI_BUDDY_PRODUCT_RESOURCE_REGISTRY.assistant.agentsExecution;
+  if (assistantIdentity?.id !== assistant.id || assistantIdentity.source !== assistant.source) {
+    return { missingRequiredResourceIds: [], serverIds: [...selectedServerIds] };
+  }
+
+  const requiredServerIds = resolveKiBuddyAssistantRequiredMcpServerIds(assistantIdentity, servers);
+  const availableResourceIds = new Set(
+    servers.flatMap((server) => {
+      const resourceId = resolveKiBuddyProductMcpResourceId(server);
+      return resourceId ? [resourceId] : [];
+    })
+  );
+  const missingRequiredResourceIds = assistant.requiredMcpResourceIds.filter(
+    (resourceId) => !availableResourceIds.has(resourceId)
+  );
+  return {
+    missingRequiredResourceIds,
+    serverIds: [...new Set([...selectedServerIds, ...requiredServerIds])],
+  };
+}
+
 /** Applies required MCP resources only when the explicit Ki-Buddy runtime capability is present. */
 export function resolveKiBuddyAssistantEffectiveMcpServerIds(
   productRuntime: Pick<KiBuddyProductRuntime, 'id'> | null,
@@ -158,9 +193,8 @@ export function resolveKiBuddyAssistantEffectiveMcpServerIds(
   servers: readonly Pick<IMcpServer, 'builtin' | 'id' | 'name' | 'transport'>[],
   selectedServerIds: readonly string[]
 ): string[] {
-  if (!productRuntime) return [...selectedServerIds];
-  const requiredServerIds = resolveKiBuddyAssistantRequiredMcpServerIds(assistantIdentity, servers);
-  return [...new Set([...selectedServerIds, ...requiredServerIds])];
+  return resolveKiBuddyAssistantEffectiveMcpSelection(productRuntime, assistantIdentity, servers, selectedServerIds)
+    .serverIds;
 }
 
 /** Resolves product-owned UI copy without changing the Adapter's stable MCP protocol metadata. */

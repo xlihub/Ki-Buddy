@@ -1742,6 +1742,10 @@ export interface ICronAgentConfigRead {
   model?: ICronProviderModel;
   config_options?: Record<string, string>;
   workspace?: string;
+  skill_ids: string[];
+  disabled_builtin_skill_ids: string[];
+  mcp_ids: string[];
+  exclude_auto_inject_skills: string[];
 }
 
 export interface ICronProviderModel {
@@ -1758,6 +1762,10 @@ export interface ICronAgentConfigWrite {
   model?: ICronProviderModel;
   config_options?: Record<string, string>;
   workspace?: string;
+  skill_ids: string[];
+  disabled_builtin_skill_ids: string[];
+  mcp_ids: string[];
+  exclude_auto_inject_skills: string[];
 }
 
 export interface ICreateCronJobParams {

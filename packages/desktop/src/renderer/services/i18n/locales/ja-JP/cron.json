@@ -107,6 +107,7 @@
       "assistant": "アシスタント",
       "agentRequired": "アシスタントを選択してください",
       "assistantRequired": "アシスタントを選択してください",
+      "requiredMcpUnavailable": "選択したアシスタントに必要な MCP リソースを利用できません。インストール済みリソースを確認して、もう一度お試しください。",
       "agentPlaceholder": "このタスクを実行するアシスタントを選択",
       "assistantPlaceholder": "このタスクを実行するアシスタントを選択",
       "executionMode": "実行モード",

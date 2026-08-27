@@ -95,6 +95,7 @@
       "assistant": "실행 어시스턴트",
       "agentRequired": "실행 어시스턴트를 선택하세요",
       "assistantRequired": "실행 어시스턴트를 선택하세요",
+      "requiredMcpUnavailable": "선택한 어시스턴트에 필요한 MCP 리소스를 사용할 수 없습니다. 설치된 리소스를 확인한 후 다시 시도하세요.",
       "agentPlaceholder": "작업을 실행할 어시스턴트 선택",
       "assistantPlaceholder": "작업을 실행할 어시스턴트 선택",
       "executionMode": "실행 모드",

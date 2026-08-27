@@ -97,6 +97,7 @@
       "assistant": "執行助手",
       "agentRequired": "請選擇執行助手",
       "assistantRequired": "請選擇執行助手",
+      "requiredMcpUnavailable": "所選助手需要的 MCP 資源無法使用，請檢查安裝資源後再試一次。",
       "agentPlaceholder": "選擇執行任務的助手",
       "assistantPlaceholder": "選擇執行任務的助手",
       "executionMode": "執行模式",
